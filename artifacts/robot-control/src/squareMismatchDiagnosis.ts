@@ -20,6 +20,8 @@ export type SquareMismatchType =
   | "unreachable";
 export type FeedbackLevel = "task" | "process" | "worked" | "self-regulation";
 export type XY = { x:number; y:number };
+export type SquareExecutionSource = "dt" | "hardware" | "mock" | "prediction";
+export type SquareObservedVertex = XY & { z?:number; r?:number; label:string };
 export type SquareMeasurement = { label?:string; target:XY & {z?:number}; actual:XY & {z?:number}; distanceError?:number };
 export type SquareEdgeEvidence = {
   edge:string; condition:{axis:"X"|"Y"; delta:number}; executed:{dx:number; dy:number};
@@ -32,10 +34,11 @@ export type SquareDiagnosis = {
   /** Neutral, answer-free label for learners. */
   label:string;
   evidence:{
+    source:SquareExecutionSource;
     condition:{width:number; height:number; xDir:1|-1; yDir:1|-1; start:XY};
-    executed?:{width:number; height:number; closesAtStart:boolean; vertices:(XY & {label:string})[]};
+    executed?:{width:number; height:number; closesAtStart:boolean; vertices:SquareObservedVertex[]};
     edges?:SquareEdgeEvidence[];
-    measured?:{meanError:number; maxError:number; meanOffset:XY; count:number};
+    measured?:{meanError:number; maxError:number; meanOffset:XY; count:number; reference?:"target"|"student-plan"};
     rejected?:XY;
   };
 };
@@ -86,24 +89,51 @@ const EDGE_LABELS = ["P1 → P2","P2 → P3","P3 → P4","P4 → P1"];
  * - `rejected`: a point the DT could not reach (no IK solution).
  */
 export function diagnoseSquare(lesson:ShapeLesson, answers:Record<string,string>,
-  options:{measurements?:SquareMeasurement[]; rejected?:XY|null}={}):SquareDiagnosis | null {
+  options:{measurements?:SquareMeasurement[]; rejected?:XY|null; observedVertices?:SquareObservedVertex[];
+    source?:SquareExecutionSource}={}):SquareDiagnosis | null {
   const condition = squareCondition(lesson);
   if (!condition) return null;
-  const base = {condition:{width:condition.width,height:condition.height,xDir:condition.xDir,yDir:condition.yDir,start:condition.start}};
+  const source=options.source??"prediction";
+  const base = {source,condition:{width:condition.width,height:condition.height,xDir:condition.xDir,yDir:condition.yDir,start:condition.start}};
   if (options.rejected) return {type:"unreachable",label:"로봇이 갈 수 없는 점이 있어요",evidence:{...base,rejected:{x:options.rejected.x,y:options.rejected.y}}};
   const planned = squarePlannedVertices(lesson, answers);
   if (!planned) return null;
-  const edges:SquareEdgeEvidence[] = planned.slice(1).map((p,i) => ({
-    edge:EDGE_LABELS[i], condition:condition.edges[i], executed:{dx:p.x-planned[i].x, dy:p.y-planned[i].y},
+  const observed=options.observedVertices;
+  if(options.source&&(!observed||observed.length!==5||observed.some(p=>!p||!Number.isFinite(p.x)||!Number.isFinite(p.y)||!p.label)))return null;
+  const vertices=observed??planned;
+  const edges:SquareEdgeEvidence[] = vertices.slice(1).map((p,i) => ({
+    edge:EDGE_LABELS[i], condition:condition.edges[i], executed:{dx:p.x-vertices[i].x, dy:p.y-vertices[i].y},
   }));
   const executed = {
     width:Math.abs(edges[0].executed.dx) > Math.abs(edges[0].executed.dy) ? Math.abs(edges[0].executed.dx) : Math.abs(edges[1].executed.dx),
     height:Math.abs(edges[1].executed.dy) > Math.abs(edges[1].executed.dx) ? Math.abs(edges[1].executed.dy) : Math.abs(edges[0].executed.dy),
-    closesAtStart:nearXY(planned[4],planned[0]), vertices:planned,
+    closesAtStart:nearXY(vertices[4],vertices[0]), vertices,
   };
   const evidence = {...base, executed, edges};
 
-  if (planned.every((p,i) => nearXY(p, condition.target[i]))) {
+  const planCorrect=planned.every((p,i) => nearXY(p, condition.target[i]));
+  if(source==="hardware"&&observed) {
+    const errors=observed.map((p,i)=>Math.hypot(p.x-planned[i].x,p.y-planned[i].y,(p.z??0)-(planned[i].z??0)));
+    const meanOffset={x:observed.reduce((sum,p,i)=>sum+p.x-planned[i].x,0)/observed.length,
+      y:observed.reduce((sum,p,i)=>sum+p.y-planned[i].y,0)/observed.length};
+    const measured={meanError:errors.reduce((sum,n)=>sum+n,0)/errors.length,maxError:Math.max(...errors),
+      meanOffset,count:observed.length,reference:"student-plan" as const};
+    if(measured.maxError>MODEL_REAL_THRESHOLD_MM)
+      return {type:"model-real",label:"GetPose 실측 경로가 학생이 제출한 실행 좌표와 달라요. 학생의 계산 오류로 단정할 수 없습니다.",
+        evidence:{...evidence,measured}};
+  }
+  if (planCorrect) {
+    if(source==="hardware"&&observed) {
+      const errors=observed.map((p,i)=>Math.hypot(p.x-condition.target[i].x,p.y-condition.target[i].y,(p.z??0)-(condition.target[i].z??0)));
+      const meanOffset={x:observed.reduce((sum,p,i)=>sum+p.x-condition.target[i].x,0)/observed.length,
+        y:observed.reduce((sum,p,i)=>sum+p.y-condition.target[i].y,0)/observed.length};
+      const measured={meanError:errors.reduce((sum,n)=>sum+n,0)/errors.length,maxError:Math.max(...errors),
+        meanOffset,count:observed.length,reference:"target" as const};
+      if(measured.maxError>MODEL_REAL_THRESHOLD_MM)
+        return {type:"model-real",label:"GetPose 실측 경로가 계산한 목표와 달라요. 학생의 계산 오류로 단정할 수 없습니다.",
+          evidence:{...evidence,measured}};
+      return {type:"match",label:"예측과 GetPose 좌표가 허용 오차 안에서 일치해요",evidence:{...evidence,measured}};
+    }
     const m = (options.measurements ?? []).filter(item => Number.isFinite(item.actual?.x) && Number.isFinite(item.target?.x));
     if (m.length) {
       const errors = m.map(item => Math.hypot(item.actual.x-item.target.x, item.actual.y-item.target.y, (item.actual.z??0)-(item.target.z??0)));
@@ -248,8 +278,14 @@ export function priorSquareDiagnoses<R extends {id:string; condition:unknown; pr
     if (record.id === excludeId || (record.condition as {id?:string}|null)?.id !== lesson.id) continue;
     const mission = record.runs.filter(run => run.action === "mission").at(-1);
     if (!mission || (mission.status !== "completed" && mission.status !== "unavailable")) continue;
-    const rejected = (mission.detail as {rejectedTarget?:XY}|undefined)?.rejectedTarget ?? null;
-    const d = diagnoseSquare(lesson, record.prediction, {rejected:mission.status === "unavailable" ? rejected : null});
+    const missionDetail=mission.detail as {rejectedTarget?:XY;observedVertices?:SquareObservedVertex[];planKey?:string}|undefined;
+    const physical=record.runs.filter(run=>run.action==="square-measurement"&&run.status==="completed").at(-1);
+    const physicalDetail=physical?.detail as {source?:SquareExecutionSource;observedVertices?:SquareObservedVertex[];planKey?:string}|undefined;
+    const usePhysical=!!physicalDetail&&physicalDetail.planKey===missionDetail?.planKey
+      &&(physicalDetail.source==="hardware"||physicalDetail.source==="mock");
+    const d=diagnoseSquare(lesson,record.prediction,{rejected:mission.status==="unavailable"?missionDetail?.rejectedTarget??null:null,
+      observedVertices:usePhysical?physicalDetail?.observedVertices:missionDetail?.observedVertices,
+      source:usePhysical?physicalDetail?.source:"dt"});
     if (d) types.push(d.type);
   }
   return types;

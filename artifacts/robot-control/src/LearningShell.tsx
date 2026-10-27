@@ -12,6 +12,19 @@ export default function LearningShell(){
   const [loading,setLoading]=useState(false),[error,setError]=useState("");
   const state=useSyncExternalStore(subscribeLearningSave,getLearningSaveState);
   useEffect(()=>{void flushLearningQueue();},[]);
+  async function loadLearningApp(){
+    let lastError:unknown;
+    // A transient failure to fetch Vite's lazy App module must not strand a
+    // learner after their visit has already been created and saved.
+    for(let attempt=0;attempt<2;attempt++){
+      try{return await import("./App");}
+      catch(error){
+        lastError=error;
+        if(attempt===0)await new Promise(resolve=>setTimeout(resolve,350));
+      }
+    }
+    throw lastError;
+  }
   useEffect(()=>{
     if(!professor||auth.isLoading)return;
     if(!auth.isAuthenticated)return;
@@ -25,7 +38,7 @@ export default function LearningShell(){
     try{
       // No historical hydration. Every ID entry is a new, write-only visit.
       await initializeLearningSync(next);
-      const {default:App}=await import("./App");setContent(()=>App);
+      const {default:App}=await loadLearningApp();setContent(()=>App);
     }catch(err){setError(err instanceof Error?err.message:"학습 화면을 불러오지 못했습니다.");}
     finally{setLoading(false);}
   }
