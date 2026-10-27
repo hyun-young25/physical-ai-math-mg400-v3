@@ -25,7 +25,12 @@ export type InquiryRecord = ReturnType<typeof learningRecordContext> & {
   explanationReviews?:ExplanationEntry[];
   answerReviews?:{answers:Record<string,string>;at:string;runCount:number}[];
   feedbackEvents?:{kind:"hint"|"guided-check"|"answer-review"|"revise"|"transfer";at:string;runCount:number;keys:string[]}[];
+  /** Rule-based prediction–execution diagnosis shown after a run, with the learner's cause explanation. */
+  mismatchDiagnoses?:MismatchDiagnosisEntry[];
 };
+export type MismatchDiagnosisEntry={runCount:number;at:string;type:string;edge?:string;label:string;
+  level:string;question:string;relationHint?:string;supportMode:string;priorSameType:number;teacherFlag:boolean;
+  evidence:unknown;source?:"dt"|"hardware";causeExplanation?:string;explainedAt?:string};
 const now=()=>new Date().toISOString();
 const clone=<T,>(v:T):T=>JSON.parse(JSON.stringify(v));
 const STORAGE_KEY="physical-ai-inquiry-evidence-v1";
@@ -134,10 +139,12 @@ export function useMathInquiry(task:string, condition:unknown, fields:InquiryFie
     aiJudgment.current={conditionKey,answerKey:JSON.stringify([answers,reason]),value:verdict};
     const snapshot=feedbackContext(task==="square"?null:ref.current,verdict,answers);
     void ai.request("submit",snapshot,"",`${conditionKey}:check:${++aiSubmission.current}`);
-    if(squareWrong) {
+    const diagnosed=task==="square"&&!!judgment&&typeof judgment==="object"&&"diagnosis" in judgment;
+    if(squareWrong||diagnosed) {
       window.dispatchEvent(new Event("square-tutor-feedback"));
-      if(ai.mode==="gpt")void ai.request("hint",snapshot,
-        "방금 확인한 틀린 항목과 내 입력값을 문제 조건에 연결해, 오류 이유와 단계별 힌트·개선 방법을 친절하게 설명해 주세요. 정답 수치를 바로 대신 쓰지 말고 스스로 고칠 수 있게 도와주세요.");
+      if(ai.mode==="gpt")void ai.request("hint",snapshot,diagnosed
+        ?"전달된 실행 결과 진단(diagnosis)의 유형·근거·피드백 수준에 맞춰, 로봇이 실제로 그린 결과와 과제 조건의 차이를 학생이 스스로 찾도록 질문 1개만 2문장 이내로 해 주세요. 정답 좌표나 정답 값은 말하지 마세요."
+        :"방금 확인한 틀린 항목과 내 입력값을 문제 조건에 연결해, 오류 이유와 단계별 힌트·개선 방법을 친절하게 설명해 주세요. 정답 수치를 바로 대신 쓰지 말고 스스로 고칠 수 있게 도와주세요.");
     }
   };
   const submit=()=>{
@@ -191,6 +198,17 @@ export function useMathInquiry(task:string, condition:unknown, fields:InquiryFie
       recordLearningAction(task,"support-used",{condition,feedbackEvents:[event]},source);return;}
     save({...r,feedbackEvents:[...(r.feedbackEvents??[]),event]});
   };
+  /** One entry per run; a later call for the same run updates it (e.g. adds the cause explanation). */
+  const recordDiagnosis=(entry:Omit<MismatchDiagnosisEntry,"at"|"runCount">&{causeExplanation?:string})=>{
+    const r=ref.current;if(!r)return;
+    const runCount=r.runs.length,list=r.mismatchDiagnoses??[],source=entry.source??"dt";
+    const same=(item:MismatchDiagnosisEntry)=>item.runCount===runCount&&(item.source??"dt")===source;
+    const existing=list.find(same);
+    if(existing&&existing.type===entry.type&&!entry.causeExplanation)return;
+    const next:MismatchDiagnosisEntry={...existing,...clone(entry),source,runCount,at:existing?.at??now(),
+      ...(entry.causeExplanation?{causeExplanation:entry.causeExplanation.trim(),explainedAt:now()}:{})};
+    save({...r,mismatchDiagnoses:[...list.filter(item=>!same(item)),next]});
+  };
   const showHint=(key:string)=>{if(openHints.includes(key))return;setOpenHints(v=>[...v,key]);feedbackEvent("hint",[key]);};
   const reviewAnswers=()=>{
     const r=ref.current;if(!observed||!r)return;
@@ -219,7 +237,9 @@ export function useMathInquiry(task:string, condition:unknown, fields:InquiryFie
     if(!judgmentComplete(judgment,detailedReflection)){setMessage(detailedReflection?"유지·수정 판단과 가장 참고한 정보를 선택하세요.":"비교 후 내 판단을 선택하세요.");return;}
     const answers=record.answerReviews?.filter(v=>v.runCount===record.runs.length).at(-1)?.answers??record.prediction;
     const assessment=reflection.trim()?assessExplanation(reflection,explanationContext(record,answers,"reflection")):undefined;
-    save({...record,reflections:[...record.reflections,{text:reflection.trim(),at:now(),runCount:record.runs.length,review:assessment?"teacher":"learner",assessment,unresolved:assessment?assessment.verdict!=="confirmed":undefined,answers:clone(answers),judgment:clone(judgment)}]});
+    // Keep same-tick additions (e.g. a diagnosis note saved just before) instead of a stale render copy.
+    const latest=ref.current?.id===record.id?ref.current:record;
+    save({...latest,reflections:[...latest.reflections,{text:reflection.trim(),at:now(),runCount:record.runs.length,review:assessment?"teacher":"learner",assessment,unresolved:assessment?assessment.verdict!=="confirmed":undefined,answers:clone(answers),judgment:clone(judgment)}]});
     setMessage(!assessment?"비교 확인을 저장했습니다. 처음 쓴 예측 근거는 그대로 남습니다.":assessment.verdict==="confirmed"?"설명과 피드백을 저장했습니다. 다음 조건으로 진행할 수 있습니다.":assessment.verdict==="revise"?"설명을 저장했습니다. 표시된 오류를 확인하거나 검토용으로 남길 수 있습니다.":"설명을 판단 보류 상태로 저장했습니다. 아래 질문은 더 생각해 볼 때 참고하세요. 다시 쓰지 않고 다음 조건으로 진행할 수 있습니다.");
   };
   const requestExplanationReview=()=>{
@@ -260,7 +280,7 @@ export function useMathInquiry(task:string, condition:unknown, fields:InquiryFie
     judgment,setJudgment,judgmentReady:judgmentComplete(judgment,detailedReflection),observation,setObservation,saveObservation,
     checked,comparisonAvailable,reviewDraft,setReviewDraft:updateReviewDraft,reviewAnswers,openHints,showHint,feedbackEvent,storageFailed,
     reviewed:checked&&!!record&&explanationReviewed(record,reflection)&&sameJudgment(record.reflections.at(-1)?.judgment,judgment),
-    reasonRevision,setReasonRevision,reviewReason,requestExplanationReview,submit,begin,finish,recordExecution,interrupt,revise,explain,download,
+    reasonRevision,setReasonRevision,reviewReason,requestExplanationReview,recordDiagnosis,submit,begin,finish,recordExecution,interrupt,revise,explain,download,
     fields,history:memory.filter(r=>r.task===task),recordCount:memory.filter(r=>r.task===task).length};
 }
 

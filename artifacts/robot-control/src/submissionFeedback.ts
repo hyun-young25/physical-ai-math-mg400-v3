@@ -51,6 +51,16 @@ export function automaticHint(c:FeedbackContext,a:SubmissionAssessment,attempt:n
   const errors=a.errors.map(errorLabel).join("·");
   const step=typeof p.step==="number"?` · 단계 ${p.step+1}`:"";
   const prefix=`자동 피드백${step} · 제출 ${attempt}회${a.correct?"":` · 오답 ${wrongCount}회`}\n`;
+  const diagnosis=object(object(parse(c.judgment)).diagnosis);
+  if(c.task==="square"&&typeof diagnosis.question==="string"&&diagnosis.question) {
+    // Execution-based diagnosis: ask about the observed mismatch, never list the answers.
+    const level=typeof diagnosis.levelLabel==="string"?diagnosis.levelLabel:"";
+    return prefix+`실행 결과 비교 · ${level}\n${diagnosis.question}`+
+      (typeof diagnosis.relationHint==="string"&&diagnosis.relationHint?`\n관계 힌트: ${diagnosis.relationHint}`:"")+
+      (typeof diagnosis.example==="string"&&diagnosis.example?`\n${diagnosis.example}`:"")+
+      (diagnosis.teacherFlag===true?"\n같은 차이가 반복되어 선생님 화면에 도움 요청을 표시했어요.":"")+
+      (a.correct?"":"\n차이가 생긴 이유를 한 문장으로 적은 뒤 예측을 고쳐 다시 실행해 보세요.");
+  }
   if(c.task==="square"&&!a.correct) {
     const items=a.errors.map(error=>{
       const value=error.value===undefined||String(error.value).trim()===""?"미입력":String(error.value);

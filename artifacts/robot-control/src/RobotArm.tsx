@@ -10,6 +10,7 @@ import { getShapeLesson, SHAPE_LESSON_COUNT, shapeLessonFields, shapeLessonExpec
 import type { ShapeLesson } from "./shapeLearning";
 import { assessSquare, squareStudentSequence, squareExecutionKey, squareAnswersUnchanged, squarePlanMatchesTarget } from "./squareLearningFlow";
 import { SquareContinuation, type SquareContinuationPhase } from "./squareContinuation";
+import { SquareMeasurementDiagnosis } from "./SquareMeasurementDiagnosis";
 import type { LearningVisualState } from "./Robot3D";
 import { copyShapePose, measureShapeClosure, prepareShapeMotion, sampleShapeMotion, prepareShapeReturn, sampleShapeReturn, ShapeFrameScheduler } from "./shapeRun";
 import type { ShapeClosure, ShapeMotion, ShapePoseSnapshot, ShapeReturn, ShapeRunPhase } from "./shapeRun";
@@ -1578,6 +1579,7 @@ export function RobotArm({
             {shapeType==="사각형"&&continuationPhase==="complete"&&measurements.length>0&&<div>
               {mockRun&&<p role="status">모의 통신 · 실측 아님: 이 값은 학습 증거로 저장하지 않습니다.</p>}
               <MeasurementResults items={measurements} attempt={attemptCount} source={measurementSource}/>
+              {measurementSource==="hardware"&&!mockRun&&<SquareMeasurementDiagnosis lesson={currentShapeLesson} inquiry={inquiry} measurements={measurements} trialKey={`${measurementTrialId??"continuous"}:${attemptCount}:${measurements.length}`} supportMode={supportMode} disabled={status==="running"}/>}
             </div>}
             {shapeType === "사각형" && inquiry.reviewed && shapeLessonStage === 7 && <details className="lesson-card">
               <summary>추가 측정 · 실장비 / 가상 센서</summary>
@@ -1594,6 +1596,7 @@ export function RobotArm({
               {measurements.length > 0 && <>
                 <MeasurementResults items={measurements} attempt={attemptCount} source={measurementSource}/>
                 {measurementTrialId && <MeasurementFeedbackReview key={measurementTrialId} trialId={measurementTrialId} locked={status === "running"}/>}
+                {measurementSource==="hardware"&&!mockRun&&continuationPhase!=="complete"&&<SquareMeasurementDiagnosis lesson={currentShapeLesson} inquiry={inquiry} measurements={measurements} trialKey={`${measurementTrialId??"continuous"}:${attemptCount}:${measurements.length}`} supportMode={supportMode} disabled={status==="running"}/>}
               </>}
               <details><summary>이전 사각형 학습·측정 기록</summary>
                 <button onClick={() => downloadEvidence("square-legacy-learning-records.json", Object.fromEntries([

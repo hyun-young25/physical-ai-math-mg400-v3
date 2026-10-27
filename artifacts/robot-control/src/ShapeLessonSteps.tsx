@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { parseLessonNumber } from "./curriculum";
 import { compareInquiry, currentInquiryComparison, latestInquiryRuns, type useMathInquiry } from "./MathInquiry";
 import { ExplanationFeedback } from "./ExplanationFeedbackPanel";
@@ -8,6 +8,8 @@ import { LearningAiFeedback } from "./LearningAiFeedback";
 import { LEARNING_STAGES } from "./learningFramework";
 import "./shapeLessonSteps.css";
 import { LearningJudgmentFields, sameJudgment } from "./LearningJudgment";
+import { diagnoseSquare, priorSquareDiagnoses, squareFeedbackPlan, squareMismatchName, type XY } from "./squareMismatchDiagnosis";
+import { SquareDiagnosisPanel } from "./SquareDiagnosisPanel";
 
 type LessonStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 type BeforeRunStep = 1 | 2 | 3;
@@ -65,6 +67,38 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
   const reflectionFeedback = record?.reflections.filter(review => review.runCount === record.runs.length).at(-1);
   const reflectionAnswers = record?.answerReviews?.filter(review => review.runCount === record.runs.length).at(-1)?.answers ?? record?.prediction;
   const reflectionCurrent = reflectionFeedback?.text === q.reflection.trim() && q.fields.every(field => reflectionFeedback?.answers?.[field.key] === reflectionAnswers?.[field.key]) && sameJudgment(reflectionFeedback?.judgment, q.judgment);
+  // Prediction–execution diagnosis (square only): what the robot executed vs the task condition.
+  const isSquare = lesson.id.startsWith("square-");
+  const mission = record?.runs.filter(run => run.action === "mission").at(-1);
+  const rejected = mission?.status === "unavailable" ? (mission.detail as { rejectedTarget?: XY } | undefined)?.rejectedTarget ?? null : null;
+  const diagnosis = isSquare && record && q.ready && (hasCompletedObservation || rejected) ? diagnoseSquare(lesson, record.prediction, { rejected }) : null;
+  const priorTypes = diagnosis && record ? priorSquareDiagnoses(q.history, lesson, record.id) : [];
+  const diagnosisPlan = diagnosis ? squareFeedbackPlan(diagnosis, priorTypes.filter(type => type === diagnosis.type).length, supportMode,
+    diagnosis.type === "match" ? priorTypes.at(-1) : undefined) : null;
+  const diagnosisMismatch = !!diagnosis && diagnosis.type !== "match" && diagnosis.type !== "model-real";
+  const [cause, setCause] = useState("");
+  const sentDiagnosis = useRef("");
+  useLayoutEffect(() => { setCause(""); }, [record?.id, record?.runs.length]);
+  useEffect(() => {
+    if (!diagnosis || !diagnosisPlan || !record) return;
+    const key = `${record.id}:${record.runs.length}:${diagnosis.type}`;
+    if (sentDiagnosis.current === key) return;
+    sentDiagnosis.current = key;
+    const entry = { type: diagnosis.type, edge: diagnosis.edge, label: diagnosis.label, level: diagnosisPlan.level,
+      question: diagnosisPlan.question, relationHint: diagnosisPlan.relationHint, supportMode,
+      priorSameType: priorTypes.filter(type => type === diagnosis.type).length, teacherFlag: diagnosisPlan.teacherFlag, evidence: diagnosis.evidence };
+    q.recordDiagnosis(entry);
+    const rows = assessSquare(lesson, record.prediction);
+    const errors = rows.filter(row => !row.matched);
+    q.requestAi({ status: errors.length ? "incorrect" : "correct", errorCount: errors.length,
+      fields: (errors.length ? errors : rows).slice(0, 3).map(row => ({ key: row.key, label: row.label, value: row.value.slice(0, 60), matched: row.matched, feedback: "" })),
+      diagnosis: { type: diagnosis.type, name: squareMismatchName(diagnosis.type), label: diagnosis.label, edge: diagnosis.edge,
+        level: diagnosisPlan.level, levelLabel: diagnosisPlan.levelLabel, question: diagnosisPlan.question,
+        relationHint: diagnosisPlan.relationHint, example: diagnosisPlan.example, teacherFlag: diagnosisPlan.teacherFlag,
+        evidence: diagnosis.evidence } }, record.prediction);
+  }, [diagnosis?.type, diagnosisPlan?.level, record?.id, record?.runs.length]);
+  const diagnosisPanel = diagnosis && diagnosisPlan ? <SquareDiagnosisPanel diagnosis={diagnosis} plan={diagnosisPlan}
+    cause={cause} onCauseChange={setCause} causeRequired={diagnosisMismatch && diagnosis.type !== "unreachable"} disabled={locked}/> : null;
 
   useLayoutEffect(() => {
     setStep(1); setAttemptedStep(null); setHints([]); setFeedback("");
@@ -116,12 +150,19 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
 
   const reviewAnswers = () => {
     if(!lesson.id.startsWith("square-")){q.reviewAnswers();return;}
+    if(diagnosisMismatch&&!cause.trim()){setFeedback("로봇이 그린 결과와 과제 조건이 왜 달랐는지 먼저 한 문장으로 적어 주세요.");return;}
+    if(diagnosis&&diagnosisPlan&&cause.trim())q.recordDiagnosis({type:diagnosis.type,edge:diagnosis.edge,label:diagnosis.label,level:diagnosisPlan.level,
+      question:diagnosisPlan.question,relationHint:diagnosisPlan.relationHint,supportMode,priorSameType:priorTypes.filter(type=>type===diagnosis.type).length,
+      teacherFlag:diagnosisPlan.teacherFlag,evidence:diagnosis.evidence,causeExplanation:cause});
     const answers={...q.record?.prediction,...q.reviewDraft};
     q.requestAi(squareTutorJudgment(assessSquare(lesson,answers)),answers);
     // A changed answer is a new prediction, never approval of an old DT path.
     q.revise();q.setDraft(answers);
-    setStep(1);setAttemptedStep(null);
-    setFeedback("수정한 입력으로 다시 확인해 주세요. 예측 저장 → DT 실행 → 비교·성찰 후 실제 실행할 수 있어요. 처음 예측은 기록에 남습니다.");
+    // After an execution-based diagnosis only the coordinates change: return to the coordinate plan.
+    setStep(diagnosisMismatch?3:1);setAttemptedStep(null);
+    setFeedback(diagnosisMismatch
+      ?"차이의 이유를 기록했어요. 고친 좌표로 예측을 다시 저장하고 DT에서 다시 실행해 결과를 비교하세요. 처음 예측과 이유는 기록에 남습니다."
+      :"수정한 입력으로 다시 확인해 주세요. 예측 저장 → DT 실행 → 비교·성찰 후 실제 실행할 수 있어요. 처음 예측은 기록에 남습니다.");
   };
 
   const renderQuestion = (question: LessonQuestion, review = false, compact = false) => {
@@ -171,8 +212,13 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
     {activeStage === 3 ? "예측 저장 · 실행 준비" : "확인하고 다음"}
   </button> : activeStage === 5 ? <button type="button" className="lesson-primary" disabled={locked || !hasCompletedObservation || (q.detailedReflection && !q.observation.trim())} onClick={() => { if (q.saveObservation()) setStep(6); }}>관찰 완료 · 비교하기</button>
     : activeStage === 6 ? !q.comparisonAvailable ? <button type="button" className="lesson-primary" disabled={locked} onClick={() => reopen()}>예측·조건 다시 확인</button>
-      : !q.checked ? <button type="button" className="lesson-primary" disabled={locked} onClick={reviewAnswers}>수정한 판단 확인</button>
-        : !q.reviewed ? <button type="button" className="lesson-primary" disabled={locked || !q.reflectionReady || !q.judgmentReady} onClick={q.explain}>{q.taskKind === "practice" ? "비교 확인 저장" : "내 설명 저장"}</button>
+      : !q.checked ? <button type="button" className="lesson-primary" disabled={locked || (diagnosisMismatch && !cause.trim())} onClick={reviewAnswers}>{diagnosisMismatch ? "이유 저장 · 예측 고쳐 다시 실행" : "수정한 판단 확인"}</button>
+        : !q.reviewed ? <button type="button" className="lesson-primary" disabled={locked || !q.reflectionReady || !q.judgmentReady} onClick={() => {
+            // The optional self-check plan after a resolved mismatch is kept with the diagnosis.
+            if (diagnosis && diagnosisPlan && cause.trim()) q.recordDiagnosis({ type: diagnosis.type, label: diagnosis.label, level: diagnosisPlan.level,
+              question: diagnosisPlan.question, supportMode, priorSameType: 0, teacherFlag: false, evidence: diagnosis.evidence, causeExplanation: cause });
+            q.explain();
+          }}>{q.taskKind === "practice" ? "비교 확인 저장" : "내 설명 저장"}</button>
           : <button type="button" className="lesson-primary" disabled={locked} onClick={() => setStep(7)}>비교 완료 · 다음</button>
     : activeStage === 7 ? <button type="button" className="lesson-primary" disabled={locked || !q.reviewed || !canAdvance} onClick={() => { if (!canAdvance) return; q.feedbackEvent("transfer"); onNewCondition(); }}>{nextLabel}</button> : null;
 
@@ -227,6 +273,7 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
         </details>
         <div className="shape-step-execution">{execution}</div>
         {latestRuns.filter(run => run.status === "unavailable" || run.status === "stopped").map(run => <p className="shape-step-feedback" role="status" key={run.action}>{run.summary ?? "실행이 완료되지 않았습니다. 조건을 확인하고 다시 실행하세요."}</p>)}
+        {diagnosis?.type === "unreachable" && diagnosisPanel}
       </>}
       {activeStage === 5 && <>
         <p>경로의 모양, 마지막 점, 실행 전 자세로의 복귀를 확인하세요.</p>
@@ -238,13 +285,14 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
         </label> : <p className="lesson-note">장면에서 한 구간의 방향과 도형이 닫히는지 확인한 뒤 비교로 넘어가세요. 아래에서 이미 입력한 예측과 결과를 나란히 봅니다.</p>}
       </>}
       {activeStage === 6 && record && <>
+        {diagnosisPanel}
         <div className="shape-step-table-wrap" tabIndex={0} aria-label="처음 예측과 확인값 비교표">
           <table><thead><tr><th scope="col">항목</th><th scope="col">처음 예측</th><th scope="col">확인값</th>{hasReview && <th scope="col">수정한 판단</th>}</tr></thead>
             <tbody>{comparison.map(row => {
               const reviewed = currentComparison.find(value => value.key === row.key);
               return <tr key={row.key}><th scope="row">{row.label}</th>
                 <td data-match={row.matched}>{displayAnswer(row, row.prediction)}<small>{row.matched ? "일치" : "차이 있음"}</small></td>
-                <td>{displayAnswer(row, row.result)}</td>
+                <td>{diagnosisMismatch && !row.matched && !reviewed?.matched ? <small>실행 결과로 다시 계산</small> : displayAnswer(row, row.result)}</td>
                 {hasReview && <td data-match={reviewed?.matched}>{reviewed && displayAnswer(row, reviewed.prediction)}<small>{reviewed?.matched ? "일치" : "다시 확인"}</small></td>}
               </tr>;
             })}</tbody>

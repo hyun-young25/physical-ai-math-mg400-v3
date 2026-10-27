@@ -89,8 +89,8 @@ if(require.main===module)(async()=>{
     if(await active().getByLabel("예측 근거",{exact:true}).count())
       await active().getByLabel("예측 근거",{exact:true}).fill("각 변의 이동 방향과 좌표 변화량을 구분하고, 유지되는 좌표는 그대로 두었습니다.");
   }
-  async function predict(index=0,overrides={}){
-    for(let n=1;n<=3;n++){
+  async function predict(index=0,overrides={},from=1){
+    for(let n=from;n<=3;n++){
       await stage(n);await fillStage(index,overrides);
       await active().getByRole("button",{name:n===3?"예측 저장 · 실행 준비":"확인하고 다음",exact:true}).click();
     }
@@ -177,11 +177,18 @@ if(require.main===module)(async()=>{
   await page.getByLabel("도형 학습 지원",{exact:true}).selectOption("challenge");
   await predict(0,{p2x:"280"});await runDT();await compare();
   assert.equal(await id("button-shape-hardware-run").count(),0);
+  // Execution-based diagnosis: the executed P1 → P2 edge is 80 mm, not the 100 mm condition.
+  await id("square-diagnosis").waitFor();
+  assert.equal(await id("square-diagnosis").getAttribute("data-type"),"arithmetic");
+  assert.match(await id("square-diagnosis").innerText(),/P1 → P2에서 로봇이 그린 변의 길이는 80 mm/);
+  const revise=active().getByRole("button",{name:"이유 저장 · 예측 고쳐 다시 실행",exact:true});
   await active().getByLabel("다시 판단 P2의 X",{exact:true}).fill("300.04");
-  await active().getByRole("button",{name:"수정한 판단 확인",exact:true}).click();
-  await stage(1);assert.equal(await id("button-shape-hardware-run").count(),0);
-  await predict(0,{p2x:"300.04"});await runDT();await finishPractice();
-  passed.push("wrong challenge plan stays virtual; correcting it requires a new prediction plus fresh DT and comparison");
+  assert.equal(await revise.isDisabled(),true,"a cause explanation is required before revising");
+  await active().getByLabel("차이가 생긴 이유",{exact:true}).fill("P1의 X에 가로 길이 100이 아니라 80을 더했습니다.");
+  await revise.click();
+  await stage(3);assert.equal(await id("button-shape-hardware-run").count(),0);
+  await predict(0,{p2x:"300.04"},3);await runDT();await finishPractice();
+  passed.push("wrong challenge plan stays virtual; the DT result is diagnosed, a cause is required, and correcting it needs a new prediction plus fresh DT and comparison");
 
   // A restrictive site range is not expanded to admit the correct student path.
   await connect();

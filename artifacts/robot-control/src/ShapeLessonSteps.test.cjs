@@ -495,12 +495,25 @@ for (const shape of ['사각형', '삼각형', '동그라미']) test(`${shape}: 
   assert.equal(nodes(app.tree).some(node => node.props?.['aria-label'] === '결과 해석'), false);
   assert.equal(app.inquiry.checked, false);
   app.input(`다시 판단 ${numeric.label}`).onChange({ target: { value: String(numeric.answer) } }); app.render();
-  app.click('수정한 판단 확인');
   if(shape==='사각형'){
-    assertOneActivity(app,1);
+    // Execution-based diagnosis: the executed P1 → P2 edge is 125 mm, not the 100 mm condition.
+    const panel=nodes(app.tree).find(node=>node.type==='SquareDiagnosisPanel');
+    assert.ok(panel,'diagnosis panel shown after the DT run');
+    assert.equal(panel.props.diagnosis.type,'arithmetic');
+    assert.equal(panel.props.diagnosis.edge,'P1 → P2');
+    assert.equal(panel.props.plan.level,'task');
+    assert.equal(panel.props.causeRequired,true);
+    assert.equal(app.inquiry.record.mismatchDiagnoses[0].type,'arithmetic');
+    assert.equal(Boolean(app.button('이유 저장 · 예측 고쳐 다시 실행').disabled),true,'cause is required before revising');
+    assert.equal(app.text.includes(`${numeric.label}${wrong} mm차이 있음${numeric.answer} mm`),false,'mismatched answer is not revealed');
+    panel.props.onCauseChange('P1의 X에 가로 길이 100이 아니라 125를 더했다.'); app.render();
+    app.click('이유 저장 · 예측 고쳐 다시 실행');
+    assertOneActivity(app,3);
     assert.equal(app.inquiry.ready,false);
     assert.equal(app.inquiry.checked,false);
-    app.complete();
+    const saved=JSON.parse(app.storage.get('physical-ai-inquiry-evidence-v1'))[0].mismatchDiagnoses[0];
+    assert.equal(saved.causeExplanation,'P1의 X에 가로 길이 100이 아니라 125를 더했다.');
+    app.fill('calculation'); app.fill('prediction'); app.click('예측 저장 · 실행 준비');
     assert.notEqual(app.inquiry.record.id,initialId);
     assert.equal(app.inquiry.record.previousId,initialId);
     assert.equal(app.inquiry.record.prediction[numeric.key],String(numeric.answer));
@@ -514,6 +527,7 @@ for (const shape of ['사각형', '삼각형', '동그라미']) test(`${shape}: 
     assert.equal(history[1].runs.length,1);
     return;
   }
+  app.click('수정한 판단 확인');
   assert.equal(app.inquiry.checked, true);
   assert.equal(app.inquiry.record.prediction[numeric.key], wrong);
   assert.equal(app.inquiry.record.answerReviews[0].answers[numeric.key], String(numeric.answer));

@@ -13,6 +13,8 @@ function squareDependency(name){
 }
 module.exports = {
   "./squareLearningFlow": squareDependency("squareLearningFlow"),
+  "./squareMismatchDiagnosis": squareDependency("squareMismatchDiagnosis"),
+  "./SquareDiagnosisPanel": { SquareDiagnosisPanel: "SquareDiagnosisPanel" },
   "./LearningAiFeedback": { LearningAiFeedback: () => null, useLearningAi: () => ({request:()=>Promise.resolve()}) },
   "./learningAiContext": { makeFeedbackContext: () => ({}), numericFeedbackContext:()=>({}) },
   "./learningClient": { getLearningUser: () => null },
