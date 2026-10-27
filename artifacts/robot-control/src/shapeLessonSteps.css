@@ -1,0 +1,130 @@
+/* Use curriculum.css for shared controls, cards, primary actions and feedback. */
+.lesson-scroll.shape-lesson-content { padding: 16px; gap: 10px; font-size: 14px; line-height: 1.65; }
+.shape-lesson-content button, .shape-lesson-content input, .shape-lesson-content select { font-family: inherit; }
+.shape-learning-panel { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.shape-lesson-content h3 { margin: 0; color: #3730a3; font-size: 16px; line-height: 1.5; }
+.shape-lesson-content summary { cursor: pointer; }
+.shape-lesson-content summary:focus-visible, .shape-step-table-wrap:focus-visible,
+.shape-measurement-table-wrap:focus-visible { outline: 3px solid #0891b2; outline-offset: 2px; }
+
+/* Compact setup keeps the conditions and the current question in view. */
+.shape-type-tabs { flex-wrap: nowrap; gap: 6px; }
+.shape-lesson-content .shape-type-tabs button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 0; min-height: 34px; padding: 6px 10px; font-size: 13px; }
+.shape-learning-panel .shape-lesson-settings { border: 0; color: #64748b; font-size: 13px; }
+.shape-lesson-settings > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 30px; list-style: none; }
+.shape-lesson-settings > summary::-webkit-details-marker { display: none; }
+.shape-settings-current { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-weight: 500; }
+.shape-settings-current > span { color: #64748b; font-size: 12px; }
+.shape-settings-toggle { display: inline-flex; align-items: center; flex-shrink: 0; gap: 6px; color: #4338ca; font-size: 12px; }
+.shape-settings-close-label, .shape-lesson-settings[open] .shape-settings-open-label { display: none; }
+.shape-lesson-settings[open] .shape-settings-close-label { display: inline; }
+.shape-lesson-settings[open] .shape-settings-toggle > [aria-hidden] { transform: rotate(180deg); }
+.shape-learning-panel .shape-lesson-toolbar { display: flex; flex-wrap: wrap; gap: 10px 16px; padding: 12px 0; border-bottom: 1px solid #e2e8f0; }
+.shape-learning-panel .shape-lesson-toolbar label { flex: 1 1 160px; gap: 5px; color: #64748b; font-size: 12px; font-weight: 500; }
+.shape-learning-panel .shape-lesson-toolbar select { min-height: 36px; padding: 7px 9px; font-size: 14px; font-weight: 500; }
+.shape-learning-panel .shape-problem-focus { padding: 0 0 12px; border-bottom: 1px solid #e2e8f0; min-width: 0; }
+.shape-learning-panel .shape-problem-focus h2 { margin: 0 0 8px; color: #3730a3; font-size: 16px; font-weight: 700; line-height: 1.4; word-break: keep-all; overflow-wrap: anywhere; }
+.shape-problem-facts { display: grid; gap: 6px; margin: 0; padding: 10px 12px; border-left: 3px solid #6366f1; border-radius: 6px; background: #eef2ff; }
+.shape-problem-facts > div { min-width: 0; }
+.shape-problem-facts dt { margin: 0 0 2px; color: #64748b; font-size: 12px; line-height: 1.4; }
+.shape-problem-facts dd { margin: 0; min-width: 0; color: #1e1b4b; font-size: 15px; font-weight: 600; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.shape-learning-panel .shape-problem-note { margin-top: 7px; color: #475569; font-size: 12px; line-height: 1.5; }
+.shape-problem-details { margin-top: 7px; color: #64748b; font-size: 12px; }
+.shape-problem-details > summary { color: #4338ca; }
+.shape-learning-panel .shape-problem-details > p { margin-top: 8px; color: #475569; font-size: 14px; line-height: 1.6; }
+
+/* One shared visual scale for all shapes and all seven stages. */
+.shape-lesson-steps { display: flex; flex-direction: column; gap: 10px; min-width: 0; color: #334155; font-size: 14px; line-height: 1.65; }
+.shape-lesson-steps p { margin: 0; }
+.shape-lesson-steps .lesson-note { color: #64748b; font-size: 13px; }
+.shape-learning-panel .shape-step-progress { padding: 0; color: #475569; font-size: 12px; }
+.shape-step-progress strong { color: #3730a3; }
+.shape-step-active { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.shape-step-active h4 { margin: 0; color: #3730a3; font-size: 14px; }
+.shape-learning-panel .shape-step-intro { color: #64748b; font-size: 13px; line-height: 1.55; }
+.shape-step-fields { display: grid; gap: 12px; }
+.shape-step-field { min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.shape-learning-panel .shape-step-field > label { color: #334155; font-size: 16px; font-weight: 650; line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }
+.shape-learning-panel .shape-step-field > input,
+.shape-learning-panel .shape-step-field > select { min-height: 38px; font-size: 14px; padding: 8px 10px; }
+.shape-lesson-steps select { white-space: normal; }
+.shape-learning-panel .shape-step-reason { color: #334155; font-size: 14px; }
+.shape-lesson-steps textarea { width: 100%; min-width: 0; box-sizing: border-box; padding: 10px; border: 1px solid #cbd5e1; border-radius: 7px; color: #1e293b; background: #fff; font: inherit; line-height: 1.65; resize: vertical; }
+.shape-lesson-steps textarea:disabled { opacity: .5; cursor: not-allowed; }
+.shape-lesson-steps textarea:focus-visible { outline: 3px solid #0891b2; outline-offset: 2px; }
+.shape-step-field-help { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; font-size: 13px; line-height: 1.55; }
+.shape-step-field-help > span, .shape-step-hint { color: #64748b; }
+.shape-step-hint { display: block; }
+.shape-step-field[data-status="incorrect"] input, .shape-step-field[data-status="incorrect"] select,
+.shape-step-field[data-status="empty"] input, .shape-step-field[data-status="empty"] select { border-color: #dc2626; background: #fffafa; }
+.shape-step-field[data-status="correct"] input, .shape-step-field[data-status="correct"] select { border-color: #16a34a; background: #f7fef9; }
+.shape-step-field[data-status="incorrect"] .shape-step-field-help > span,
+.shape-step-field[data-status="empty"] .shape-step-field-help > span { color: #b91c1c; }
+.shape-step-field[data-status="correct"] .shape-step-field-help > span,
+.shape-lesson-steps .shape-step-success { color: #15803d; }
+.shape-lesson-steps .shape-step-feedback { border-left: 3px solid #6366f1; padding: 9px 12px; border-radius: 6px; background: #eef2ff; color: #334155; font-size: 14px; }
+.shape-step-actions { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; position: static; padding: 8px 0 0; border-top: 1px solid #e2e8f0; }
+.shape-step-actions .lesson-primary { flex: 1 1 155px; margin-left: auto; }
+.shape-step-actions .shape-step-secondary { flex: 0 1 auto; }
+.shape-learning-panel .shape-step-actions button { padding: 8px 10px; font-size: 14px; font-weight: 650; }
+.shape-lesson-steps .shape-step-text-button { flex: 0 0 auto; padding: 3px 0; border: 0; background: transparent; color: #4338ca; font-size: 12px; }
+.shape-step-completed, .shape-step-evidence { min-width: 0; border: 0; padding: 0; font-size: 13px; }
+.shape-step-completed > summary, .shape-step-evidence > summary { color: #4338ca; padding: 3px 0; }
+.shape-step-completed[open], .shape-step-evidence[open] { display: block; }
+.shape-step-completed[open] > :not(summary), .shape-step-evidence[open] > :not(summary) { margin-top: 10px; }
+.shape-step-summary { display: flex; align-items: flex-start; gap: 12px; padding-bottom: 9px; border-bottom: 1px solid #e2e8f0; }
+.shape-step-summary > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.shape-step-summary strong { color: #475569; }
+.shape-step-summary span { color: #64748b; overflow-wrap: anywhere; font-size: 12px; }
+.shape-step-table-wrap { overflow-x: auto; min-width: 0; }
+.shape-step-table-wrap table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.shape-lesson-content .shape-step-table-wrap th,
+.shape-lesson-content .shape-step-table-wrap td { padding: 9px 7px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: top; min-width: 70px; overflow-wrap: anywhere; }
+.shape-step-table-wrap thead th { color: #475569; background: #f8fafc; font-weight: 700; }
+.shape-step-table-wrap tbody th { min-width: 100px; font-weight: 600; }
+.shape-step-table-wrap td small { display: block; font-size: 12px; margin-top: 4px; }
+.shape-step-table-wrap td[data-match="true"] small { color: #15803d; }
+.shape-step-table-wrap td[data-match="false"] small { color: #b91c1c; }
+.shape-step-execution, .shape-step-observation { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.shape-lesson-steps .explanation-feedback { margin: 0; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-size: 13px; }
+.shape-lesson-steps .explanation-feedback h4 { font-size: 13px; margin: 0 0 6px; }
+.shape-lesson-steps .explanation-feedback details { margin-top: 8px; }
+
+/* Plan every point together without repeating a large prompt for each axis. */
+.shape-step-coordinate-wrap { min-width: 0; overflow-x: auto; }
+.shape-step-coordinate-wrap:focus-visible { outline: 3px solid #0891b2; outline-offset: 2px; }
+.shape-step-coordinate-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
+.shape-step-coordinate-table caption { padding: 0 0 6px; color: #64748b; font-size: 12px; text-align: left; }
+.shape-step-coordinate-table th, .shape-step-coordinate-table td { padding: 7px 6px; border-bottom: 1px solid #e2e8f0; vertical-align: top; text-align: left; }
+.shape-step-coordinate-table thead th { color: #475569; background: #f8fafc; font-weight: 600; }
+.shape-step-coordinate-table th:first-child { width: 23%; }
+.shape-step-coordinate-table th:last-child { width: 17%; }
+.shape-step-coordinate-table tbody th { color: #475569; font-weight: 600; overflow-wrap: anywhere; }
+.shape-step-coordinate-table tr[data-point-kind="closure"] { background: #f8fafc; }
+.shape-step-coordinate-field { gap: 4px; }
+.shape-learning-panel .shape-step-coordinate-field > label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.shape-learning-panel .shape-step-coordinate-field > input { box-sizing: border-box; width: 100%; min-width: 0; min-height: 34px; padding: 6px 7px; font-size: 14px; }
+.shape-step-coordinate-field .shape-step-field-help { gap: 4px; flex-wrap: wrap; font-size: 12px; }
+.shape-step-coordinate-field .shape-step-field-help > span:empty { display: none; }
+.shape-step-coordinate-field .shape-step-text-button { padding: 0; }
+.shape-step-coordinate-table .shape-step-given-coordinate { padding-top: 13px; color: #64748b; font-variant-numeric: tabular-nums; }
+
+/* Execution, coordinate editing and optional measurements share the same shell. */
+.shape-lesson-content .shape-run-status { color: #475569; font-size: 12px; }
+.shape-lesson-content .shape-run-status button { margin-top: 6px; padding: 6px 10px; }
+.shape-coordinate-editor { overflow-wrap: anywhere; }
+.shape-measurement-results { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.shape-lesson-content .shape-measurement-source { font-size: 13px; }
+.shape-measurement-source[data-source="hardware"] { border-color: #86efac; background: #f0fdf4; color: #166534; }
+.shape-measurement-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.shape-measurement-metrics > div { min-width: 0; padding: 8px; border: 1px solid #c7d2fe; border-radius: 7px; background: #eef2ff; text-align: center; overflow-wrap: anywhere; }
+.shape-measurement-metrics small { display: block; color: #64748b; font-size: 12px; }
+.shape-measurement-metrics strong { display: block; color: #3730a3; font-size: 14px; font-weight: 700; }
+.shape-measurement-table-wrap { overflow-x: auto; min-width: 0; }
+.shape-measurement-table-wrap table { font-size: 13px; font-variant-numeric: tabular-nums; }
+.shape-lesson-content .shape-measurement-table-wrap th,
+.shape-lesson-content .shape-measurement-table-wrap td { padding: 8px; white-space: nowrap; }
+.shape-measurement-table-wrap thead { color: #475569; background: #f8fafc; }
+.shape-lesson-content .shape-measurement-table-wrap th:first-child,
+.shape-lesson-content .shape-measurement-table-wrap td:first-child { text-align: left; }
+.shape-lesson-content .shape-measurement-hint { color: #334155; font-size: 13px; }

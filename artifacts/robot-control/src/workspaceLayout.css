@@ -1,0 +1,86 @@
+/* Keep these containers mounted: layout changes must never recreate a session or lesson. */
+#root:has(.robot-app-shell) { display: flex; flex-direction: column; height: 100dvh; }
+.robot-app-shell { flex: 1; height: auto; min-height: 0; }
+#root:has(.robot-app-shell) > .learning-student-bar { flex-shrink: 0; }
+.robot-app-header button { flex-shrink: 0; white-space: nowrap; }
+.robot-app-header .pr-lock { position: static; }
+.workspace-layout {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+.learning-workspace { min-width: 0; overflow: auto; }
+.learning-workspace > .curriculum-scene { overflow: auto; }
+.practice-settings-host {
+  flex: 0 0 380px;
+  width: 380px;
+  min-width: 0;
+  min-height: 0;
+  border-left: 2px solid #b9c8d4;
+  background: #fff;
+}
+.practice-settings-host[hidden] { display: none; }
+.practice-settings-host > .pr-panel {
+  position: static;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.pr-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.pr-panel-heading h2 { margin: 0; font-size: 15px; font-weight: 800; color: #0b2d5c; }
+.pr-panel-heading button { flex-shrink: 0; }
+.practice-settings-host .pr-grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.practice-settings-host .pr-grid4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.practice-settings-host .pr-panel input { max-width: 100%; }
+
+/* Below the combined minimum reading widths, put settings below the workspace,
+   not on top of it. Each region keeps its own scroll surface. */
+@media (max-width: 1400px) {
+  .workspace-layout { flex-direction: column; }
+  .workspace-layout--settings > .learning-workspace {
+    flex: 0 0 auto;
+    height: max(700px, 85dvh);
+    min-height: 700px;
+  }
+  .practice-settings-host {
+    flex: 0 0 540px;
+    width: 100%;
+    height: 540px;
+    border-left: 0;
+    border-top: 2px solid #b9c8d4;
+  }
+}
+@media (max-width: 900px) {
+  .workspace-layout > .workspace-has-lesson {
+    flex: 0 0 auto;
+    flex-direction: column !important;
+    height: auto;
+    min-height: 1040px;
+  }
+  .workspace-layout > .workspace-has-lesson > .curriculum-scene {
+    flex: 0 0 380px !important;
+    height: 380px !important;
+    min-height: 380px;
+  }
+  .workspace-layout .curriculum-panel,
+  .workspace-layout .foundation-panel {
+    flex: 0 0 660px !important;
+    height: 660px !important;
+    width: 100%;
+    min-width: 0;
+  }
+  .learning-workspace:not(.workspace-has-lesson) > .shrink-0 { min-width: 760px; }
+}
+@media (max-width: 420px) {
+  .practice-settings-host .pr-grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

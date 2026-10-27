@@ -1,0 +1,104 @@
+현재 문제는 단순 position/rotation 값 하나의 문제가 아니라, MG400의 parallel linkage가 폐쇄링크 구조인데 Three.js group tree로 억지로 재현하면서 생기는 접합 문제로 보입니다.
+
+따라서 이제 `link3_2.STL`, `link4_2.STL`의 회전값을 계속 조정하지 말고, parallel chain의 검은 링크는 두 pivot marker 사이를 실시간으로 잇는 procedural link로 대체해주세요.
+
+핵심 방향:
+
+1. 기존 main chain은 유지합니다.
+2. `j2_2`의 Y값 수정은 유지합니다.
+
+```jsx id="g70umc"
+<group ref={j22Ref} position={[0.004528856, -0.0305, 0.1415]}>
+```
+
+3. `j31Ref.rotation.y = -PI2`, `j32Ref.rotation.y = -a3 * dd - PI2`는 기존값으로 유지합니다.
+4. `geometry.center()`, `geometry.translate()`, `mesh.position=-pivot`, visual wrapper 방식은 사용하지 않습니다.
+5. 문제가 되는 검은 parallel link는 STL을 억지로 맞추지 말고, pivot marker 사이를 실시간으로 잇는 box link로 렌더링합니다.
+
+예시 컴포넌트:
+
+```jsx id="xwfzgi"
+import * as THREE from "three";
+import { useFrame } from "@react-three/fiber";
+import { useRef } from "react";
+
+function DynamicBoxLink({ startRef, endRef, rootRef, thickness = 0.008, depth = 0.006, color = "#111" }) {
+  const meshRef = useRef();
+
+  const p1 = new THREE.Vector3();
+  const p2 = new THREE.Vector3();
+  const localP1 = new THREE.Vector3();
+  const localP2 = new THREE.Vector3();
+  const mid = new THREE.Vector3();
+  const dir = new THREE.Vector3();
+  const xAxis = new THREE.Vector3(1, 0, 0);
+
+  useFrame(() => {
+    if (!startRef.current || !endRef.current || !rootRef.current || !meshRef.current) return;
+
+    startRef.current.getWorldPosition(p1);
+    endRef.current.getWorldPosition(p2);
+
+    localP1.copy(p1);
+    localP2.copy(p2);
+
+    rootRef.current.worldToLocal(localP1);
+    rootRef.current.worldToLocal(localP2);
+
+    dir.copy(localP2).sub(localP1);
+    const length = dir.length();
+    if (length < 0.0001) return;
+
+    mid.copy(localP1).add(localP2).multiplyScalar(0.5);
+
+    meshRef.current.position.copy(mid);
+    meshRef.current.quaternion.setFromUnitVectors(xAxis, dir.normalize());
+    meshRef.current.scale.set(length, thickness, depth);
+  });
+
+  return (
+    <mesh ref={meshRef}>
+      <boxGeometry args={[1, 1, 1]} />
+      <meshStandardMaterial color={color} />
+    </mesh>
+  );
+}
+```
+
+사용 예시:
+
+```jsx id="cmukqp"
+<group ref={robotRootRef} rotation={[-Math.PI / 2, 0, 0]} scale={1000}>
+  ...
+  <DynamicBoxLink
+    startRef={parallelStartRef}
+    endRef={parallelEndRef}
+    rootRef={robotRootRef}
+    thickness={0.008}
+    depth={0.006}
+    color="#111"
+  />
+</group>
+```
+
+여기서 `parallelStartRef`, `parallelEndRef`는 현재 화면의 검은 링크가 붙어야 하는 두 joint marker에 달아주세요.
+
+예를 들어 하부 검은 긴 링크는:
+
+```text id="25j4sw"
+startRef = orange marker 쪽 pivot
+endRef = yellow marker 쪽 pivot
+```
+
+짧은 검은 보조 링크도 필요하면 같은 방식으로:
+
+```text id="wk22tu"
+startRef = blue marker 쪽 pivot
+endRef = orange marker 쪽 pivot
+```
+
+처럼 하나 더 생성합니다.
+
+중요한 점은 parallel link를 STL mesh 회전값으로 맞추려고 하지 말고, 실제 pivot marker 두 점을 연결하는 방식으로 시각화하는 것입니다.
+
+이 방식이면 시작점과 끝점이 항상 pivot에 붙기 때문에, 현재처럼 링크 끝이 떠 보이는 문제가 사라집니다.

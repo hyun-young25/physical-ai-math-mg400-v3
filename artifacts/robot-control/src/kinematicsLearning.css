@@ -1,0 +1,71 @@
+.kinematics-learning .kinematics-task-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 18px;
+}
+.kinematics-task-list li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 8px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.kinematics-task-list li[aria-current="step"] {
+  background: #eff6ff;
+  color: #1e3a5f;
+  border-color: #5a91c7;
+  font-weight: 700;
+}
+.kinematics-task-list li.is-complete { color: #166534; background: #f0fdf4; }
+.kinematics-learning .kinematics-problem { border-left: 3px solid #2563a3; }
+.kinematics-learning .kinematics-direction { display: block; color: #1e3a5f; line-height: 1.7; }
+.kinematics-learning .kinematics-formula { margin: 14px 0; }
+.kinematics-learning .kinematics-formula summary { cursor: pointer; font-weight: 700; }
+.kinematics-learning .kinematics-formula .lesson-formula { line-height: 1.9; font-size: 13px; }
+.kinematics-learning table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.kinematics-learning table th, .kinematics-learning table td {
+  border: 1px solid #dbe3ed;
+  padding: 9px 7px;
+  text-align: center;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+.kinematics-learning table th { background: #f1f5f9; }
+.kinematics-learning .kinematics-changed td:last-child { color: #164e83; background: #edf6ff; font-weight: 700; }
+.kinematics-learning .kinematics-result p { line-height: 1.8; }
+.kinematics-learning .kinematics-target input:disabled { opacity: 1; color: #334155; -webkit-text-fill-color: #334155; }
+.kinematics-learning button:disabled { cursor: not-allowed; }
+@media (max-width: 600px) {
+  .kinematics-learning .kinematics-task-list { gap: 4px; }
+  .kinematics-task-list li { align-items: flex-start; padding: 8px 5px; font-size: 11px; }
+}
+
+/* Reuse the lesson's existing card colors while bringing the reference into view. */
+.kinematics-learning { gap: 10px; }
+.kinematics-learning .kinematics-problem { margin: 0; padding: 12px 14px; gap: 6px; }
+.kinematics-learning .kinematics-problem h3 { margin: 0 0 6px; }
+.kinematics-learning .kinematics-problem p { margin: 0; }
+.kinematics-learning .kinematics-direction { font-size: 13px; }
+.kinematics-learning .kinematics-reference,
+.kinematics-learning .kinematics-target { margin: 0; padding: 12px 14px; gap: 4px; }
+.kinematics-learning .kinematics-reference h3,
+.kinematics-learning .kinematics-target h3 { margin: 0 0 8px; }
+.kinematics-learning .kinematics-reference p { margin: 6px 0; }
+.kinematics-learning .kinematics-reference th,
+.kinematics-learning .kinematics-reference td { padding: 6px; }
+.kinematics-learning .kinematics-joint-select {
+  border: 1px solid transparent; border-radius: 6px; padding: 4px 6px;
+  background: transparent; color: #475569; font: inherit; font-weight: 700; cursor: pointer;
+}
+.kinematics-learning .kinematics-joint-select[aria-pressed="true"] {
+  background: #eef2ff; color: #4338ca; border-color: #a5b4fc;
+}
+.kinematics-learning .kinematics-joint-select:focus-visible { outline: 2px solid #4f46e5; outline-offset: 2px; }
+.kinematics-learning .kinematics-notation { margin: 10px 0; line-height: 1.6; }

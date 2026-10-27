@@ -1,0 +1,6 @@
+.task-start-point{flex-shrink:0;min-width:0;border:1px solid #9bbbd2;border-left:4px solid #0284c7;border-radius:6px;background:#f0f9ff;padding:10px 12px;margin:8px 0;color:#15364d;font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+.task-start-point p{margin:4px 0;font-variant-numeric:tabular-nums}
+.task-start-point p>span{font-size:11px}
+.task-start-point button{padding:8px 12px!important;min-height:36px;border:1px solid #0369a1!important;border-radius:5px;background:#fff;color:#075985!important;font-weight:750;cursor:pointer;white-space:normal}
+.task-start-point button:disabled{opacity:.5;cursor:not-allowed}
+.task-start-point [role=status]{font-weight:650}

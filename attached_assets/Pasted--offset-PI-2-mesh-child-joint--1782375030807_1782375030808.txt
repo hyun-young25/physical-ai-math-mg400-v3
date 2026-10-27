@@ -1,0 +1,119 @@
+현재 마커를 보면 단순 offset 문제가 아니라, `-PI/2` 회전 보정이 mesh뿐 아니라 child joint까지 함께 회전시키면서 접합 위치가 어긋나는 것으로 보입니다.
+
+따라서 mesh 방향 보정용 `-PI2`와 joint 계층 회전을 분리해서 테스트해주세요.
+
+현재 구조는 아래처럼 되어 있습니다.
+
+```jsx
+<group ref={j3Ref} position={[-0.00105, 0.03577, 0.175]}>
+  <group ref={j31Ref}>
+    <mesh geometry={l31G} />
+
+    <group ref={j41Ref} position={[0.175, -0.017, 0.00325]}>
+      <mesh geometry={l41G} />
+      ...
+    </group>
+  </group>
+</group>
+```
+
+이 상태에서
+
+```js
+j31Ref.current.rotation.y = -PI2;
+```
+
+를 적용하면 `link3_1`뿐 아니라 `j41Ref`까지 같이 회전됩니다.
+그래서 손목 쪽 접합점이 STL 구멍 중심과 어긋나는 것 같습니다.
+
+아래처럼 `link3_1`의 mesh 회전 보정만 별도 visual group으로 분리해주세요.
+
+```jsx
+<group ref={j3Ref} position={[-0.0010512570, 0.0357748756, 0.175001164]}>
+  <group ref={j31Ref}>
+    {/* link3_1 STL 방향 보정용 visual group */}
+    <group ref={l31VisualRef} rotation={[0, -PI2, 0]}>
+      <mesh geometry={l31G} />
+    </group>
+
+    {/* j41Ref는 l31VisualRef 안에 넣지 않음 */}
+    <group ref={j41Ref} position={[0.174969784, -0.017, 0.003251871]}>
+      <mesh geometry={l41G} />
+
+      <group ref={j4Ref} position={[0.065999623, 0.017, 0.031000800]}>
+        <mesh geometry={l5G} />
+      </group>
+    </group>
+  </group>
+</group>
+```
+
+rotation 적용부는 아래처럼 수정합니다.
+
+```js
+// main chain
+j2Ref.current.rotation.y = PI2 - a2 * dd;
+j3Ref.current.rotation.y = -a3 * dd;
+
+// j31Ref에는 더 이상 -PI2를 주지 않음
+j31Ref.current.rotation.y = 0;
+
+// -PI2는 l31VisualRef에 고정 적용
+l31VisualRef.current.rotation.y = -PI2;
+
+j41Ref.current.rotation.y = (a2 + a3) * dd;
+j4Ref.current.rotation.z = a4 * dd;
+```
+
+parallel chain도 같은 방식으로 분리합니다.
+
+현재 구조:
+
+```jsx
+<group ref={j32Ref} position={[-0.00105, 0.0065, 0.175]}>
+  <mesh geometry={l32G} />
+
+  <group ref={j42Ref} position={[0.0679, 0.0005, 0.01197]}>
+    <mesh geometry={l42G} />
+  </group>
+</group>
+```
+
+수정 구조:
+
+```jsx
+<group ref={j32Ref} position={[-0.001050497, 0.0065, 0.174996846]}>
+  {/* link3_2 STL 방향 보정용 visual group */}
+  <group ref={l32VisualRef} rotation={[0, -PI2, 0]}>
+    <mesh geometry={l32G} />
+  </group>
+
+  {/* j42Ref는 l32VisualRef 안에 넣지 않음 */}
+  <group ref={j42Ref} position={[0.067896585, 0.0005, 0.011971999]}>
+    <mesh geometry={l42G} />
+  </group>
+</group>
+```
+
+rotation 적용부는 아래처럼 수정합니다.
+
+```js
+// parallel chain
+j22Ref.current.rotation.y = PI2 - a2 * dd;
+
+// j32Ref는 실제 관절 회전만 담당
+j32Ref.current.rotation.y = -a3 * dd;
+
+// -PI2는 mesh visual 보정에만 적용
+l32VisualRef.current.rotation.y = -PI2;
+
+j42Ref.current.rotation.y = 0;
+```
+
+주의사항:
+
+1. `mesh.position` offset은 사용하지 않습니다.
+2. `geometry.center()`, `geometry.translate()`, `mesh.position=-pivot`은 사용하지 않습니다.
+3. `j31Ref.rotation.y = -PI2`처럼 child joint까지 같이 돌리는 구조를 피합니다.
+4. `-PI2`는 STL mesh 방향 보정용 visual wrapper에만 적용합니다.
+5. 수정 후 기준 자세 `a1=0, a2=0, a3=60, a4=0`에서 마커가 구멍 중심과 맞는지 다시 확인해주세요.

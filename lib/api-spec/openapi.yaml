@@ -1,0 +1,333 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: MG400 ID-labelled append-only learning and owner-only record access
+servers:
+  - url: /api
+tags:
+  - name: health
+  - name: Auth
+paths:
+  /learning/feedback/status:
+    get:
+      operationId: getLearningFeedbackStatus
+      summary: Owner-only sanitized GPT availability
+      responses:
+        "200":
+          description: No credentials or student content
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LearningFeedbackAvailability" }
+        "401": { description: Owner authentication required }
+        "403": { description: Project owner only }
+  /learning/feedback:
+    post:
+      operationId: requestLearningFeedback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LearningFeedbackInput" }
+      responses:
+        "200":
+          description: Advisory feedback only; never a grade or motion command
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LearningFeedback" }
+        "400": { description: Invalid context }
+        "403": { description: Invalid learning visit or origin }
+        "429": { description: Public usage limit }
+  /auth/user:
+    get:
+      tags: [Auth]
+      operationId: getCurrentAuthUser
+      responses:
+        "200":
+          description: Current verified identity; does not grant professor access
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthUserEnvelope" }
+  /login:
+    get:
+      tags: [Auth]
+      operationId: beginBrowserLogin
+      parameters:
+        - { name: returnTo, in: query, schema: { type: string } }
+      responses:
+        "302": { description: "OIDC authorization with state, nonce and PKCE S256" }
+  /callback:
+    get:
+      tags: [Auth]
+      operationId: handleBrowserLoginCallback
+      responses:
+        "302": { description: Verified browser session and safe relative redirect }
+        "401": { description: Invalid or expired OIDC flow }
+  /logout:
+    get:
+      tags: [Auth]
+      operationId: logoutBrowserSession
+      parameters:
+        - { name: returnTo, in: query, schema: { type: string } }
+      responses:
+        "302": { description: Session revoked }
+  /learning/session:
+    get:
+      operationId: getLearningSession
+      security: [{ ReplitSession: [] }]
+      responses:
+        "200":
+          description: The single configured and authenticated project owner
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LearningIdentityEnvelope" }
+        "401": { description: No verified OIDC session }
+        "403": { description: Not the configured owner }
+        "503": { description: Owner binding not configured; access denied }
+  /learning/student/enter:
+    post:
+      operationId: enterLearningStudent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LearningStudentCredentials" }
+      responses:
+        "200":
+          description: Fresh write-only visit; an ID label is not authentication
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LearningIdentityEnvelope" }
+  /learning/records:
+    get:
+      operationId: getStudentLearningRecords
+      responses:
+        "403": { description: "No student history retrieval, including the same ID" }
+    post:
+      operationId: appendLearningRecords
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LearningEventBatch" }
+      responses:
+        "200":
+          description: Immutable event IDs acknowledged, duplicate retries do not overwrite
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LearningAcknowledgement" }
+  /learning/teacher/students:
+    get:
+      operationId: getTeacherLearningStudents
+      security: [{ ReplitSession: [] }]
+      responses:
+        "200":
+          description: Owner-only ID-grouped activity, including preserved legacy labels
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LearningObject" }
+        "401": { description: Authentication required }
+        "403": { description: Non-owner denied }
+        "503": { description: Owner configuration missing; denied }
+  /learning/teacher/records:
+    get:
+      operationId: getTeacherLearningRecords
+      security: [{ ReplitSession: [] }]
+      parameters:
+        - { name: login, in: query, schema: { type: string } }
+        - { name: chapter, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time }, description: Exclusive upper bound }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0 } }
+      responses:
+        "200":
+          description: Owner-only paginated immutable revisions across the project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LearningObject" }
+        "401": { description: Authentication required }
+        "403": { description: Non-owner denied }
+        "503": { description: Owner configuration missing; denied }
+  /learning/teacher/csv:
+    get:
+      operationId: exportTeacherLearningCsv
+      security: [{ ReplitSession: [] }]
+      parameters:
+        - { name: login, in: query, schema: { type: string } }
+        - { name: chapter, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time }, description: Exclusive upper bound }
+      responses:
+        "200":
+          description: Owner-only complete UTF-8 BOM CSV, including initial predictions and later revisions
+          content:
+            text/csv:
+              schema: { type: string }
+        "401": { description: Authentication required }
+        "403": { description: Non-owner denied }
+        "503": { description: Owner configuration missing; denied }
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+components:
+  securitySchemes:
+    ReplitSession: { type: apiKey, in: cookie, name: sid }
+  schemas:
+    LearningFeedbackFailureReason:
+      type: string
+      enum: [not_configured, provider_quota, provider_rate_limit, invalid_credentials, provider_permission, model_unavailable, invalid_request, network_error, timeout, invalid_response, provider_error, app_ip_limit, app_visit_limit, app_global_limit, app_concurrency]
+    LearningFeedbackDiagnostic:
+      type: object
+      required: [status, providerAttempted, at]
+      properties:
+        status: { type: string }
+        failureReason: { $ref: "#/components/schemas/LearningFeedbackFailureReason" }
+        providerAttempted: { type: boolean }
+        httpStatus: { type: integer }
+        at: { type: string }
+    LearningFeedbackAvailability:
+      type: object
+      required: [configured, model, limits]
+      properties:
+        configured: { type: boolean }
+        model: { type: string }
+        latest: { $ref: "#/components/schemas/LearningFeedbackDiagnostic" }
+        latestProvider: { $ref: "#/components/schemas/LearningFeedbackDiagnostic" }
+        limits:
+          type: object
+          required: [ipPerMinute, visitPerHour, globalPerDay, concurrency, globalUsed, active]
+          properties:
+            ipPerMinute: { type: integer }
+            visitPerHour: { type: integer }
+            globalPerDay: { type: integer }
+            concurrency: { type: integer }
+            globalUsed: { type: integer }
+            active: { type: integer }
+    LearningFeedbackInput:
+      type: object
+      additionalProperties: false
+      required: [visitId, task, condition, answers, reason, initialPrediction, history, judgment, execution, support, trigger, attempts]
+      properties:
+        visitId: { type: string, format: uuid }
+        task: { type: string, maxLength: 80 }
+        condition: { type: string, maxLength: 6000 }
+        answers: { type: string, maxLength: 3000 }
+        reason: { type: string, maxLength: 1500 }
+        initialPrediction: { type: string, maxLength: 3000 }
+        history: { type: string, maxLength: 6000 }
+        judgment: { type: string, maxLength: 2000 }
+        execution: { type: string, maxLength: 10000 }
+        support: { type: string, enum: [guided, challenge] }
+        trigger: { type: string, enum: [submit, hint, result, retry] }
+        attempts: { type: integer, minimum: 0, maximum: 1000 }
+        question: { type: string, maxLength: 1000 }
+        conversation:
+          type: array
+          maxItems: 8
+          items:
+            type: object
+            required: [role, text]
+            properties:
+              role: { type: string, enum: [student, tutor] }
+              text: { type: string, maxLength: 1000 }
+              source: { type: string, enum: [openai, rules] }
+    LearningFeedback:
+      type: object
+      required: [text, provider, status, createdAt]
+      properties:
+        text: { type: string, maxLength: 700 }
+        failureReason: { $ref: "#/components/schemas/LearningFeedbackFailureReason" }
+        providerAttempted: { type: boolean }
+        httpStatus: { type: integer }
+        retryAfterSeconds: { type: integer, minimum: 0 }
+        provider: { type: string, enum: [openai, rules] }
+        status: { type: string, enum: [provided, unconfigured, limited, timeout, unavailable] }
+        createdAt: { type: string }
+    AuthUser:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
+        email: { type: [string, "null"] }
+        firstName: { type: [string, "null"] }
+        lastName: { type: [string, "null"] }
+        profileImageUrl: { type: [string, "null"] }
+    AuthUserEnvelope:
+      type: object
+      required: [user]
+      properties:
+        user:
+          anyOf:
+            - { $ref: "#/components/schemas/AuthUser" }
+            - { type: "null" }
+    LearningObject:
+      type: object
+      additionalProperties: true
+    LearningIdentity:
+      type: object
+      required: [id, role, classCode, login]
+      properties:
+        id: { type: string }
+        role: { type: string, enum: [student, teacher] }
+        classCode: { type: string, description: Legacy compatibility only; not required at student entry }
+        login: { type: string }
+        visitId: { type: string, format: uuid, description: Fresh append-only visit; never read authorization }
+    LearningIdentityEnvelope:
+      type: object
+      required: [user]
+      properties:
+        user:
+          anyOf:
+            - { $ref: "#/components/schemas/LearningIdentity" }
+            - { type: "null" }
+    LearningStudentCredentials:
+      type: object
+      required: [login]
+      properties:
+        login: { type: string, minLength: 1, maxLength: 60 }
+    LearningEventInput:
+      type: object
+      required: [eventId, storeKey, recordId, chapter, task, eventKind, occurredAt, contentVersion, dataSource, payload, changedPaths]
+      properties:
+        eventId: { type: string, format: uuid }
+        storeKey: { type: string }
+        recordId: { type: string }
+        chapter: { type: string }
+        task: { type: string }
+        eventKind: { type: string }
+        occurredAt: { type: string, format: date-time }
+        contentVersion: { type: string }
+        dataSource: { type: string }
+        payload: { $ref: "#/components/schemas/LearningObject" }
+        changedPaths:
+          type: array
+          items: { type: string }
+    LearningEventBatch:
+      type: object
+      required: [visitId, events]
+      properties:
+        visitId: { type: string, format: uuid }
+        events:
+          type: array
+          minItems: 1
+          maxItems: 30
+          items: { $ref: "#/components/schemas/LearningEventInput" }
+    LearningAcknowledgement:
+      type: object
+      required: [acknowledged]
+      properties:
+        acknowledged:
+          type: array
+          items: { type: string, format: uuid }
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string }

@@ -1,0 +1,121 @@
+
+Library
+Search
+Apps
+Robot Control Panel
+Robot Control Panel
+Website
+/
+
+Add curved bracket lines to axis labels and adjust label positioning
+여기 노란점 밑에 TCP라고 써둬
+
+10 days ago
+여기 각각 행간격 조금 더 넓혀도돼
+
+10 days ago
+저기 실제 장비에서 tcp 부분 노란색 더 진해도돼
+
+10 days ago
+오른쪽 저기 해당 확대 이미지 조금만 더 높이를 내려도 돼
+
+10 days ago
+💡 작업 대상이 로봇 정면에 있을 때 주로 사용합니다.
+
+멘트 모두 제거
+
+10 days ago
+x축 움직임 저거 아니야 x축방향은 도봇 앞쪽으로 가는 방향이야
+
+10 days ago
+X축 방향 설명이 잘못된 건지, 실제 조그 방향이 반대인 건지 먼저 확인합니다:
+
+3D 씬의 X 방향 화살표가 어떻게 그려지는지 확인합니다:
+
+정적 축 화살표와 실제 조그 방향도 같이 확인합니다:
+
+FloorArrow의 toNegZ/toX 정의를 확인합니다:
+
+방향 표시가 어떻게 렌더되는지 읽습니다:
+
+coord guide arrows의 라벨을 확인합니다:
+
+FK/IK 변환에서 X 방향 부호를 확인합니다:
+
+FK/IK 계산 핵심 부분을 읽겠습니다:
+
+endEffWorldPos가 어떻게 계산되는지 봅니다:
+
+라인 210~230 주변을 읽어서 tz=-rx 문맥을 파악합니다:
+
+현재 앱 상태를 스크린샷으로 확인하겠습니다:
+
+스크린샷을 보니 문제가 명확합니다. 3D 씬에서 X방향 화살표(빨강)가 로봇 전방이 아닌 측면을 가리키고 있고, 바닥 오버레이도 X와 Y 방향이 뒤바뀌어 있습니다. 수정하겠습니다.
+
+핵심 원인:
+
+Robot X → Three.js +X (앞방향) 인데, 현재 코드는 tz=-rx (Three.js -Z)로 잘못 매핑
+Robot Y → Three.js -Z 인데, tx=ry (Three.js +X)로 잘못 매핑
+정적 바닥 화살표와 Coord Guide 화살표도 모두 뒤바뀜
+XYFloorOverlay, 바닥 화살표, CoordGuideArrows 세 곳 모두 한 번에 수정합니다:
+
+이제 나머지 세 곳도 수정합니다 — 아크 계산, 정적 바닥 화살표, CoordGuideArrows 방향:
+
+이제 EndEffectorProjection 폴백 좌표도 수정하고 스크린샷으로 확인합니다:
+
+변경이 반영되었습니다. 메모리를 업데이트하고 결과를 알려드립니다:
+
+에러 없이 정상 반영됐습니다. 수정된 내용을 정리하면:
+
+수정한 곳 (4곳)
+
+위치	이전 (잘못됨)	이후 (수정됨)
+바닥 오버레이 XY 좌표	tx=ry, tz=-rx	tx=rx, tz=-ry
+바닥 아크(호) 공식	sin(a), -cos(a)	cos(a), -sin(a)
+정적 바닥 화살표	X방향→-Z, Y방향→+X	X방향→+X, Y방향→-Z
+좌표 가이드 X/Y 화살표	x:(0,0,-1), y:(1,0,0)	x:(1,0,0), y:(0,0,-1)
+이제 **X방향 화살표(빨강)**가 로봇 팔이 향하는 실제 전방(+X)을 가리키고, 좌표 가이드 X탭의 파란 화살표도 TCP가 실제로 이동하는 방향과 일치합니다.
+
+여기 배경색도 지금 다르자나 회색으로 통일해줘
+
+20 minutes ago
+r = L₁ = 175 mm글자체 기존 글자체와 동일하게
+
+18 minutes ago
+여기 두번째 L1을 이런식으로 밖에 점선과 함께 표시하고 저 회색 막대를 링크 왼쪽 장비와 동일하게 저 연보라 색상과 동일하게
+
+16 minutes ago
+L1을 싸는 것을 점선으로
+
+14 minutes ago
+여기 그래프에 X,Z 표시해야지
+
+12 minutes ago
+X,Z쪽에 점선넣으면 어때?
+
+10 minutes ago
+X,Z 축 각각 더 굵게
+
+8 minutes ago
+X축, Z축 조금 더 굵게
+
+7 minutes ago
+점선을 더 굵게하라는게 아니고 점선은 더 얇게하고 축자체를 더 굵게해줘
+
+7 minutes ago
+축 두개 검은색으로
+
+5 minutes ago
+축 끝에 화살표 모양을 이렇게
+
+4 minutes ago
+X, Z 글자 크기 더 크게
+
+3 minutes ago
+글자 더 크게
+
+2 minutes ago
+X, Z 여기 굽은 곡선 이 밖으로 해줘 검은색으로 얇게
+
+Just now
+X·Z 성분 바깥쪽에 곡선 

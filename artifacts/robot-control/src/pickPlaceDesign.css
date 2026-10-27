@@ -1,0 +1,67 @@
+/* Chapter 4 only. Every rule is scoped to .pick-place-chapter / .pick-place-chapter-layout. */
+.pick-place-chapter-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(340px,440px);grid-template-rows:minmax(0,1fr);gap:0;min-height:0;height:100%;width:100%;min-width:0}
+.pick-place-chapter-layout>.pick-place-chapter-scene{min-width:0;min-height:320px;position:relative}
+.pick-place-chapter-layout>.curriculum-panel{width:auto;max-width:none;min-width:0;min-height:0;overflow:hidden;border-left:1px solid #cbd5e1;background:#f8fafc}
+.pick-place-chapter-layout>.curriculum-panel>.curriculum-title{font-size:15px;padding:8px 12px;background:#e0f2fe;color:#0c4a6e}
+.pick-place-chapter-layout>.curriculum-panel>.curriculum-body{min-height:0}
+@media (max-width:900px){.pick-place-chapter-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(260px,42dvh) minmax(220px,1fr);overflow-y:auto}.pick-place-chapter-layout>.curriculum-panel{height:100%;border-left:0;border-top:1px solid #cbd5e1}.pick-place-chapter-layout>.pick-place-chapter-scene{min-height:260px}}
+
+.pick-place-chapter{--pp-navy:#0c4a6e;--pp-sky:#0284c7;--pp-line:#cbd5e1;color:#334155;font-size:14px;line-height:1.6;padding:12px;min-width:0;min-height:0;flex:1;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+.pick-place-chapter *{box-sizing:border-box}
+.pick-place-chapter h1{font-size:16px;font-weight:700;margin:0 0 6px;color:var(--pp-navy);line-height:1.45}
+.pick-place-chapter h2{font-size:15px;font-weight:700;margin:0 0 8px;color:var(--pp-navy)}
+.pick-place-chapter h3{font-size:13px;font-weight:700;margin:12px 0 6px;color:#0f172a}
+.pick-place-chapter p{margin:5px 0 8px;overflow-wrap:anywhere}
+.pp-levels,.pp-stages{display:grid;gap:4px;margin:0 0 8px}
+.pp-levels{grid-template-columns:repeat(3,minmax(0,1fr))}
+.pp-stages{grid-template-columns:repeat(7,minmax(0,1fr))}
+.pp-levels button,.pp-stages button,.pp-btn{font:inherit;cursor:pointer;color:#334155;background:#fff;border:1px solid var(--pp-line);border-radius:4px;padding:7px 6px;line-height:1.35;min-width:0}
+.pp-levels button{text-align:left;font-size:12px}
+.pp-stages button{font-size:11px;padding:6px 1px;text-align:center}
+.pp-stages button span{display:block;font-weight:800;color:#64748b}
+.pp-levels button[aria-current=step],.pp-stages button[aria-current=step]{color:#075985;border-color:var(--pp-sky);background:#f0f9ff;box-shadow:inset 0 -3px var(--pp-sky)}
+.pp-levels button:disabled,.pp-stages button:disabled,.pp-btn:disabled{opacity:.45;cursor:not-allowed}
+.pp-btn{padding:8px 12px;font-size:13px;font-weight:650}
+.pp-btn.primary{color:#fff;background:var(--pp-navy);border-color:var(--pp-navy)}
+.pp-btn.danger{color:#991b1b;border-color:#fca5a5;background:#fff}
+.pp-btn.small{padding:4px 8px;font-size:12px}
+.pp-btn:focus-visible,.pp-levels button:focus-visible,.pp-stages button:focus-visible,.pp-card select:focus-visible,.pp-card input:focus-visible,.pp-card textarea:focus-visible{outline:3px solid #0891b2;outline-offset:2px}
+.pp-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.pp-card{padding:12px;border:1px solid #94a3b8;border-radius:4px;background:#fff;margin:10px 0;min-width:0}
+.pp-card.given{border-left:4px solid var(--pp-sky);background:#f0f9ff}
+.pp-card.hint{border-left:4px solid #0f766e;background:#f0fdfa;font-size:13px}
+.pp-card.warn{border-color:#fca5a5;background:#fef2f2;color:#7f1d1d}
+.pp-card.ok{border-color:#86efac;background:#f0fdf4;color:#14532d}
+.pp-kicker{font-size:11px;font-weight:800;letter-spacing:1px;color:#0369a1}
+.pp-givens{display:grid;gap:4px;font-variant-numeric:tabular-nums;font-size:13px}
+.pp-givens b{color:var(--pp-navy)}
+.pp-card select,.pp-card input,.pp-card textarea{font:inherit;font-size:13px;color:#334155;background:#fff;border:1px solid #94a3b8;border-radius:3px;padding:6px 7px;min-width:0;max-width:100%}
+.pp-card textarea{display:block;width:100%;min-height:68px;resize:vertical;margin-top:6px}
+.pp-field{display:grid;gap:4px;margin:10px 0;font-weight:600;font-size:13px}
+.pp-field select{width:100%;font-weight:400}
+.pp-xyz{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+.pp-xyz label{display:grid;gap:2px;font-size:11px;color:#64748b}
+.pp-xyz input{width:100%;font-variant-numeric:tabular-nums}
+.pp-cmd{border:1px solid #94a3b8;border-radius:4px;background:#fff;margin:8px 0;padding:10px;min-width:0}
+.pp-cmd header{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:8px}
+.pp-cmd header b{flex:1;min-width:90px;color:var(--pp-navy)}
+.pp-cmd .row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.pp-cmd .sub{font-size:11px;font-weight:700;color:#0369a1;margin:8px 0 3px}
+.pp-table-wrap{overflow-x:auto;max-width:100%}
+.pp-table{border-collapse:collapse;width:100%;font-size:12px;font-variant-numeric:tabular-nums}
+.pp-table th,.pp-table td{border:1px solid #e2e8f0;padding:4px 5px;text-align:left;vertical-align:top}
+.pp-table th{background:#f1f5f9;color:var(--pp-navy)}
+.pp-table tr[aria-selected=true] td{background:#e0f2fe}
+.pp-table tr.pickable{cursor:pointer}
+.pp-progress{height:8px;border:1px solid var(--pp-line);background:#fff;margin:8px 0}
+.pp-progress i{display:block;height:100%;background:var(--pp-sky);transform-origin:left}
+.pp-note{font-size:12px;color:#64748b}
+.pp-error{color:#991b1b;font-size:13px;font-weight:600;margin:8px 0}
+.pp-ext{margin-top:16px;border:1px solid #94a3b8;border-radius:4px;background:#fff}
+.pp-ext>summary{padding:10px 12px;font-weight:700;color:var(--pp-navy);cursor:pointer}
+.pp-ext-body{border-top:1px solid #e2e8f0;min-width:0}
+.pp-badge{display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;border:1px solid #bae6fd;background:#f0f9ff;color:#075985;border-radius:3px}
+.pp-support{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:8px}
+.pp-support select{border:1px solid #94a3b8;border-radius:3px;padding:4px;background:#fff}
+.pp-table caption{text-align:left;color:#475569;margin-bottom:6px;font-size:12px}
+@media (max-width:480px){.pp-stages button{font-size:10px}.pp-xyz{grid-template-columns:repeat(3,minmax(0,1fr))}}

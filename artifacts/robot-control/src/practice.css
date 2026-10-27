@@ -1,0 +1,92 @@
+.pr-dock{position:fixed;top:52px;right:8px;z-index:60;font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',sans-serif;font-size:13px;color:#1a1a1a}
+.pr-pill{display:flex;gap:2px;border:1px solid #111;border-radius:6px;background:#fff;overflow:hidden}
+.pr-pill button{border:0;padding:5px 11px;font-weight:700;font-size:12px;background:#fff;color:#111;cursor:pointer}
+.pr-pill button[aria-pressed=true]{background:#111;color:#fff}
+.pr-pill button:disabled{opacity:.45;cursor:not-allowed}
+.pr-pill .pr-gear{border-left:1px solid #111;background:#f0f0f0}
+.pr-lock{margin-top:4px;background:#7a1f1f;color:#fff;border-radius:5px;padding:3px 8px;font-size:11px;font-weight:600}
+.pr-panel{margin-top:6px;width:min(380px,calc(100vw - 16px));max-height:calc(100dvh - 110px);overflow:auto;background:#fff;border:1px solid #cfcfcf;border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.28);padding:10px 12px}
+.pr-panel h3{margin:12px 0 6px;font-size:13px;font-weight:800;color:#0B2D5C}
+.pr-panel h3:first-child{margin-top:0}
+.pr-panel label{display:flex;flex-direction:column;gap:2px;font-size:11px;color:#444;font-weight:600}
+.pr-panel input[type=text],.pr-panel input[type=number],.pr-panel select{border:1px solid #bbb;border-radius:4px;padding:4px 6px;font-size:12px;font-family:ui-monospace,monospace;background:#fff;color:#111;min-width:0}
+.pr-panel input:disabled,.pr-panel button:disabled{opacity:.5;cursor:not-allowed}
+.pr-panel button,.pr-modal button{border:1px solid #888;background:#f4f4f4;border-radius:5px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;color:#111}
+.pr-panel button.pr-primary{background:#0B2D5C;color:#fff;border-color:#0B2D5C}
+.pr-panel button.pr-danger,.pr-modal button.pr-danger{background:#7a1f1f;color:#fff;border-color:#7a1f1f}
+.pr-grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.pr-grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.pr-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.pr-check{flex-direction:row!important;align-items:center;gap:6px!important;font-weight:500!important;font-size:12px!important}
+.pr-note{font-size:11.5px;line-height:1.5;color:#444;margin:4px 0}
+.pr-warn{font-size:11.5px;line-height:1.5;color:#7a1f1f;font-weight:700;margin:6px 0}
+.pr-err{background:#fdecec;border:1px solid #e3a7a7;color:#7a1f1f;border-radius:5px;padding:5px 8px;font-size:12px;margin-top:6px}
+.pr-ok{background:#eaf5ee;border:1px solid #9cc7a9;color:#1d5a35;border-radius:5px;padding:5px 8px;font-size:12px;margin-top:6px}
+.pr-badge{display:inline-block;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:800}
+.pr-badge.hw{background:#1d5a35;color:#fff}
+.pr-badge.mock{background:#b45309;color:#fff}
+.pr-badge.off{background:#e5e5e5;color:#555}
+.pr-badge.stale{background:#7a1f1f;color:#fff}
+.pr-kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:12px;font-family:ui-monospace,monospace}
+.pr-kv dt{color:#666}.pr-kv dd{margin:0}
+.pr-bits{display:flex;gap:2px;flex-wrap:wrap}
+.pr-bits i{width:16px;height:16px;border-radius:3px;background:#e5e5e5;font-size:9px;font-style:normal;text-align:center;line-height:16px;color:#555}
+.pr-bits i.on{background:#1d5a35;color:#fff}
+.pr-modal{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:12px}
+.pr-modal__box{background:#fff;border-radius:10px;max-width:460px;width:100%;max-height:90dvh;overflow:auto;padding:16px 18px;font-size:13px;color:#1a1a1a}
+.pr-modal__box h2{margin:0 0 8px;font-size:15px}
+.pr-modal__box li{margin:3px 0;line-height:1.5}
+.pr-measured{border:1px solid #1d5a35;background:#f1f8f3;border-radius:6px;padding:8px 10px;margin:8px 0;font-size:12px}
+.pr-measured.mock{border-color:#b45309;background:#fdf6ec}
+.pr-measured h4{margin:0 0 4px;font-size:12px}
+.pr-measured table{width:100%;border-collapse:collapse;font-family:ui-monospace,monospace;font-size:11.5px}
+.pr-measured td,.pr-measured th{padding:1px 4px;text-align:left;font-weight:400}
+.pr-hwtag{display:inline-block;border-radius:4px;padding:0 6px;font-size:11px;font-weight:800;background:#1d5a35;color:#fff}
+.pr-hwtag.mock{background:#b45309}
+
+/* Header-integrated selector: angular navy / sky-blue, same as the app header */
+.pr-dock{position:static;display:flex;align-items:center;gap:6px;color:#fff}
+.pr-pill{border:1px solid rgba(255,255,255,.28);border-radius:3px;background:rgba(255,255,255,.08)}
+.pr-pill button{background:transparent;color:#dbeafe;padding:4px 10px;font-size:12.5px}
+.pr-pill button[aria-pressed=true]{background:#38bdf8;color:#0B2D5C}
+.pr-pill .pr-gear{border-left:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.12);color:#fff}
+.pr-lock{position:fixed;top:50px;right:8px;z-index:61;margin:0;border-radius:3px;background:#7a1f1f}
+.pr-panel{position:fixed;top:50px;right:8px;z-index:60;margin:0;border-radius:3px;border:1px solid #0B2D5C;max-height:calc(100dvh - 60px)}
+.pr-panel h3{border-left:3px solid #38bdf8;padding-left:6px}
+.pr-panel button,.pr-modal button,.pr-modal__box,.pr-badge,.pr-measured,.pr-err,.pr-ok{border-radius:3px}
+.pr-hud{position:absolute;left:12px;bottom:12px;z-index:10;max-width:min(420px,calc(100% - 24px));padding:5px 9px;background:rgba(11,45,92,.92);color:#e0f2fe;border-left:3px solid #38bdf8;font-size:11.5px;font-weight:700;line-height:1.45}
+.pr-shape{border:1px solid #0B2D5C;border-radius:3px;padding:8px 10px;margin:8px 0;background:#f0f7ff}
+.pr-shape label{display:flex;flex-direction:column;font-size:11px;font-weight:600}
+.pr-shape input{border:1px solid #bbb;border-radius:3px;padding:3px 5px;min-width:0}
+.pr-shape button{border:1px solid #0B2D5C;border-radius:3px;padding:5px 10px;font-weight:700;background:#fff;cursor:pointer}
+.pr-shape button.pr-primary{background:#0B2D5C;color:#fff}
+.pr-shape button.pr-danger{background:#7a1f1f;color:#fff;border-color:#7a1f1f}
+@media(max-width:760px){.app-title{display:none}.pr-pill button{padding:4px 7px;font-size:11.5px}.pr-grid4{grid-template-columns:repeat(2,1fr)}}
+.pr-pill button{white-space:nowrap}
+@media(max-width:760px){.pr-pill .pr-gear{font-size:0}.pr-pill .pr-gear::after{content:"연결";font-size:11px}}
+
+/* The header is white-on-blue, but the measurement/settings panel is white. */
+.pr-panel{color:#1a1a1a}
+
+/* Incoming telemetry must not change line counts or move the preparation form. */
+.pr-panel .pr-grid2>label,.pr-panel .pr-grid4>label{min-width:0}
+.pr-readiness-summary{display:block;height:4.5em;line-height:1.5;overflow:auto}
+.pr-measurement{min-width:0;font-size:11px;line-height:20px;font-variant-numeric:tabular-nums}
+.pr-measurement-meta{display:grid;grid-template-columns:64px minmax(0,1fr);gap:0 8px;margin:6px 0}
+.pr-measurement-meta dt,.pr-measurement-meta dd{margin:0;min-width:0;height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pr-measurement-meta dt,.pr-measurement-label{color:#666}
+.pr-measurement-meta dd{font-family:ui-monospace,monospace}
+.pr-measurement .pr-badge{line-height:16px;vertical-align:top}
+.pr-measurement-label{height:20px;white-space:nowrap}
+.pr-measurement-group{margin:6px 0}
+.pr-measurement-axes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 8px;font-family:ui-monospace,monospace}
+.pr-measurement-axes>div{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px;height:20px;min-width:0}
+.pr-measurement-axes span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pr-measurement-axes span:last-child{text-align:right}
+.pr-measurement-io{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:6px 0}
+.pr-measurement .pr-bits{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:2px}
+.pr-measurement .pr-bits i{width:100%;min-width:0;height:16px;line-height:16px;font-family:ui-monospace,monospace}
+.pr-measurement .pr-bits i.unknown{background:#f3f3f3;color:#999}
+.pr-measurement-note{height:34px;line-height:17px;margin:6px 0}
+.pr-measurement-note span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:300px){.pr-measurement-io{grid-template-columns:minmax(0,1fr)}}

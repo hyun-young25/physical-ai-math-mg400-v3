@@ -1,0 +1,168 @@
+.ait-mode { padding: 6px 14px; border-bottom: 1px solid #e2e8f0; flex-shrink: 0; font-size: 11px; }
+.ait-mode label { display: flex; align-items: center; gap: 8px; }
+.ait-mode select { min-width: 0; max-width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 3px; color: #334155; background: #fff; }
+.ait-mode small { display: block; margin-top: 4px; color: #64748b; line-height: 1.4; }
+/* AI 수학 튜터 — scoped .ait-* classes; matches app neutral gray + near-black, Pretendard, 6px radii. */
+:root {
+  --ait-w: 360px;
+  /* Keep the menu clear normally. In a very short keyboard viewport, allow the
+     non-modal tutor to extend above it rather than clip its title/composer. */
+  --ait-top: max(var(--ai-tutor-viewport-top, 0px), var(--ai-tutor-banner-bottom, 0px), min(var(--ai-tutor-header, 48px), calc(var(--ai-tutor-viewport-top, 0px) + var(--ai-tutor-viewport-height, 100dvh) - 320px)));
+  --ait-visible-h: max(0px, calc(var(--ai-tutor-viewport-height, 100dvh) - var(--ait-top) + var(--ai-tutor-viewport-top, 0px)));
+  --ait-dock-h: min(72dvh, max(0px, calc(var(--ait-visible-h) - 8px)));
+  --ait-ink: #171717;
+  --ait-paper: #fafaf8;
+  --ait-line: #d1d1d1;
+  --ait-muted: #6b6b6b;
+  --ait-tint: #eef1ee;
+  --ait-accent: #2f5d50;
+}
+
+/* Host integration: main agent toggles body.ai-tutor-open while the window is open. */
+body.ai-tutor-open { padding-right: var(--ait-w); }
+body.ai-tutor-available #root:has(.robot-app-shell) { height: calc(100dvh - var(--ai-tutor-root-top, 0px)); }
+body.ai-tutor-available:not(.ai-tutor-open) .robot-app-shell { padding-bottom: 72px; }
+body.ai-tutor-open .robot-app-shell { container-type: inline-size; container-name: tutor-workspace; }
+@media (min-width: 768px) {
+  body.ai-tutor-open .pr-dock, body.ai-tutor-open .pr-lock, body.ai-tutor-open .pr-panel {
+    right: calc(var(--ait-w) + 8px);
+  }
+}
+@media (max-width: 767px) {
+  body.ai-tutor-open { padding-right: 0; }
+  body.ai-tutor-open #root:has(.robot-app-shell) {
+    height: max(120px, calc(100dvh - var(--ait-dock-h) - var(--ai-tutor-root-top, 0px) - var(--ai-tutor-kb, 0px)));
+  }
+}
+
+/* Respond to the width left by the tutor, not the full browser width. */
+@container tutor-workspace (max-width: 1400px) {
+  .workspace-layout { flex-direction: column; }
+  .workspace-layout--settings > .learning-workspace { flex: 0 0 auto; height: max(700px, 85dvh); min-height: 700px; }
+  .practice-settings-host { flex: 0 0 540px; width: 100%; height: 540px; border-left: 0; border-top: 2px solid #b9c8d4; }
+}
+@container tutor-workspace (max-width: 900px) {
+  .workspace-layout > .workspace-has-lesson { flex: 0 0 auto; flex-direction: column !important; height: auto; min-height: 1040px; }
+  .workspace-layout > .workspace-has-lesson > .curriculum-scene { flex: 0 0 380px !important; height: 380px !important; min-height: 380px; }
+  .workspace-layout .curriculum-panel, .workspace-layout .foundation-panel { flex: 0 0 660px !important; height: 660px !important; width: 100%; min-width: 0; }
+}
+
+/* Only the visible tutor surfaces receive input. Never intercept the workspace
+   or compete with the separate, higher-priority robot approval modal. */
+.ait-root { font-family: 'Pretendard', 'Segoe UI', sans-serif; color: var(--ait-ink); pointer-events: none; }
+.ait-window, .ait-launcher, .ait-preview { pointer-events: auto; }
+.ait-head .ait-icon-btn { width: auto; min-width: 28px; display: flex; gap: 3px; padding: 4px; font-size: 11px; white-space: nowrap; }
+.ait-root *, .ait-root *::before { box-sizing: border-box; }
+.ait-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.ait-launcher {
+  position: fixed; z-index: 45; right: 18px;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  width: 52px; height: 52px; border-radius: 50%; border: 1px solid #000;
+  background: var(--ait-ink); color: #f4f4f2; display: grid; place-items: center; cursor: pointer;
+  box-shadow: 0 6px 18px rgba(23,23,23,.28); transition: transform .18s ease;
+}
+.ait-launcher:hover { transform: translateY(-2px); }
+.ait-launcher:focus-visible, .ait-root button:focus-visible, .ait-input:focus-visible, .ait-log:focus-visible {
+  outline: 2px solid var(--ait-accent); outline-offset: 2px;
+}
+.ait-launcher-badge { position: absolute; top: 6px; right: 6px; width: 9px; height: 9px; border-radius: 50%; background: #7fb59f; border: 2px solid var(--ait-ink); }
+.ait-preview { position: fixed; z-index: 45; right: 82px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); width: min(360px, calc(100vw - 98px)); height: 58px; padding: 6px 10px; text-align: left; background: #f0fdf4; color: #173a2d; border: 1px solid #94b5a6; border-radius: 8px; cursor: pointer; overflow: hidden; }
+.ait-preview strong { display: block; font-size: 11px; }
+.ait-preview span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 11px; line-height: 15px; }
+.ait-preview:focus-visible { outline: 2px solid var(--ait-accent); outline-offset: 2px; }
+
+.ait-window {
+  /* Above the student bar (1000) only where they overlap in a short viewport,
+     still below the robot's final approval dialog (9999). */
+  position: fixed; z-index: 1001; right: 12px; top: calc(var(--ait-top) + 12px); bottom: calc(var(--ai-tutor-kb, 0px) + 16px); width: calc(var(--ait-w) - 24px);
+  min-height: 0; border-radius: 12px; overflow: hidden;
+  container-type: size; container-name: tutor-window;
+  display: flex; flex-direction: column; background: var(--ait-paper);
+  border: 1px solid var(--ait-line); box-shadow: 0 8px 28px rgba(0,0,0,.14); animation: ait-in .2s ease-out;
+}
+@keyframes ait-in { from { opacity: 0; transform: translateX(12px); } }
+
+@media (max-width: 767px) {
+  .ait-window {
+    top: auto; left: 0; right: 0; width: auto; border-radius: 12px 12px 0 0;
+    bottom: var(--ai-tutor-kb, 0px);
+    height: var(--ait-dock-h);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    border-left: 0; border-right: 0; border-top: 1px solid var(--ait-line);
+    box-shadow: 0 -6px 20px rgba(0,0,0,.08); animation-name: ait-up;
+  }
+  .ait-launcher { right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); width: 46px; height: 46px; }
+  .ait-note { display: none; }
+  /* Avoid iOS focus auto-zoom hiding the fixed composer. */
+  .ait-compose .ait-input { font-size: 16px; }
+}
+@keyframes ait-up { from { opacity: 0; transform: translateY(14px); } }
+
+.ait-head { display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 14px; background: var(--ait-ink); color: #f4f4f2; flex-shrink: 0; }
+.ait-avatar { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: #f4f4f2; color: var(--ait-ink); flex-shrink: 0; }
+.ait-titles { flex: 1; min-width: 0; }
+.ait-title { margin: 0; font-size: 14px; font-weight: 750; letter-spacing: -.01em; }
+.ait-context { margin: 1px 0 0; font-size: 11.5px; color: #b5b5b0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ait-icon-btn { width: 30px; height: 30px; border-radius: 6px; border: 0; background: transparent; color: #cfcfca; display: grid; place-items: center; cursor: pointer; }
+.ait-icon-btn:hover { background: #2a2a2a; color: #fff; }
+
+.ait-note { margin: 0; padding: 8px 14px; font-size: 11.5px; line-height: 1.5; color: var(--ait-muted); border-bottom: 1px solid #e6e6e2; background: #f3f3f0; }
+
+/* Header and composer never shrink. The outer scroller is a fallback for short
+   windows/keyboards where even the supporting controls cannot all fit. */
+.ait-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; overscroll-behavior: contain; }
+.ait-note, .ait-alert { flex-shrink: 0; }
+.ait-log { flex: 1; min-height: 96px; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; overscroll-behavior: contain; }
+.ait-empty { margin: auto; text-align: center; color: var(--ait-muted); font-size: 13px; line-height: 1.6; }
+.ait-empty p { margin: 8px 0 0; }
+.ait-empty-mark { display: inline-grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; border: 1px dashed #bdbdb8; color: #8a8a85; }
+
+.ait-msg { display: flex; flex-direction: column; flex-shrink: 0; max-width: 86%; }
+.ait-msg--student { align-self: flex-end; align-items: flex-end; }
+.ait-msg--tutor { align-self: flex-start; }
+.ait-bubble { margin: 0; padding: 8px 11px; font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 10px; }
+.ait-msg--student .ait-bubble { background: var(--ait-ink); color: #f4f4f2; border-bottom-right-radius: 3px; }
+.ait-msg--tutor .ait-bubble { background: var(--ait-tint); border: 1px solid #dde3de; border-bottom-left-radius: 3px; }
+.ait-source { margin-top: 3px; font-size: 10.5px; color: var(--ait-muted); }
+
+.ait-typing { display: inline-flex; gap: 4px; padding: 11px 13px; }
+.ait-typing i { width: 6px; height: 6px; border-radius: 50%; background: #8a9a92; animation: ait-dot 1.1s infinite ease-in-out; }
+.ait-typing i:nth-child(2) { animation-delay: .15s; }
+.ait-typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes ait-dot { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+
+.ait-status { display: flex; align-items: center; gap: 7px; padding: 6px 14px; font-size: 11.5px; color: var(--ait-muted); border-top: 1px solid #e6e6e2; flex-shrink: 0; min-height: 30px; }
+.ait-dot { width: 7px; height: 7px; border-radius: 50%; background: #9a9a95; flex-shrink: 0; }
+.ait-dot--busy { background: var(--ait-accent); animation: ait-pulse 1.2s infinite; }
+@keyframes ait-pulse { 50% { opacity: .35; } }
+.ait-retry { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; font: inherit; font-weight: 650; color: var(--ait-ink); background: #fff; border: 1px solid var(--ait-line); border-radius: 6px; cursor: pointer; }
+.ait-retry:hover { border-color: var(--ait-ink); }
+.ait-alert { margin: 0; padding: 6px 14px; font-size: 11.5px; color: #9b2c2c; background: #fbeeee; }
+
+.ait-chips { display: flex; gap: 6px; padding: 4px 14px 8px; overflow-x: auto; flex-shrink: 0; scrollbar-width: none; }
+.ait-chip { flex-shrink: 0; padding: 5px 10px; font: inherit; font-size: 12px; font-weight: 600; color: var(--ait-ink); background: #fff; border: 1px solid var(--ait-line); border-radius: 999px; cursor: pointer; white-space: nowrap; }
+.ait-chip:hover:not(:disabled) { border-color: var(--ait-ink); }
+.ait-chip:disabled { opacity: .45; cursor: not-allowed; }
+
+.ait-compose { padding: 0 12px 12px; flex-shrink: 0; }
+.ait-input { display: block; width: 100%; resize: none; padding: 9px 11px; font: inherit; font-size: 14px; line-height: 1.5; color: var(--ait-ink); background: #fff; border: 1px solid var(--ait-line); border-radius: 6px; max-height: 120px; }
+.ait-input:focus { border-color: var(--ait-ink); }
+.ait-input[aria-invalid="true"] { border-color: #c24141; }
+.ait-compose-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.ait-count { font-size: 11px; color: var(--ait-muted); font-variant-numeric: tabular-nums; }
+.ait-count--over { color: #b03030; }
+/* In a short keyboard/landscape viewport, keep input and send side by side.
+   The counter remains available to assistive technology via aria-describedby. */
+@container tutor-window (max-height: 320px) {
+  .ait-compose { display: flex; align-items: center; gap: 6px; padding: 4px 8px 8px; }
+  .ait-input { flex: 1; min-width: 0; width: 0; height: 44px; }
+  .ait-compose-row { flex: 0 0 auto; margin-top: 0; }
+  .ait-count { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+.ait-send { width: 36px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 6px; background: var(--ait-ink); color: #f4f4f2; cursor: pointer; }
+.ait-send:disabled { background: #cfcfcb; color: #8a8a85; cursor: not-allowed; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ait-root *, .ait-window { animation: none !important; transition: none !important; }
+}

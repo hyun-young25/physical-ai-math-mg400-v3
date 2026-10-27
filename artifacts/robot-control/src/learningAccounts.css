@@ -1,0 +1,68 @@
+.learning-professor-link{position:fixed;right:18px;top:16px;border:1px solid #d5d5d2;background:transparent;border-radius:4px;padding:5px 10px;font-size:12px;color:#666;cursor:pointer;z-index:10}
+.learning-professor-inline{font-size:11px!important;margin-left:auto;opacity:.75}
+.la-root{min-height:100dvh;background:#ececea;color:#1e1e1e;font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',sans-serif;}
+.la-entry{display:grid;place-items:center;padding:32px 16px;min-height:100dvh}
+.la-card{width:100%;max-width:460px;background:#fafaf8;border:1px solid #d1d1d1;border-radius:6px;box-shadow:0 10px 30px rgba(20,20,20,.08);overflow:hidden}
+.la-head{padding:22px 24px 14px;border-bottom:1px solid #e2e2e0}
+.la-kicker{font-size:11px;letter-spacing:.14em;color:#777;font-weight:600}
+.la-title{font-size:20px;font-weight:700;margin:6px 0 4px}
+.la-sub{font-size:13px;color:#666;line-height:1.55}
+.la-tabs{display:flex;border-bottom:1px solid #e2e2e0}
+.la-tab{flex:1;padding:12px;font-size:13px;font-weight:600;background:none;border:none;border-bottom:2px solid transparent;color:#777;cursor:pointer}
+.la-tab[aria-selected=true]{color:#171717;border-bottom-color:#171717}
+.la-tab:focus-visible,.la-btn:focus-visible,.la-input:focus-visible,.la-seg button:focus-visible{outline:2px solid #2563a8;outline-offset:2px}
+.la-body{padding:20px 24px 24px;display:flex;flex-direction:column;gap:14px}
+.la-field{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:#444}
+.la-input{height:38px;padding:0 11px;border:1px solid #cfcfcd;border-radius:5px;background:#fff;font-size:14px;font-family:inherit;color:#1e1e1e}
+select.la-input{padding-right:6px}
+.la-hint{font-weight:400;color:#888;font-size:11.5px}
+.la-seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:#e6e6e4;padding:4px;border-radius:6px}
+.la-seg button{border:none;background:none;padding:8px;border-radius:4px;font-size:13px;font-weight:600;color:#666;cursor:pointer;font-family:inherit}
+.la-seg button[aria-pressed=true]{background:#fff;color:#171717;box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.la-btn{height:38px;padding:0 16px;border-radius:5px;border:1px solid #171717;background:#171717;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+.la-btn:disabled{opacity:.45;cursor:not-allowed}
+.la-btn.ghost{background:#fff;color:#171717;border-color:#cfcfcd}
+.la-btn.sm{height:30px;padding:0 10px;font-size:12px}
+.la-note{font-size:12px;line-height:1.6;color:#555;background:#f0f0ee;border-left:3px solid #8a8a86;padding:10px 12px;border-radius:0 4px 4px 0}
+.la-note ul{margin:4px 0 0;padding-left:16px}
+.la-note code{font-family:'Roboto Mono',monospace;font-size:11px;background:#e2e2e0;padding:1px 4px;border-radius:3px;word-break:break-all}
+.la-error{font-size:12.5px;color:#a3241f;background:#fbeceb;border:1px solid #efc3c0;padding:9px 11px;border-radius:5px}
+.la-ok{font-size:12.5px;color:#245a2c;background:#eaf4ea;border:1px solid #bfdcc2;padding:9px 11px;border-radius:5px}
+details.la-details summary{cursor:pointer;font-size:12px;font-weight:600;color:#444}
+.la-shell{display:flex;flex-direction:column;min-height:100dvh}
+.la-bar{display:flex;align-items:center;gap:12px;padding:12px 20px;background:#171717;color:#f2f2f0}
+.la-bar .who{margin-left:auto;font-size:12px;color:#bbb}
+.la-main{display:grid;grid-template-columns:280px 1fr;gap:16px;padding:16px 20px;align-items:start}
+@media(max-width:860px){.la-main{grid-template-columns:1fr}}
+.la-panel{background:#fafaf8;border:1px solid #d1d1d1;border-radius:6px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.la-panel h3{margin:0;font-size:13px;font-weight:700}
+.la-filters{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;align-items:end}
+.la-list{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow:auto}
+.la-li{text-align:left;border:1px solid transparent;background:none;padding:7px 8px;border-radius:4px;font-size:12.5px;cursor:pointer;font-family:inherit;color:inherit;display:flex;justify-content:space-between;gap:6px}
+.la-li:hover{background:#efefed}
+.la-li[aria-pressed=true]{background:#fff;border-color:#171717}
+.la-li small{color:#888;font-variant-numeric:tabular-nums}
+.la-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.la-table th{text-align:left;font-size:11px;color:#777;font-weight:600;padding:7px 8px;border-bottom:1px solid #d1d1d1}
+.la-table td{padding:7px 8px;border-bottom:1px solid #e6e6e4;vertical-align:top;font-variant-numeric:tabular-nums}
+.la-table tr.open td{background:#f3f3f1}
+.la-pill{display:inline-block;padding:1px 7px;border-radius:10px;background:#e6e6e4;font-size:11px}
+.la-payload{display:grid;grid-template-columns:minmax(140px,auto) 1fr;gap:3px 12px;font-size:12px}
+.la-payload .p{font-family:'Roboto Mono',monospace;font-size:11px;color:#2c4f7c;word-break:break-all}
+.la-payload .v{word-break:break-all}
+.la-payload .d{grid-column:2;color:#888;font-size:11px;margin-top:-2px}
+.la-skel{height:14px;border-radius:3px;background:linear-gradient(90deg,#e4e4e2,#efefed,#e4e4e2);background-size:200% 100%;animation:la-sh 1.2s infinite}
+@keyframes la-sh{to{background-position:-200% 0}}
+.la-empty{padding:36px 12px;text-align:center;color:#777;font-size:13px}
+.la-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.la-scroll{overflow-x:auto}
+.learning-student-bar{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;padding:8px 16px;background:#f6f6f4;border-bottom:1px solid #d8d8d6;font-size:12px;position:relative;z-index:1000}
+.learning-student-bar>span:first-child{margin-right:auto}
+.learning-student-bar button,.learning-shell-error button{border:1px solid #ccc;border-radius:6px;background:white;padding:5px 9px;cursor:pointer;color:#222}
+.learning-student-bar button:disabled{opacity:.5;cursor:wait}
+.learning-save-ready{color:#27603b}.learning-save-pending,.learning-save-saving{color:#715114}.learning-save-failed{color:#a42222}
+.learning-own-history{background:#f8f8f6;padding:18px;max-height:55vh;overflow:auto;border-bottom:1px solid #ccc;font-size:13px}
+.learning-own-history h2{font-size:16px}.learning-own-history details{margin:8px 0;padding:9px;border:1px solid #ddd;border-radius:6px}
+.learning-own-history pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;max-height:300px;overflow:auto}
+.learning-shell-message,.learning-shell-error{margin:18px;padding:14px;border:1px solid #ddd;border-radius:6px}
+.learning-shell-error{color:#a42222}

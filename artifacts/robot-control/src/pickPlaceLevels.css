@@ -1,0 +1,44 @@
+.pick-level-lesson { --pick-blue:#0c4a6e; --pick-line:#cbd5e1; }
+.pick-level-lesson .pick-level-heading { display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; align-items:center; color:#334155; }
+.pick-level-lesson .pick-level-heading strong { font-size:17px; }
+.pick-level-lesson .pick-level-heading span { font-size:12px; color:#475569; }
+.pick-level-lesson .pick-level-selector { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.pick-level-lesson .pick-level-selector button { display:flex; flex-direction:column; align-items:flex-start; gap:5px; margin:0; padding:12px; color:#334155; background:#fff; border:1px solid var(--pick-line); border-radius:4px; text-align:left; line-height:1.45; }
+.pick-level-lesson .pick-level-selector button[aria-current="step"] { color:#075985; border-color:#0284c7; background:#f0f9ff; box-shadow:inset 3px 0 #0284c7; }
+.pick-level-lesson .pick-level-selector b { font-size:14px; }
+.pick-level-lesson .pick-level-selector span { font-size:13px; }
+.pick-level-lesson .pick-level-note { margin:0; color:#64748b; font-size:12px; line-height:1.55; }
+.pick-level-lesson .pick-level-goal { padding:17px; border:1px solid #94a3b8; border-radius:4px; background:#f8fafc; }
+.pick-level-lesson .pick-level-kicker { font-size:11px; font-weight:800; letter-spacing:1px; color:#0369a1; }
+.pick-level-lesson .pick-level-goal h2 { margin:6px 0 12px; font-size:20px; line-height:1.4; color:#0f172a; }
+.pick-level-lesson .pick-level-goal p { font-size:14px; line-height:1.7; margin:10px 0; }
+.pick-level-lesson .pick-level-targets { display:grid; gap:10px; padding:12px 0; border-top:1px solid #e2e8f0; border-bottom:1px solid #e2e8f0; }
+.pick-level-lesson .pick-level-targets>div { display:grid; gap:5px; font-size:13px; font-variant-numeric:tabular-nums; }
+.pick-level-lesson .pick-level-condition { color:#075985; font-weight:650; }
+.pick-level-lesson .pick-level-stage { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; }
+.pick-level-lesson .pick-level-stage span { padding:8px 3px; text-align:center; color:#64748b; font-size:12px; border-bottom:2px solid #e2e8f0; }
+.pick-level-lesson .pick-level-stage span[aria-current="step"] { color:#0369a1; font-weight:800; border-bottom-color:#0284c7; }
+.pick-level-lesson .pick-guided-sequence { display:grid; gap:8px; padding-left:25px; margin:14px 0 22px; color:#334155; font-size:14px; }
+.pick-level-lesson .pick-command { padding:0; border-radius:4px; margin:10px 0; }
+.pick-level-lesson .pick-command summary { cursor:pointer; padding:12px; font-size:13px; line-height:1.6; overflow-wrap:anywhere; }
+.pick-level-lesson .pick-command summary b { display:inline-block; margin-right:6px; color:#0369a1; }
+.pick-level-lesson .pick-command fieldset { border:0; padding:0 12px 12px; min-width:0; }
+.pick-level-lesson .pick-command .lesson-actions { gap:7px; }
+.pick-level-lesson .pick-command .lesson-actions>label { min-width:125px; font-size:12px; }
+.pick-level-lesson input,.pick-level-lesson select,.pick-level-lesson textarea { border-radius:4px; }
+.pick-level-lesson .pick-baseline { border-left:3px solid #0284c7; background:#f0f9ff; }
+.pick-level-lesson .pick-result.is-passed { border-color:#16a34a; background:#f0fdf4; }
+.pick-level-lesson .pick-metrics { display:grid; grid-template-columns:1fr; gap:8px; padding:12px; background:#f8fafc; border:1px solid #e2e8f0; }
+.pick-level-lesson .pick-metrics>div { display:flex; justify-content:space-between; gap:8px; font-size:13px; }
+.pick-level-lesson .pick-metrics b { color:#0f172a; font-variant-numeric:tabular-nums; }
+.pick-level-lesson .pick-issue { margin:12px 0; border-left:3px solid #dc2626; background:#fef2f2; }
+.pick-level-lesson .pick-distance-compare { font-size:14px; line-height:1.8; padding:12px 0; }
+.pick-level-lesson .pick-running { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.pick-level-lesson .pick-revision { padding:12px; margin:16px 0; border:1px solid #cbd5e1; background:#f8fafc; }
+.pick-level-lesson .pick-table-scroll { overflow-x:auto; margin-top:12px; }
+.pick-level-lesson .pick-table-scroll table { font-size:12px; min-width:440px; }
+.pick-level-lesson .pick-table-scroll td,.pick-level-lesson .pick-table-scroll th { text-align:center; padding:10px 6px; }
+.pick-level-lesson .pick-level-notes { color:#64748b; font-size:12px; line-height:1.7; }
+.pick-level-lesson .pick-level-notes li { margin:8px 0; }
+.pick-level-lesson .pick-visually-hidden { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+@media(max-width:360px) { .pick-level-lesson .pick-level-selector { grid-template-columns:1fr; } }

@@ -1,0 +1,27 @@
+- [Overhead-mount 3D visual](overhead-mount-3d.md) — j2=70° initial pose + camera [900,-200,300] makes overhead mount visually obvious; forearm is always horizontal (parallelogram); Z+ moves arm UP toward ceiling.
+- [Screenshot tool has no WebGL](screenshot-webgl.md) — screenshot tool always shows IsoFallback SVG, not ThreeDScene; camera changes can only be verified in real browser.
+- [MG400 mimic joint formulas](mg400-mimic-joints.md) — correct URDF mimic formulas; j31=-PI2 and j32=-a3*dd-PI2 are CONFIRMED REQUIRED (STL geometry baked with -PI/2 offset); do NOT remove -PI2 from these two.
+- [MG400 rotation formula locked](mg400-rotation-locked.md) — j31/j32 -PI2 offset confirmed by testing; visual overlap issues must be fixed via mesh local position offset only, not rotation.
+- [MG400 axis mapping Three.js](mg400-axis-mapping.md) — Robot X→Three.js +X, Robot Y→Three.js -Z; floor overlay tx=rx, tz=-ry; arc uses cos/sin not sin/cos.
+- [MG400 home position](mg400-home-position.md) — 홈(초기값): TCP(350,0,0,0), displayJoints(0,32.27,32.59,0), 3D visual joints(j2=60,j3=-115). coords/displayJoints는 decoupled display state.
+- [MG400 parallel chain gap — what NOT to do](mg400-parallel-chain-no-dynamic.md) — dynamic tracking BREAKS arm; bridge cylinder creates ugly rod through arm; l32G hidden + small sphere cap at j32Ref is the accepted visual fix.
+- [MG400 j22Ref URDF value](mg400-j22ref-urdf.md) — j22Ref Y must be -0.0305 (URDF value); it was wrongly set to -0.0411; restored to -0.0305. The only actual coordinate error vs URDF.
+- [MG400 link4_2 LOCKED transform](mg400-link4-locked.md) — l42G: rotation=[0,-0.271,0] scale=[0.9013,1,0.9013] CONFIRMED+LOCKED; +0.271 sign is WRONG (moves boss to -Z); -0.271 moves boss to +Z = target.
+- [MG400 link3_2 hole positions](mg400-link3-holes.md) — l31G/l32G confirmed hole positions and rigid-body alignment targets (all locked 2025-06-27).
+- [MG400 l31G alignment — hR anchor rule](mg400-l31-alignment.md) — l3R.position = l31PosOffset DIRECTLY (j31Ref local const); never world-space convert; worldToLocal pattern breaks hR when arm moves.
+- [MG400 link2_1 upper hole](mg400-link2-upper-hole.md) — l21G 위쪽 구멍: j2Ref local [-0.017, 0.029, 0.147] (locked 2025-06-27).
+- [MG400 j42Ref position — ABSOLUTE HARD LOCK](mg400-j42ref-hard-lock.md) — j42Ref.position MUST NOT be modified by any code. 4 attempts (worldToLocal freeze, worldToLocal per-frame, getWorldPos+getWorldQuat, getWorldPos+getWorldQuat with scale fix) ALL catastrophically broke the arm. Root cause unknown but constraint is absolute.
+- [MG400 stable checkpoint](mg400-stable-checkpoint.md) — commit fcb050a4 = 안정된 상태(stable); j42Ref clone만 있는 버전. 장비 이상해지면 이 커밋으로 rollback.
+- [MG400 pick tray Three.js Y — FK derivation](mg400-pick-tray-height.md) — TY=136mm is the correct tray group Y; derived from COORD_OZ, shoulder y, j4Ref offset, and tracker offset.
+- [4장 교육 범위](chapter4-teaching-scope.md) — 단일 MG400 좌표·운동학 직접 설계 수업; 공정 확장은 완료 후만, 기존 장·기록·모델 보존.
+- [패키지 설치 부작용](package-installer-side-effects.md) — 설치 실패 후에도 Replit 환경 설정이 바뀔 수 있으므로 의도하지 않은 설정 차이를 확인한다.
+- [MG400 두 가지 실습 방식](dual-practice-scope.md) — 기본 무장비 가상 실습과 같은 학생 계획의 실측 실행; 모의·가상 값을 실측으로 대체하지 않는다.
+- [학생 로그 식별·연구 원칙](student-log-privacy.md) — 아이디만으로 학습하되 과거 기록 비공개; 단일 소유자 인증, 원본·출처 보존 및 익명 귀속 금지.
+- [OIDC 소유자 검증](oidc-owner-verification.md) — openid-client 기본 교환만으로 JWS 검증이 켜지지 않으므로 명시적인 서명 검증을 유지한다.
+- [임베디드 브라우저 검증](browser-iframe-testing.md) — 공개 테스트 부모에서 loopback 미리보기로 연결할 때 LNA 차단을 앱 인증 실패로 오인하지 않는다.
+- [Git 제공자 인증](git-provider-auth.md) — 연결 메타데이터가 healthy여도 Git 인증 성공은 별도 확인; 일반 연결 카드가 Git 제공자 연결을 처리하지 못할 수 있다.
+- [AI 학습 피드백 경계](ai-feedback-boundaries.md) — 기존 판정 기반 제출 자동 힌트와 질문형 GPT를 구분; 정오 추측·첫 답 누설 없이 최초 예측·출처·실행 승인 보존.
+- [Vite 검사 fixture](vite-browser-fixtures.md) — 최적화된 CommonJS의 수동 동적 import는 default 전용일 수 있음; fixture 부트스트랩 실패와 앱 회귀를 구분.
+- [MG400 연결 대상 고정](mg400-fixed-target.md) — 로봇 IP는 192.168.1.6 고정; 이전 주소 무시, 수동 연결·실행 확인 유지.
+- [실장비 속도·설치 확인](hardware-speed-installation-policy.md) — 공통 1~20%·새 기본 5%; 적용 응답과 사람 확인을 구분하고 현장 범위를 자동 확대하지 않는다.
+- [실습 화면 배치 원칙](practice-layout-scope.md) — 과제·안내·기존 튜터에 동시 접근; 2-1도 동일한 튜터 제공, 화면 전환 중 연결·준비·기록·진행 상태 보존.

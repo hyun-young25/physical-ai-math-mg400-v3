@@ -1,0 +1,16 @@
+{
+  "name": "@workspace/scripts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "hello": "tsx ./src/hello.ts",
+    "convert-step": "node ./src/convert-step-to-glb.cjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "occt-import-js": "^0.0.23",
+    "tsx": "catalog:"
+  }
+}
