@@ -10,13 +10,13 @@ import { getShapeLesson, SHAPE_LESSON_COUNT, shapeLessonFields, shapeLessonExpec
 import type { ShapeLesson } from "./shapeLearning";
 import { assessSquare, squareStudentSequence, squareExecutionKey, squareAnswersUnchanged, squarePlanMatchesTarget } from "./squareLearningFlow";
 import { SquareContinuation, type SquareContinuationPhase } from "./squareContinuation";
-import { SquareMeasurementDiagnosis } from "./SquareMeasurementDiagnosis";
 import type { LearningVisualState } from "./Robot3D";
 import { copyShapePose, measureShapeClosure, prepareShapeMotion, sampleShapeMotion, prepareShapeReturn, sampleShapeReturn, ShapeFrameScheduler } from "./shapeRun";
 import type { ShapeClosure, ShapeMotion, ShapePoseSnapshot, ShapeReturn, ShapeRunPhase } from "./shapeRun";
 import { usePractice } from "./PracticeProvider";
 import { downloadEvidence, readEvidence, writeEvidence } from "./learningEvidenceStorage";
 import { getEvidenceItem, setEvidenceItem } from "./learningSync";
+import type { SquareObservedVertex } from "./squareMismatchDiagnosis";
 
 interface Joints { j1: number; j2: number; j3: number; j4: number; }
 interface Coords { x: number; y: number; z: number; r: number; }
@@ -38,6 +38,10 @@ interface WaypointMeasurement {
   label: string;
   target: Coords;
   actual: Coords;
+  source?: "hardware" | "mock";
+  seq?: number;
+  measuredAt?: number;
+  ageMs?: number;
   errorX: number;
   errorY: number;
   errorZ: number;
@@ -724,6 +728,7 @@ export function RobotArm({
     ["mission"],resetKey,shapeType==="사각형"&&activeTab==="rect"?false:hardwareConnected);
   const inquiryExpectedRef=useRef<Record<string,number|string>>({});
   const inquiryPathRef=useRef<Coords[]>([]);
+  const inquiryVerticesRef=useRef<SquareObservedVertex[]>([]);
   const squarePlan=useMemo(()=>shapeType==="사각형"&&inquiry.record
     ?squareStudentSequence(currentShapeLesson,inquiry.record.prediction):null,[shapeType,currentShapeLesson,inquiry.record]);
   const executionSeq=squarePlan??editableSeq;
@@ -741,12 +746,17 @@ export function RobotArm({
     && completedDetail?.closure?.closed === true && completedDetail.returnedToInitialPose === true;
   const measurementApproved = shapeType === "사각형" && !!squarePlan && squareInputCurrent && squareCorrect
     && completedShapeRun && inquiry.reviewed && sequenceMatchesTarget;
+  const challengeWrongPlanEligible = supportMode === "challenge" && !squareCorrect;
   const squareApprovalRef=useRef({key:executionKey,approved:measurementApproved&&activeTab==="rect"});
   squareApprovalRef.current={key:executionKey,approved:measurementApproved&&activeTab==="rect"};
   const squareInputKey=JSON.stringify([executionKey,inquiry.draft,inquiry.reviewDraft,inquiry.reason,activeTab,resetKey]);
   const squareLiveRef=useRef({key:executionKey,inputKey:squareInputKey,eligible:false});
   squareLiveRef.current={key:executionKey,inputKey:squareInputKey,
-    eligible:activeTab==="rect"&&shapeType==="사각형"&&!!squarePlan&&squareInputCurrent&&squareCorrect&&sequenceMatchesTarget&&inquiry.ready};
+    eligible:activeTab==="rect"&&shapeType==="사각형"&&!!squarePlan&&squareInputCurrent
+      &&(squareCorrect?sequenceMatchesTarget:challengeWrongPlanEligible)
+      &&completedShapeRun&&inquiry.ready
+      &&!inquiry.record?.runs.some(run=>run.action==="square-measurement"&&run.status==="completed"
+        &&(run.detail as {planKey?:string}|undefined)?.planKey===executionKey)};
   useLayoutEffect(()=>{
     const pending=continuationRef.current;
     const settings=continuationSettingsRef.current;
@@ -934,12 +944,14 @@ export function RobotArm({
     const closure = drawing?.closure ?? (completed?.shape ? measureShapeClosure(inquiryPathRef.current[0], onComputeFK(onGetJoints())) : null);
     if(kind==="legacy") {
       const observed=drawing?.closedAt ?? onComputeFK(onGetJoints());
+      const observedVertices=[...inquiryVerticesRef.current];
       inquiry.finish(completed?.shape
         ? closure?.closed
           ? "P1에서 도형을 닫고 실행 전 자세로 복귀했습니다. 비교할 실행 궤적에는 접근·복귀 이동을 포함하지 않습니다. 표의 값은 문항의 수학적 확인값이며, 실제 TCP 궤적과 구분하여 비교하세요."
           : "시퀀스 실행을 마쳤지만 도형이 닫히지 않았습니다. 실제 끝점과 P1을 비교하세요. 실행 전 자세로의 복귀는 도형 완성과 별개입니다."
         : "DT 시퀀스 실행을 완료했습니다. 표의 값은 문항의 수학적 확인값이며, 실제 TCP 궤적과 구분하여 비교하세요. 실제 TCP 경로와 직선거리가 같은지는 궤적을 보고 설명하세요.",
-        inquiryExpectedRef.current,{observed,observedPath:drawing?.observedPath ?? [...inquiryPathRef.current,observed],completedSteps:stepCount,
+        inquiryExpectedRef.current,{source:"dt",planKey:completed.conditionKey,observed,observedVertices,
+          observedPath:drawing?.observedPath ?? [...inquiryPathRef.current,observed],completedSteps:stepCount,
           ...(drawing ? {initialPose:drawing.initialPose,closure,returnedToInitialPose:true} : {})});
     }
     setStatus("done");
@@ -1109,9 +1121,15 @@ export function RobotArm({
 
     // Approach and return are separate from the closed shape being compared.
     if (s.shape && s.stepIdx === 0) {
-      inquiryPathRef.current = [{ ...onComputeFK(onGetJoints()) }];
+      const p1={ ...onComputeFK(onGetJoints()) };
+      inquiryPathRef.current = [p1];
+      inquiryVerticesRef.current=[{...p1,label:"P1"}];
       onMissionStart?.();
       setShapeRunPhase("drawing");
+    } else if(s.shape&&s.stepIdx>0) {
+      const point={...onComputeFK(onGetJoints())};
+      const labels=["P1","P2","P3","P4","P1"];
+      inquiryVerticesRef.current.push({...point,label:labels[s.stepIdx]??`P${s.stepIdx+1}`});
     }
 
     s.from = { ...to };
@@ -1145,6 +1163,7 @@ export function RobotArm({
     if(!continuous)stopAnim();
     if (inquiry.begin("mission") === false) return false;
     inquiryPathRef.current=[];
+    inquiryVerticesRef.current=[];
     const invalid=seq.flatMap(step=>[step.coords,step.via]).find(p=>p&&(!Object.values(p).every(Number.isFinite)||!onComputeIK(p.x,p.y,p.z,p.r,onGetJoints().j3)));
     if(invalid) {
       inquiry.finish("입력 좌표에 모델 해가 없어 DT 실행을 시작하지 않았습니다. 좌표를 바꾸고 다시 예측하세요.",{}, {rejectedTarget:invalid},"unavailable");
@@ -1251,17 +1270,37 @@ export function RobotArm({
     }):()=>{};
     const attempt = attemptCount + 1;
     const results: WaypointMeasurement[] = [];
-    let src = "hardware" as "hardware" | "mock", stepStart = performance.now();
+    const runStartedAt=new Date().toISOString();
+    let src = practice.session.getSnapshot().source === "mock" ? "mock" as const : "hardware" as const;
+    let stepStart = performance.now();
+    const saveMeasurementRun=(status:"completed"|"unavailable"|"stopped",summary:string)=>{
+      const sequenceOrder=["P1","P2","P3","P4","P1"];
+      const valid=results.length===5&&results.every((row,index)=>row.source===src
+        &&Number.isFinite(row.actual.x)&&Number.isFinite(row.actual.y)&&Number.isFinite(row.actual.z)
+        &&Number.isFinite(row.seq)&&typeof row.ageMs==="number"&&row.ageMs>=0&&row.ageMs<=1500
+        &&(index===0||row.seq!>results[index-1].seq!));
+      const observedVertices:SquareObservedVertex[]|undefined=valid
+        ?results.map((row,index)=>({...row.actual,label:sequenceOrder[index]})):undefined;
+      inquiry.recordExecution(inquiry.record!,{
+        action:"square-measurement",status,startedAt:runStartedAt,endedAt:new Date().toISOString(),summary,
+        detail:{source:src,planKey:approvedKey,complete:status==="completed"&&valid,
+          measurementContract:"GetPose controller-reported TCP; not pen contact or paper drawing",
+          observedVertices,measurements:results.map(row=>({label:row.label,target:row.target,actual:row.actual,
+            source:row.source,seq:row.seq,measuredAt:row.measuredAt,ageMs:row.ageMs,distanceError:row.distanceError}))},
+      });
+      return valid;
+    };
     try {
       const done = await practice.runOps(ops, continuous
-        ? "사각형 연속 실행: 이번 정답 좌표의 가상 완주·닫힘·복귀 후 별도 클릭 없이 실제 장비에서 같은 경로 1회 실행. 가상 중 물리 명령 없음. 설치·TCP·펜·작업면·장애물·물리 비상정지 확인 필수. 비교·성찰은 두 실행 후 진행."
+        ? `사각형 연속 실행: 학생의 ${squareCorrect?"예측 경로":"오답 가능성이 있는 예측 경로"}를 DT에서 완주·닫힘·복귀 확인한 뒤, 같은 계획을 실제 장비에서 1회 실행합니다. 오답이면 목표와 다른 도형이 그려질 수 있습니다. DT 중 물리 명령은 없으며 연결·준비·서보·작업 범위와 사람의 최종 확인을 통과해야 합니다.`
         : "2-3 도형 · 내가 입력한 같은 좌표 계획을 실제 로봇에서 실측 (펜·바닥 접촉은 측정되지 않음)", (m, i, op) => {
         if (hardwareRunTokenRef.current !== token) return;
-        if (m.source === "mock") src = "mock";
+        src=m.source;
         const target = op.kind === "move" ? { ...op.target } : { ...plan[i].step.coords! };
         const actual = { ...m.pose };
         const errorX = actual.x - target.x, errorY = actual.y - target.y, errorZ = actual.z - target.z;
         results.push({ label: waypointLabel(plan[i].step), target, actual, errorX, errorY, errorZ,
+      source:m.source,seq:m.seq,measuredAt:m.measuredAt,ageMs:m.ageMs,
           distanceError: Math.hypot(errorX, errorY, errorZ), durationMs: performance.now() - stepStart });
         stepStart = performance.now();
         measuredPathRef.current = [...measuredPathRef.current, actual];
@@ -1289,6 +1328,7 @@ export function RobotArm({
         virtualUnlockRef.current?.();virtualUnlockRef.current=null;
       }:undefined);
       if (!done) {
+        if(inquiry.record)saveMeasurementRun("stopped","사람이 시작 전 확인을 취소했습니다. 좌표 실측은 없습니다.");
         pending?.cancel("시작 전 물리 실행 확인을 취소했습니다.");
         if(pending)setContinuationReason(pending.reason);
         return;
@@ -1307,6 +1347,10 @@ export function RobotArm({
       pending?.finish();
 
       const summary = summarizeMeasurements(results);
+      const completeMeasurements=saveMeasurementRun("completed",src==="mock"
+        ?"모의 GetPose 회신으로 좌표를 기록했습니다. 실장비 실측 증거가 아닙니다."
+        :"GetPose 제어기 보고 TCP 좌표를 기록했습니다. 펜 접촉이나 종이 위 선의 측정은 아닙니다.");
+      if(!completeMeasurements)setRunError("실행은 끝났지만 같은 계획의 유효한 GetPose 꼭짓점 5개가 없어 실측 기반 진단은 완료되지 않았습니다.");
       try {
         if (src !== "hardware") throw new Error("mock runs are not stored as hardware evidence");
         const storageKey = "physical-ai-square-trials-v1";
@@ -1335,6 +1379,7 @@ export function RobotArm({
       }
     } catch (error) {
       if (hardwareRunTokenRef.current !== token) return;
+      if(inquiry.record&&results.length)saveMeasurementRun("unavailable","실행이 끝나지 않았거나 유효한 최신 측정이 부족합니다. 이 자료로는 전체 도형을 진단하지 않습니다.");
       setStatus("idle");
       setRunKind(null);
       runKindRef.current = null;
@@ -1548,9 +1593,10 @@ export function RobotArm({
               seq={editableSeq}
               executionSeq={shapeType==="사각형"?executionSeq:undefined}
               continuousExecution={shapeType==="사각형"?<div className="lesson-notice">
-                <p>가상 전용 실행은 위 버튼을 사용하세요. 아래 연속 실행은 <strong>실제 장비가 움직입니다.</strong> 시작 전에 연결·준비와 이번 경로의 물리 실행을 확인하고, 가상 완주 후 동일 좌표로 1회만 이어집니다.</p>
+                <p>가상 전용 실행은 위 버튼을 사용하세요. 아래는 DT에서 완주·닫힘·복귀를 확인한 <strong>같은 좌표 계획을 실제 장비에서 1회 실행</strong>합니다. 도전 모드에서는 정답 확인 전 자신의 예측을 실행하므로 오답이면 목표와 다른 도형이 그려질 수 있습니다. 연결·준비·서보·작업 범위 검사와 사람의 최종 승인은 그대로 필요합니다.</p>
                 <button type="button" data-testid="button-square-continuous-run" disabled={!squareLiveRef.current.eligible||status==="running"||continuationBusyRef.current}
-                  onClick={()=>void startHardwareSquare(true)}>가상 → 실제 사각형 연속 실행 · 시작 전 확인</button>
+                  onClick={()=>void startHardwareSquare(true)}>{challengeWrongPlanEligible
+                    ?"내 예측을 DT 확인 후 실제 실행 · 오답이면 다른 도형":"가상 → 실제 사각형 연속 실행 · 시작 전 확인"}</button>
               </div>:undefined}
               currentStep={currentStep}
               status={status}
@@ -1579,7 +1625,6 @@ export function RobotArm({
             {shapeType==="사각형"&&continuationPhase==="complete"&&measurements.length>0&&<div>
               {mockRun&&<p role="status">모의 통신 · 실측 아님: 이 값은 학습 증거로 저장하지 않습니다.</p>}
               <MeasurementResults items={measurements} attempt={attemptCount} source={measurementSource}/>
-              {measurementSource==="hardware"&&!mockRun&&<SquareMeasurementDiagnosis lesson={currentShapeLesson} inquiry={inquiry} measurements={measurements} trialKey={`${measurementTrialId??"continuous"}:${attemptCount}:${measurements.length}`} supportMode={supportMode} disabled={status==="running"}/>}
             </div>}
             {shapeType === "사각형" && inquiry.reviewed && shapeLessonStage === 7 && <details className="lesson-card">
               <summary>추가 측정 · 실장비 / 가상 센서</summary>
@@ -1596,7 +1641,6 @@ export function RobotArm({
               {measurements.length > 0 && <>
                 <MeasurementResults items={measurements} attempt={attemptCount} source={measurementSource}/>
                 {measurementTrialId && <MeasurementFeedbackReview key={measurementTrialId} trialId={measurementTrialId} locked={status === "running"}/>}
-                {measurementSource==="hardware"&&!mockRun&&continuationPhase!=="complete"&&<SquareMeasurementDiagnosis lesson={currentShapeLesson} inquiry={inquiry} measurements={measurements} trialKey={`${measurementTrialId??"continuous"}:${attemptCount}:${measurements.length}`} supportMode={supportMode} disabled={status==="running"}/>}
               </>}
               <details><summary>이전 사각형 학습·측정 기록</summary>
                 <button onClick={() => downloadEvidence("square-legacy-learning-records.json", Object.fromEntries([

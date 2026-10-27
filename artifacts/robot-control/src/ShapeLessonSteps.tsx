@@ -8,7 +8,7 @@ import { LearningAiFeedback } from "./LearningAiFeedback";
 import { LEARNING_STAGES } from "./learningFramework";
 import "./shapeLessonSteps.css";
 import { LearningJudgmentFields, sameJudgment } from "./LearningJudgment";
-import { diagnoseSquare, priorSquareDiagnoses, squareFeedbackPlan, squareMismatchName, type XY } from "./squareMismatchDiagnosis";
+import { diagnoseSquare, priorSquareDiagnoses, squareFeedbackPlan, squareMismatchName, type SquareObservedVertex, type SquareExecutionSource, type XY } from "./squareMismatchDiagnosis";
 import { SquareDiagnosisPanel } from "./SquareDiagnosisPanel";
 
 type LessonStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
@@ -64,18 +64,42 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
   const currentComparison = record && hasCompletedObservation ? currentInquiryComparison(record) : [];
   const hasReview = !!record?.answerReviews?.some(review => review.runCount === record.runs.length);
   const reasonFeedback = record?.explanationReviews?.filter(review => review.runCount === record.runs.length).at(-1);
+  const currentObservationSaved=!!record&&record.observations?.some(item=>item.runCount===record.runs.length&&item.acknowledged===true);
   const reflectionFeedback = record?.reflections.filter(review => review.runCount === record.runs.length).at(-1);
   const reflectionAnswers = record?.answerReviews?.filter(review => review.runCount === record.runs.length).at(-1)?.answers ?? record?.prediction;
   const reflectionCurrent = reflectionFeedback?.text === q.reflection.trim() && q.fields.every(field => reflectionFeedback?.answers?.[field.key] === reflectionAnswers?.[field.key]) && sameJudgment(reflectionFeedback?.judgment, q.judgment);
   // Prediction–execution diagnosis (square only): what the robot executed vs the task condition.
   const isSquare = lesson.id.startsWith("square-");
   const mission = record?.runs.filter(run => run.action === "mission").at(-1);
-  const rejected = mission?.status === "unavailable" ? (mission.detail as { rejectedTarget?: XY } | undefined)?.rejectedTarget ?? null : null;
-  const diagnosis = isSquare && record && q.ready && (hasCompletedObservation || rejected) ? diagnoseSquare(lesson, record.prediction, { rejected }) : null;
+  const missionDetail=mission?.detail as {rejectedTarget?:XY;observedVertices?:SquareObservedVertex[];planKey?:string}|undefined;
+  const rejected = mission?.status === "unavailable" ? missionDetail?.rejectedTarget ?? null : null;
+  const latestMeasurement=record?.runs.filter(run=>run.action==="square-measurement").at(-1);
+  const measurementDetail=latestMeasurement?.detail as {source?:SquareExecutionSource;planKey?:string;complete?:boolean;observedVertices?:SquareObservedVertex[]}|undefined;
+  const samePlanMeasurement=!!latestMeasurement&&!!measurementDetail
+    &&measurementDetail.planKey===missionDetail?.planKey
+    &&(measurementDetail.source==="hardware"||measurementDetail.source==="mock");
+  const diagnosisSource=samePlanMeasurement?measurementDetail?.source:"dt";
+  const diagnosisVertices=samePlanMeasurement
+    ?measurementDetail?.complete?measurementDetail.observedVertices:undefined
+    :missionDetail?.observedVertices;
+  const diagnosis = isSquare && record && q.ready && (hasCompletedObservation || rejected)
+    ? diagnoseSquare(lesson,record.prediction,{rejected,observedVertices:diagnosisVertices,source:diagnosisSource}) : null;
   const priorTypes = diagnosis && record ? priorSquareDiagnoses(q.history, lesson, record.id) : [];
   const diagnosisPlan = diagnosis ? squareFeedbackPlan(diagnosis, priorTypes.filter(type => type === diagnosis.type).length, supportMode,
     diagnosis.type === "match" ? priorTypes.at(-1) : undefined) : null;
   const diagnosisMismatch = !!diagnosis && diagnosis.type !== "match" && diagnosis.type !== "model-real";
+  const latestExplainedAttempt=[...q.history].reverse().find(item=>item.conditionKey===record?.conditionKey
+    &&item.mismatchDiagnoses?.some(entry=>!!entry.causeExplanation));
+  const revisionCycle=!!record&&(record.attemptKind==="revision"||!!record.previousId&&!!latestExplainedAttempt)
+    ||!record&&!!latestExplainedAttempt;
+  const causeSaved=!!record&&!!diagnosis&&record.mismatchDiagnoses?.some(entry=>entry.runCount===record.runs.length
+    &&entry.type===diagnosis.type&&!!entry.causeExplanation);
+  const squareActionSteps=[
+    {title:"좌표 예상하고 실행하기",paper:"논문 ①~④",status:record?.attemptKind==="revision"||q.ready?"complete":activeStage<=3?"current":"pending"},
+    {title:"그려진 결과 확인하기",paper:"논문 ⑤·⑥",status:currentObservationSaved?"complete":hasCompletedObservation?"current":revisionCycle&&!record?"complete":q.ready?"current":"pending"},
+    {title:"필요할 때 질문 하나 받기",paper:"논문 ⑥",status:diagnosis?.type==="match"?"not-needed":causeSaved?"complete":diagnosisMismatch?"current":revisionCycle&&!record?"complete":hasCompletedObservation?"current":"pending"},
+    {title:"고쳐서 다시 그려보기",paper:"논문 ⑦ → ③·④",status:diagnosis?.type==="match"&&revisionCycle?"complete":causeSaved||revisionCycle?"current":diagnosis?.type==="match"?"not-needed":"pending"},
+  ] as const;
   const [cause, setCause] = useState("");
   const sentDiagnosis = useRef("");
   useLayoutEffect(() => { setCause(""); }, [record?.id, record?.runs.length]);
@@ -86,7 +110,8 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
     sentDiagnosis.current = key;
     const entry = { type: diagnosis.type, edge: diagnosis.edge, label: diagnosis.label, level: diagnosisPlan.level,
       question: diagnosisPlan.question, relationHint: diagnosisPlan.relationHint, supportMode,
-      priorSameType: priorTypes.filter(type => type === diagnosis.type).length, teacherFlag: diagnosisPlan.teacherFlag, evidence: diagnosis.evidence };
+      priorSameType: priorTypes.filter(type => type === diagnosis.type).length, teacherFlag: diagnosisPlan.teacherFlag, evidence: diagnosis.evidence,
+      source:diagnosis.evidence.source==="hardware"?"hardware":diagnosis.evidence.source==="mock"?"mock":"dt" };
     q.recordDiagnosis(entry);
     const rows = assessSquare(lesson, record.prediction);
     const errors = rows.filter(row => !row.matched);
@@ -153,7 +178,9 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
     if(diagnosisMismatch&&!cause.trim()){setFeedback("로봇이 그린 결과와 과제 조건이 왜 달랐는지 먼저 한 문장으로 적어 주세요.");return;}
     if(diagnosis&&diagnosisPlan&&cause.trim())q.recordDiagnosis({type:diagnosis.type,edge:diagnosis.edge,label:diagnosis.label,level:diagnosisPlan.level,
       question:diagnosisPlan.question,relationHint:diagnosisPlan.relationHint,supportMode,priorSameType:priorTypes.filter(type=>type===diagnosis.type).length,
-      teacherFlag:diagnosisPlan.teacherFlag,evidence:diagnosis.evidence,causeExplanation:cause});
+      teacherFlag:diagnosisPlan.teacherFlag,evidence:diagnosis.evidence,
+      source:diagnosis.evidence.source==="hardware"?"hardware":diagnosis.evidence.source==="mock"?"mock":"dt",
+      causeExplanation:cause});
     const answers={...q.record?.prediction,...q.reviewDraft};
     q.requestAi(squareTutorJudgment(assessSquare(lesson,answers)),answers);
     // A changed answer is a new prediction, never approval of an old DT path.
@@ -216,13 +243,22 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
         : !q.reviewed ? <button type="button" className="lesson-primary" disabled={locked || !q.reflectionReady || !q.judgmentReady} onClick={() => {
             // The optional self-check plan after a resolved mismatch is kept with the diagnosis.
             if (diagnosis && diagnosisPlan && cause.trim()) q.recordDiagnosis({ type: diagnosis.type, label: diagnosis.label, level: diagnosisPlan.level,
-              question: diagnosisPlan.question, supportMode, priorSameType: 0, teacherFlag: false, evidence: diagnosis.evidence, causeExplanation: cause });
+              question: diagnosisPlan.question, supportMode, priorSameType: 0, teacherFlag: false, evidence: diagnosis.evidence,
+              source:diagnosis.evidence.source==="hardware"?"hardware":diagnosis.evidence.source==="mock"?"mock":"dt",
+              causeExplanation: cause });
             q.explain();
           }}>{q.taskKind === "practice" ? "비교 확인 저장" : "내 설명 저장"}</button>
           : <button type="button" className="lesson-primary" disabled={locked} onClick={() => setStep(7)}>비교 완료 · 다음</button>
     : activeStage === 7 ? <button type="button" className="lesson-primary" disabled={locked || !q.reviewed || !canAdvance} onClick={() => { if (!canAdvance) return; q.feedbackEvent("transfer"); onNewCondition(); }}>{nextLabel}</button> : null;
 
   return <div className="shape-lesson-steps" data-shape-stage={activeStage} data-support-mode={supportMode}>
+    {isSquare&&<ol className="square-action-progress" aria-label="사각형 과제 행동 진행">
+      {squareActionSteps.map((item,index)=><li key={item.title} data-status={item.status} aria-current={item.status==="current"?"step":undefined}>
+        <strong>{index+1}. {item.title}</strong>
+        <span>{item.status==="complete"?"완료":item.status==="current"?"현재":item.status==="not-needed"?"이번엔 필요 없음":"대기"}</span>
+        <small>{item.paper}</small>
+      </li>)}
+    </ol>}
     <p className="shape-step-progress" aria-live="polite">현재 단계 {activeStage}/7 · <strong>{STEP_TITLES[activeStage - 1]}</strong></p>
     <section className="shape-step-active" aria-label={STEP_TITLES[activeStage - 1]}>
       {activeStage === 1 && <>
@@ -286,6 +322,9 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
       </>}
       {activeStage === 6 && record && <>
         {diagnosisPanel}
+        {samePlanMeasurement&&!measurementDetail?.complete&&<p className="shape-step-feedback" role="status">
+          {measurementDetail?.source==="mock"?"모의 GetPose 회신":"GetPose 회신"} 좌표 5개가 모두 확인되지 않아 실측 기반 진단은 완료되지 않았습니다. 입력 좌표나 이전 측정값으로 대체하지 않습니다.
+        </p>}
         <div className="shape-step-table-wrap" tabIndex={0} aria-label="처음 예측과 확인값 비교표">
           <table><thead><tr><th scope="col">항목</th><th scope="col">처음 예측</th><th scope="col">확인값</th>{hasReview && <th scope="col">수정한 판단</th>}</tr></thead>
             <tbody>{comparison.map(row => {

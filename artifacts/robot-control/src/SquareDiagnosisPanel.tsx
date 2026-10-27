@@ -19,7 +19,11 @@ export function SquareDiagnosisPanel({ diagnosis, plan, cause, onCauseChange, ca
   const edges = diagnosis.evidence.edges ?? [];
   const measured = diagnosis.evidence.measured;
   const mismatch = diagnosis.type !== "match";
+  const sourceLabel=diagnosis.evidence.source==="hardware"?"실장비 GetPose 회신 · 제어기 보고 TCP 좌표"
+    :diagnosis.evidence.source==="mock"?"모의 GetPose 회신 · 실측 증거 아님"
+    :diagnosis.evidence.source==="dt"?"DT 시뮬레이터 관측 좌표":"학생 예측 좌표";
   return <section className="square-diagnosis" data-type={diagnosis.type} data-level={plan.level} aria-label="실행 결과와 과제 조건 비교" data-testid="square-diagnosis">
+    <p className="square-diagnosis-source">{sourceLabel}</p>
     <p className="square-diagnosis-level">{plan.levelLabel}</p>
     <h4>{diagnosis.label}</h4>
     {mismatch && edges.length > 0 && diagnosis.type !== "model-real" && <div className="square-diagnosis-table" tabIndex={0} aria-label="변별 과제 조건과 로봇이 그린 변">

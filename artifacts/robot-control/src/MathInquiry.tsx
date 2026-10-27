@@ -30,7 +30,7 @@ export type InquiryRecord = ReturnType<typeof learningRecordContext> & {
 };
 export type MismatchDiagnosisEntry={runCount:number;at:string;type:string;edge?:string;label:string;
   level:string;question:string;relationHint?:string;supportMode:string;priorSameType:number;teacherFlag:boolean;
-  evidence:unknown;source?:"dt"|"hardware";causeExplanation?:string;explainedAt?:string};
+  evidence:unknown;source?:"dt"|"hardware"|"mock";causeExplanation?:string;explainedAt?:string};
 const now=()=>new Date().toISOString();
 const clone=<T,>(v:T):T=>JSON.parse(JSON.stringify(v));
 const STORAGE_KEY="physical-ai-inquiry-evidence-v1";
