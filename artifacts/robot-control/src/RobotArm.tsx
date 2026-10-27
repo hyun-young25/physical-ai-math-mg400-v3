@@ -588,6 +588,7 @@ function ShapeLearningPanel({
           <p className="lesson-note">도형을 닫고 실행 전 자세로 돌아온 뒤 예측과 결과를 비교합니다.</p>
         </>}
         observation={<>
+                {continuousExecution}
           <ShapeDiagram seq={diagramSeq} currentStep={currentStep} status={status} shapeType={shapeType}/>
           {!matchesTarget && <p role="status" className="lesson-feedback">현재 명령과 수학적 목표가 다릅니다. 목표 좌표·이동 방식을 비교하고 수정한 뒤 다시 실행하세요.</p>}
         </>}
@@ -1284,7 +1285,7 @@ export function RobotArm({
       inquiry.recordExecution(inquiry.record!,{
         action:"square-measurement",status,startedAt:runStartedAt,endedAt:new Date().toISOString(),summary,
         detail:{source:src,planKey:approvedKey,complete:status==="completed"&&valid,
-          measurementContract:"GetPose controller-reported TCP; not pen contact or paper drawing",
+          measurementContract:"bridge controller-reported TCP (MG400 port 30004 feedback); not pen contact or paper drawing",
           observedVertices,measurements:results.map(row=>({label:row.label,target:row.target,actual:row.actual,
             source:row.source,seq:row.seq,measuredAt:row.measuredAt,ageMs:row.ageMs,distanceError:row.distanceError}))},
       });
@@ -1348,9 +1349,9 @@ export function RobotArm({
 
       const summary = summarizeMeasurements(results);
       const completeMeasurements=saveMeasurementRun("completed",src==="mock"
-        ?"모의 GetPose 회신으로 좌표를 기록했습니다. 실장비 실측 증거가 아닙니다."
-        :"GetPose 제어기 보고 TCP 좌표를 기록했습니다. 펜 접촉이나 종이 위 선의 측정은 아닙니다.");
-      if(!completeMeasurements)setRunError("실행은 끝났지만 같은 계획의 유효한 GetPose 꼭짓점 5개가 없어 실측 기반 진단은 완료되지 않았습니다.");
+        ?"모의 브리지 회신으로 좌표를 기록했습니다. 실장비 실측 증거가 아닙니다."
+        :"브리지 제어기 보고 TCP 좌표를 기록했습니다. 펜 접촉이나 종이 위 선의 측정은 아닙니다.");
+      if(!completeMeasurements)setRunError("실행은 끝났지만 같은 계획의 유효한 브리지 관측 꼭짓점 5개가 없어 실측 기반 진단은 완료되지 않았습니다.");
       try {
         if (src !== "hardware") throw new Error("mock runs are not stored as hardware evidence");
         const storageKey = "physical-ai-square-trials-v1";
@@ -1593,7 +1594,7 @@ export function RobotArm({
               seq={editableSeq}
               executionSeq={shapeType==="사각형"?executionSeq:undefined}
               continuousExecution={shapeType==="사각형"?<div className="lesson-notice">
-                <p>가상 전용 실행은 위 버튼을 사용하세요. 아래는 DT에서 완주·닫힘·복귀를 확인한 <strong>같은 좌표 계획을 실제 장비에서 1회 실행</strong>합니다. 도전 모드에서는 정답 확인 전 자신의 예측을 실행하므로 오답이면 목표와 다른 도형이 그려질 수 있습니다. 연결·준비·서보·작업 범위 검사와 사람의 최종 승인은 그대로 필요합니다.</p>
+                <p>이 버튼은 DT에서 완주·닫힘·복귀를 확인한 <strong>같은 좌표 계획을 실제 장비에서 1회 실행</strong>합니다. 도전 모드에서는 정답 확인 전 자신의 예측을 실행하므로 오답이면 목표와 다른 도형이 그려질 수 있습니다. 연결·준비·서보·작업 범위 검사와 사람의 최종 승인은 그대로 필요합니다.</p>
                 <button type="button" data-testid="button-square-continuous-run" disabled={!squareLiveRef.current.eligible||status==="running"||continuationBusyRef.current}
                   onClick={()=>void startHardwareSquare(true)}>{challengeWrongPlanEligible
                     ?"내 예측을 DT 확인 후 실제 실행 · 오답이면 다른 도형":"가상 → 실제 사각형 연속 실행 · 시작 전 확인"}</button>

@@ -489,7 +489,7 @@ for (const shape of ['사각형', '삼각형', '동그라미']) test(`${shape}: 
   app.complete({ [numeric.key]: wrong });
   const initialId = app.inquiry.record.id;
   app.click('DT에서 실행');
-  app.inquiry.finish('도형을 닫고 복귀했습니다.', app.expected(), { closed: true }); app.render();
+  app.inquiry.finish('도형을 닫고 복귀했습니다.', app.expected(), { closed: true, observedVertices: shape === '사각형' ? [{label:'P1',x:200,y:100},{label:'P2',x:325,y:100},{label:'P3',x:300,y:-100},{label:'P4',x:200,y:-100},{label:'P1',x:200,y:100}] : undefined }); app.render();
   assertOneActivity(app, 5); app.observe();
   assertOneActivity(app, 6);
   assert.equal(nodes(app.tree).some(node => node.props?.['aria-label'] === '결과 해석'), false);
@@ -519,7 +519,7 @@ for (const shape of ['사각형', '삼각형', '동그라미']) test(`${shape}: 
     assert.equal(app.inquiry.record.prediction[numeric.key],String(numeric.answer));
     assertOneActivity(app,4);
     app.click('DT에서 실행');
-    app.inquiry.finish('수정한 좌표를 새 DT에서 확인했습니다.',app.expected(),{closed:true});app.render();
+    app.inquiry.finish('수정한 좌표를 새 DT에서 확인했습니다.',app.expected(),{closed:true, observedVertices: shape === '사각형' ? [{label:'P1',x:200,y:100},{label:'P2',x:300,y:100},{label:'P3',x:300,y:-100},{label:'P4',x:200,y:-100},{label:'P1',x:200,y:100}] : undefined});app.render();
     assertOneActivity(app,5);
     const history=JSON.parse(app.storage.get('physical-ai-inquiry-evidence-v1'));
     assert.equal(history.length,2);

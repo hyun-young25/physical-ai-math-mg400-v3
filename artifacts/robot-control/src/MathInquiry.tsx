@@ -130,6 +130,8 @@ export function useMathInquiry(task:string, condition:unknown, fields:InquiryFie
       &&aiJudgment.current.answerKey===JSON.stringify([draft,reason])?aiJudgment.current.value:next?currentInquiryComparison(next).map(r=>({key:r.key,label:r.label,matched:r.matched})):
       aiJudgment.current?.conditionKey===conditionKey&&aiJudgment.current.answerKey===JSON.stringify([draft,reason])?aiJudgment.current.value:undefined),
   });
+  const latestFeedbackContext=useRef(feedbackContext);
+  latestFeedbackContext.current=feedbackContext;
   const ai=useLearningAi(feedbackContext(),JSON.stringify([draft,reason,reviewDraft,reasonRevision,reflection]));
   const aiSubmission=useRef(0);
   const requestAi=(judgment?:unknown,answers=draft)=>{
@@ -175,7 +177,7 @@ export function useMathInquiry(task:string, condition:unknown, fields:InquiryFie
     const complete=requiredActions.every(action=>latestInquiryRuns(updated).some(run=>run.action===action&&(run.status==="completed"||run.status==="unavailable")));
     if(complete)updated.explanationReviews=[...(r.explanationReviews??[]),{text:r.reason,at:now(),runCount:updated.runs.length,phase:"initial",answers:clone(r.prediction),assessment:assessExplanation(r.reason,explanationContext(updated))}];
     save(updated);
-    void ai.request("result",feedbackContext(updated),"",`${updated.id}:run:${updated.runs.length}`);
+    void ai.request("result",latestFeedbackContext.current(updated,undefined,updated.prediction),"",`${updated.id}:run:${updated.runs.length}`);
   },[save,JSON.stringify(requiredActions)]);
   // Append a separate execution to the SAME prediction, even if its screen was
   // left while awaiting confirmation. Never replace predictions or older runs.
@@ -189,7 +191,7 @@ export function useMathInquiry(task:string, condition:unknown, fields:InquiryFie
       }];
     }
     if(ref.current?.id===original.id) save(updated); else remember(updated);
-    if(ref.current?.id===original.id) void ai.request("result",feedbackContext(updated),"",`${updated.id}:run:${updated.runs.length}`);
+    if(ref.current?.id===original.id) void ai.request("result",latestFeedbackContext.current(updated,undefined,updated.prediction),"",`${updated.id}:run:${updated.runs.length}`);
   },[save]);
   const feedbackEvent=(kind:NonNullable<InquiryRecord["feedbackEvents"]>[number]["kind"],keys:string[]=[])=>{
     const r=ref.current;

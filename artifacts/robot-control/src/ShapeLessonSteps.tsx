@@ -300,7 +300,7 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
       </>}
       {activeStage === 4 && <>
         <p>{lesson.id.startsWith("square-")
-          ? "내가 입력한 XY 좌표가 DT 실행 경로에 반영됩니다. 가상 전용 실행은 연결 없이 가능합니다. 도전 모드의 오답은 DT에서만 비교합니다. 정답 경로의 가상 → 실제 연속 실행은 시작 전 장비 준비·물리 실행 승인을 받고, 가상 완주·닫힘·복귀 후 같은 경로로 이어집니다. 비교·성찰은 결과에서 진행합니다."
+          ? "내가 입력한 XY 좌표가 DT 실행 경로에 반영됩니다. 가상 전용 실행은 연결 없이 가능합니다. 도전 모드에서는 오답 예측도 DT 완주·닫힘·복귀 확인 후, 동일 계획의 작업 범위·연결·준비·서보 검사와 최종 승인을 통과하면 1회 비교 실행할 수 있습니다. 비교·성찰은 결과에서 진행합니다."
           : "예측 좌표는 비교에 사용하며, 로봇은 실행 명령의 좌표로 움직입니다."}</p>
         <details className="shape-step-evidence">
           <summary>내 예측 ↔ 실행 명령 좌표</summary>
