@@ -1,0 +1,74 @@
+import type { PaperDiagnosis, PaperEvidenceSource, PaperFrame, PaperGridPoint, PaperPointName, PaperPredictionPoint, PaperReferenceSample, PaperRunSnapshot, PaperStudentTransform, PaperTargetSet, PaperCoordinateLevel } from "./paperCoordinateStudy";
+
+export type PaperLessonStage = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export type PaperCoordinateStudyViewState = {
+  stage: PaperLessonStage;
+  level: PaperCoordinateLevel;
+  targetSet: PaperTargetSet;
+  frame: PaperFrame | null;
+  samples: PaperReferenceSample[];
+  currentPose: { x: number; y: number; z: number; r: number } | null;
+  currentSource: PaperEvidenceSource | null;
+  currentSequence: number | null;
+  currentMeasuredAt: number | null;
+  manualInputs: Record<PaperPointName, { x: string; y: string; z: string; r: string }>;
+  coordinateSystem: string;
+  user: number;
+  tool: number;
+  coordinatesVerified: boolean;
+  referenceError: string;
+  transform: PaperStudentTransform;
+  transformFeedback: string;
+  targetPoints: PaperGridPoint[];
+  predictions: PaperPredictionPoint[];
+  predictionsReady: boolean;
+  predictionFeedback: string;
+  run: PaperRunSnapshot | null;
+  runAvailable: boolean;
+  physicalAvailable: boolean;
+  physicalUnavailableReason: string;
+  liftHeight: number | null;
+  liftHeightSource: PaperReferenceSource | null;
+  liftHeightSequence: number | null;
+  paperSurfaceZ: number | null;
+  positionTolerance: number;
+  rotationTolerance: number;
+  convertedReadings: Array<{ point: string; source: PaperEvidenceSource; seq: number | null; measuredAt: number; xCm: number | null; yCm: number | null }>;
+  inkReadings: Array<{ point: string; xCm: number | null; yCm: number | null }>;
+  diagnosis: PaperDiagnosis | null;
+  studentHypothesis: string;
+  revisionReason: string;
+  saveState: "ready" | "saving" | "saved" | "failed";
+  saveMessage: string;
+  running: boolean;
+  error: string;
+};
+
+export type PaperCoordinateStudyViewActions = {
+  onBack: () => void;
+  onStageChange: (stage: PaperLessonStage) => void;
+  onLevelChange: (level: PaperCoordinateLevel) => void;
+  onRecordCurrentReference: (point: PaperPointName) => void;
+  onManualReferenceChange: (point: PaperPointName, field: "x" | "y" | "z" | "r", value: string) => void;
+  onSaveManualReference: (point: PaperPointName) => void;
+  onTransformChange: (field: keyof PaperStudentTransform, value: string) => void;
+  onSaveTransform: () => void;
+  onPredictionChange: (point: string, field: "robotX" | "robotY", value: string) => void;
+  onSavePrediction: () => void;
+  onRunDT: () => void;
+  onRunPhysical: () => void;
+  onRecordCurrentLiftHeight: () => void;
+  onLiftHeightChange: (value: string) => void;
+  onToleranceChange: (field: "positionTolerance" | "rotationTolerance", value: string) => void;
+  onInkReadingChange: (point: string, axis: "xCm" | "yCm", value: string) => void;
+  onSaveInkReadings: () => void;
+  onSaveHypothesis: (value: string) => void;
+  onRevise: (reason: string) => void;
+  onChooseNewTarget: () => void;
+  onMovePaper: () => void;
+};
+
+export type PaperCoordinateStudyViewProps = {
+  state: PaperCoordinateStudyViewState;
+  actions: PaperCoordinateStudyViewActions;
+};

@@ -14,6 +14,7 @@ import type { LearningVisualState } from "./Robot3D";
 import { copyShapePose, measureShapeClosure, prepareShapeMotion, sampleShapeMotion, prepareShapeReturn, sampleShapeReturn, ShapeFrameScheduler } from "./shapeRun";
 import type { ShapeClosure, ShapeMotion, ShapePoseSnapshot, ShapeReturn, ShapeRunPhase } from "./shapeRun";
 import { usePractice } from "./PracticeProvider";
+import { PaperCoordinateStudy } from "./PaperCoordinateStudy";
 import { downloadEvidence, readEvidence, writeEvidence } from "./learningEvidenceStorage";
 import { getEvidenceItem, setEvidenceItem } from "./learningSync";
 import type { SquareObservedVertex } from "./squareMismatchDiagnosis";
@@ -673,6 +674,8 @@ export function RobotArm({
   const [shapeInitialPose, setShapeInitialPose] = useState<ShapePoseSnapshot | null>(null);
   const [shapeClosure, setShapeClosure] = useState<ShapeClosure | null>(null);
   const [shapeStorageFailed, setShapeStorageFailed] = useState(false);
+  const [paperCoordinateOpen, setPaperCoordinateOpen] = useState(false);
+  const paperDtCancelRef = useRef(false);
   const [dtCompletionKey, setDtCompletionKey] = useState<string | null>(null);
   const shapeEvidenceRef = useRef<Record<string, unknown>[] | null>(null);
   const [measurements, setMeasurements] = useState<WaypointMeasurement[]>([]);
@@ -1487,6 +1490,66 @@ export function RobotArm({
   }
 
   /* ── render ── */
+  const runPaperDigitalTwin = async (commands: Coords[]) => {
+    if (hardwareConnected) throw new Error("실장비 연결 중에는 좌표 변환 DT를 시작하지 않았습니다.");
+    if (status === "running") throw new Error("기존 로봇 동작이 진행 중입니다.");
+    paperDtCancelRef.current = false;
+    const start = { ...coords };
+    setStatus("running");
+    setRunError(null);
+    onMissionStart?.();
+    const animate = (from: Coords, to: Coords) => new Promise<void>((resolve, reject) => {
+      const started = performance.now();
+      const duration = 350;
+      const tick = (now: number) => {
+        if (paperDtCancelRef.current) { reject(new Error("DT가 중단되었습니다. 완료로 기록하지 않습니다.")); return; }
+        const t = Math.min(1, Math.max(0, (now - started) / duration));
+        const next = {
+          x: from.x + (to.x - from.x) * t,
+          y: from.y + (to.y - from.y) * t,
+          z: from.z + (to.z - from.z) * t,
+          r: from.r + (to.r - from.r) * t,
+        };
+        if (!onComputeIK(next.x, next.y, next.z, next.r, onGetJoints().j3)) {
+          reject(new Error("DT 기구학 검사에서 도달 불가 지점을 확인했습니다."));
+          return;
+        }
+        onMoveTo(next.x, next.y, next.z, next.r);
+        if (t < 1) requestAnimationFrame(tick);
+        else { onMoveEnd(); resolve(); }
+      };
+      requestAnimationFrame(tick);
+    });
+    try {
+      let previous = start;
+      for (const command of [...commands, start]) {
+        if (!onComputeIK(command.x, command.y, command.z, command.r, onGetJoints().j3))
+          throw new Error("DT 기구학 검사에서 도달 불가 지점을 확인했습니다.");
+        await animate(previous, command);
+        previous = command;
+      }
+    } finally {
+      paperDtCancelRef.current = false;
+      onMoveTo(start.x, start.y, start.z, start.r);
+      onMoveEnd();
+      setStatus("idle");
+    }
+  };
+
+  if (paperCoordinateOpen) {
+    return (
+      <div className="paper-coordinate-host">
+        <PaperCoordinateStudy
+          onBack={() => { paperDtCancelRef.current = true; setPaperCoordinateOpen(false); }}
+          hardwareConnected={hardwareConnected}
+          currentPose={coords}
+          canReach={pose => !!onComputeIK(pose.x, pose.y, pose.z, pose.r, onGetJoints().j3)}
+          runDigitalTwin={runPaperDigitalTwin}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col shrink-0 overflow-hidden h-full"
       style={{ width:embedded ? "100%" : "clamp(500px,36vw,580px)", minWidth:0, minHeight:0, background:"#fff", borderLeft:embedded ? "none" : "2px solid #e5e7eb", fontFamily:FONT }}>
@@ -1540,6 +1603,12 @@ export function RobotArm({
 
         {activeTab === "rect" ? (
           <>
+            {shapeType === "사각형" && <button type="button" className="pcv-extension-entry"
+              onClick={() => setPaperCoordinateOpen(true)} disabled={status === "running"}>
+              <strong>확장 탐구</strong>
+              <span>사각형에서 배운 좌표를 종이 기준점에 적용하기</span>
+              <small>같은 7단계 학습 흐름 · 새 과제에서 다시 돌아올 수 있습니다</small>
+            </button>}
             <TaskStartPoint taskKey={`shape:${currentShapeLesson.id}:${shapeType}:${resetKey}`} start={currentShapeLesson.pathPlan.start ?? null}
               coords={coords} disabled={status==="running"} legacyConnected={hardwareConnected}
               onVirtualMove={p=>moveVirtualTaskStart({model:{ik:onComputeIK},joints:_joints,onMoveTo,onMoveEnd},p)}/>
