@@ -53,6 +53,27 @@ export function squareAnswersUnchanged(saved:Record<string,string>, draft:Record
     && Object.entries(review).every(([key,value])=>saved[key]===value);
 }
 
+export type SquareActionStatus="current"|"complete"|"pending"|"not-needed";
+export function squareActionProgress(input:{
+  predictionSaved:boolean;revisionCycle:boolean;revisionAttempt:boolean;
+  observationComplete:boolean;hasMismatch:boolean;causeSaved:boolean;observationSaved:boolean;
+}):SquareActionStatus[] {
+  const correctionInProgress=input.causeSaved
+    ||input.revisionCycle&&(!input.predictionSaved||(input.revisionAttempt&&!input.observationComplete));
+  const currentIndex=!input.predictionSaved?(correctionInProgress?3:0)
+    :correctionInProgress?3
+    :input.observationComplete&&input.hasMismatch&&!input.causeSaved?2
+    :input.observationComplete&&!input.hasMismatch&&!input.observationSaved?1
+    :!input.observationComplete?0:-1;
+  return [
+    currentIndex===0?"current":input.predictionSaved||input.revisionCycle?"complete":"pending",
+    currentIndex===1?"current":input.observationComplete||correctionInProgress?"complete":"pending",
+    currentIndex===2?"current":!input.hasMismatch&&input.observationComplete?"not-needed":input.causeSaved||correctionInProgress?"complete":"pending",
+    currentIndex===3?"current":input.revisionCycle&&input.observationComplete&&!input.hasMismatch?"complete"
+      :!input.hasMismatch&&input.observationComplete?"not-needed":"pending",
+  ];
+}
+
 /** The existing tutor contract caps judgment at 2,000 characters. Keep valid JSON,
  * all-error count and the next actionable errors, rather than truncating JSON. */
 export function squareTutorJudgment(rows:ReturnType<typeof assessSquare>) {

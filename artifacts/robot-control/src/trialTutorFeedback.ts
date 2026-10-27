@@ -21,9 +21,16 @@ export function trialTutorFeedback(c:FeedbackContext, result=false):string {
   const incorrect=judgments.filter(j=>j.matched===false||j.status==="incorrect");
   const correct=incorrect.length===0&&judgments.some(j=>j.matched===true||j.status==="correct");
   const question=c.question?.trim()??"";
-  const values=Object.entries(answers).map(([key,value])=>{
+  const rawJudgedFields=object(judgment).fields;
+  const judgedFields:Record<string,unknown>[]=Array.isArray(rawJudgedFields)?rawJudgedFields.map(object):[];
+  const valueKeys=[...new Set([...Object.keys(answers),...fields.map(field=>String(field.key??"")).filter(Boolean),
+    ...judgedFields.map(field=>typeof field.key==="string"?field.key:"").filter(Boolean)])];
+  const values=valueKeys.map(key=>{
     const field=fields.find(f=>f.key===key);
-    return `${field?.label??key}=${short(value,32)||"미입력"}${field?.unit??""}`;
+    const judgedValue=judgedFields.find(item=>item.key===key)?.value;
+    const value=answers[key];
+    const entered=value!==undefined&&value!==null&&String(value).trim()!==""?value:judgedValue;
+    return `${field?.label??key}=${entered===undefined||entered===null||String(entered).trim()===""?"미입력":short(entered,32)}${field?.unit??""}`;
   }).join(", ");
   const current=`현재 입력: ${values||"아직 없음"}. `;
   const phase=incorrect.length ? `기존 판정: 오답${incorrect.some(j=>j.label||j.key)?`(${incorrect.map(j=>short(j.label??j.key,35)).join(", ")})`:""}. `

@@ -72,6 +72,10 @@ const passed=[],errors=[],evidence=[];
     }
     await id("button-square-continuous-run").waitFor();
   }
+  async function runVirtual(){
+    await active().getByRole("button",{name:"▶ 실행",exact:true}).click();
+    await active().getByRole("button",{name:"관찰 완료 · 비교하기",exact:true}).waitFor();
+  }
   async function connect(){
     await id("button-mode-hardware").click();
     if(await id("button-practice-panel").getAttribute("aria-expanded")!=="true")await id("button-practice-panel").click();
@@ -86,7 +90,7 @@ const passed=[],errors=[],evidence=[];
     await page.evaluate(f=>{window.__freeze=f;},freeze);
     await id("button-square-continuous-run").click();
     const dialog=page.getByRole("dialog",{name:/실행 확인/});
-    assert.match(await dialog.innerText(),/가상 완주.*별도 클릭 없이.*실제 장비/);
+    assert.match(await dialog.innerText(),/DT에서 완주·닫힘·복귀 확인한 뒤, 같은 계획을 실제 장비에서 1회 실행/);
     assert.match(await dialog.innerText(),/속도.*User.*Tool/);
     assert.equal(moves().length,0);
     await id("button-confirm-ok").click();
@@ -217,14 +221,39 @@ const passed=[],errors=[],evidence=[];
   passed.push("connected/enabled but unconfirmed preparation cannot authorize a combined run");
 
   await boot();
-  // Challenge mode intentionally allows an incorrect prediction to reach DT,
-  // but must never authorize the physical continuation.
   await page.locator(".shape-lesson-settings > summary").click();
   await page.getByLabel("도형 학습 지원",{exact:true}).selectOption("challenge");
-  await predict({p2x:"280"});
-  assert(await id("button-square-continuous-run").isDisabled());
+  // P1=(200,100), P2=(330,100) gives a 130 mm wrong width while preserving
+  // the remaining rectangle geometry. The browser socket is the mock bridge.
+  await predict({p2x:"330",p3x:"330",p4x:"200",closeX:"200"});
+  await connect();
+  assert(await id("button-square-continuous-run").isDisabled(),"wrong plan cannot skip DT completion");
   assert.equal(moves().length,0);
-  passed.push("incorrect square numbers cannot authorize the physical continuation, including challenge mode");
+  await runVirtual();
+  assert.equal(await id("button-square-continuous-run").isDisabled(),false,
+    "challenge wrong plan becomes eligible only after its DT run completes");
+  assert.equal(await page.locator(".square-action-progress [aria-current='step']").count(),1,
+    "only one square action card is current after the discrepant DT observation");
+  await approve();
+  await id("square-continuous-status").filter({hasText:"연속 실행 완료"}).waitFor();
+  assert.equal(moves().length,5,"the approved mock run executes exactly one five-point path");
+  assert.equal(moves()[0].operation.target.x,330,"the approved path uses the student's wrong 130 mm prediction");
+  passed.push("challenge 130 mm wrong plan: DT first, then one human-approved same-plan five-point mock run; exactly one current action card");
+
+  await boot();
+  await page.locator(".shape-lesson-settings > summary").click();
+  await page.getByLabel("도형 학습 지원",{exact:true}).selectOption("challenge");
+  await predict({p2x:"330",p3x:"330",p4x:"200",closeX:"200"});
+  await connect();
+  await page.evaluate(()=>window.__practice.setSetupDraft({...window.__practice.setupDraft,
+    workspace:{...window.__practice.setupDraft.workspace,xMax:290}}));
+  await id("button-practice-panel").click();
+  for(const check of await page.locator('[data-testid^="check-"]').all())await check.check();
+  await id("button-apply-setup").click();await id("button-confirm-ok").click();await id("button-practice-panel").click();
+  await id("button-square-continuous-run").click();
+  await page.getByRole("alert").filter({hasText:/작업 범위|범위 밖/}).waitFor();
+  assert.equal(moves().length,0);
+  passed.push("challenge wrong path outside configured workspace is blocked before any mock movement");
 
   await boot();await predict();await connect();await approve(true);
   await page.evaluate(()=>window.__practice.setBridgeUrl("ws://127.0.0.1:8766"));

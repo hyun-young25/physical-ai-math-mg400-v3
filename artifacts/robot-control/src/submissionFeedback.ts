@@ -67,7 +67,10 @@ export function automaticHint(c:FeedbackContext,a:SubmissionAssessment,attempt:n
       return `• ${error.label}: 내 입력 「${value}」\n${error.detail??"문제의 기준점과 이동 방향, 유지되는 축을 다시 확인해 주세요."}`;
     }).join("\n");
     const count=object(parse(c.judgment)).errorCount;
-    return prefix+`아직 확인할 항목이 있어요.${typeof count==="number"?` 확인할 항목은 ${count}개이며 아래 항목부터 살펴봐요.`:""} 오답 상태에서는 실제 로봇을 실행할 수 없어요.\n`+
+    const executionNote=c.support==="challenge"
+      ?"도전 모드에서는 DT 완주·닫힘·복귀, 작업 범위·연결·준비·서보 검사와 사람의 최종 승인을 모두 통과한 동일 계획에 한해 오답 예측도 1회 비교 실행할 수 있어요."
+      :"기초 지원 모드에서는 오답 계획의 실제 실행이 차단됩니다. 좌표를 고친 뒤 다시 확인하세요.";
+    return prefix+`아직 확인할 항목이 있어요.${typeof count==="number"?` 확인할 항목은 ${count}개이며 아래 항목부터 살펴봐요.`:""} ${executionNote}\n`+
       (typeof p.instruction==="string"?`문제 조건: ${p.instruction.slice(0,260)}\n`:"")+`${items}\n`+
       (wrongCount>1?"1. 앞서 안내한 관계식에 내 값을 넣고 검산해 보세요.\n2. 각 변에서 바뀌는 축과 부호를 따로 적어 보세요.\n3. 수정 후 단계 확인을 다시 눌러 주세요. 막힌 항목을 질문하면 이어서 도와드릴게요."
         :"1. 문제에 주어진 시작점·길이·방향을 찾아보세요.\n2. 위 힌트로 틀린 항목부터 고쳐 보세요.\n3. 다시 확인한 뒤 예측 저장 → DT 실행·비교 순서로 진행해요.");

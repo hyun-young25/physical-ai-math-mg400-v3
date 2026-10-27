@@ -93,14 +93,16 @@ test("resolved after a mismatch asks a self-regulation question",()=>{
   assert.match(plan.question,/축·길이 뒤바뀜/);
 });
 
-test("history counting re-derives diagnoses for the same lesson only",()=>{
-  const run={action:"mission",status:"completed"};
+test("history counting re-derives diagnoses from same-plan DT observations only",()=>{
   const swap=withXY({p2x:400,p3x:400,p3y:0,p4y:0});
+  const runFor=answers=>({action:"mission",status:"completed",detail:{
+    planKey:"test-plan",observedVertices:squarePlannedVertices(lesson,answers),
+  }});
   const history=[
-    {id:"a",condition:{id:lesson.id},prediction:swap,runs:[run]},
-    {id:"b",condition:{id:"square-v3-2"},prediction:swap,runs:[run]},
+    {id:"a",condition:{id:lesson.id},prediction:swap,runs:[runFor(swap)]},
+    {id:"b",condition:{id:"square-v3-2"},prediction:swap,runs:[runFor(swap)]},
     {id:"c",condition:{id:lesson.id},prediction:swap,runs:[]},
-    {id:"d",condition:{id:lesson.id},prediction:correct(lesson),runs:[run]},
+    {id:"d",condition:{id:lesson.id},prediction:correct(lesson),runs:[runFor(correct(lesson))]},
   ];
   assert.deepEqual(priorSquareDiagnoses(history,lesson,"x"),["axis-swap","match"]);
   assert.deepEqual(priorSquareDiagnoses(history,lesson,"a"),["match"]);
@@ -122,4 +124,14 @@ test("automatic tutor text uses the diagnosis question instead of the answer lis
   assert(text.includes(plan.question));
   assert(text.includes(plan.relationHint));
   assert(!text.includes("내 입력 「400」"));
+});
+
+test("challenge-mode square hints describe the existing gated one-time wrong-plan comparison",()=>{
+  const context={task:"square",support:"challenge",condition:JSON.stringify({instruction:"가로 100 mm"}),
+    answers:'{"p2x":"330"}',judgment:'{"errorCount":1}'};
+  const assessment={correct:false,errors:[{key:"p2x",label:"P2 X",value:"330"}],keys:["p2x"]};
+  const text=automaticHint(context,assessment,1,1);
+  assert.match(text,/오답 예측도 1회 비교 실행/);
+  assert.match(text,/사람의 최종 승인/);
+  assert.doesNotMatch(text,/오답 상태에서는 실제 로봇을 실행할 수 없어요/);
 });

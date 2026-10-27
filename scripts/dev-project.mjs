@@ -1,8 +1,11 @@
 import { spawn } from "node:child_process";
 import process from "node:process";
 
+// The API server is an artifact-owned service on port 8080. Starting a second
+// copy here made `artifacts/api-server: API Server` fail with EADDRINUSE.
+// Keep this project workflow focused on the local web preview; the managed API
+// artifact owns its own lifecycle and `/api` route.
 const services = [
-  { name: "API Server", filter: "@workspace/api-server", port: "8080" },
   { name: "Robot Control", filter: "@workspace/robot-control", port: "5000" },
 ];
 

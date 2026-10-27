@@ -113,7 +113,7 @@ export function diagnoseSquare(lesson:ShapeLesson, answers:Record<string,string>
 
   const planCorrect=planned.every((p,i) => nearXY(p, condition.target[i]));
   if(source==="hardware"&&observed) {
-    const errors=observed.map((p,i)=>Math.hypot(p.x-planned[i].x,p.y-planned[i].y,(p.z??0)-(planned[i].z??0)));
+    const errors=observed.map((p,i)=>Math.hypot(p.x-planned[i].x,p.y-planned[i].y));
     const meanOffset={x:observed.reduce((sum,p,i)=>sum+p.x-planned[i].x,0)/observed.length,
       y:observed.reduce((sum,p,i)=>sum+p.y-planned[i].y,0)/observed.length};
     const measured={meanError:errors.reduce((sum,n)=>sum+n,0)/errors.length,maxError:Math.max(...errors),
@@ -124,7 +124,7 @@ export function diagnoseSquare(lesson:ShapeLesson, answers:Record<string,string>
   }
   if (planCorrect) {
     if(source==="hardware"&&observed) {
-      const errors=observed.map((p,i)=>Math.hypot(p.x-condition.target[i].x,p.y-condition.target[i].y,(p.z??0)-(condition.target[i].z??0)));
+      const errors=observed.map((p,i)=>Math.hypot(p.x-condition.target[i].x,p.y-condition.target[i].y));
       const meanOffset={x:observed.reduce((sum,p,i)=>sum+p.x-condition.target[i].x,0)/observed.length,
         y:observed.reduce((sum,p,i)=>sum+p.y-condition.target[i].y,0)/observed.length};
       const measured={meanError:errors.reduce((sum,n)=>sum+n,0)/errors.length,maxError:Math.max(...errors),

@@ -7,7 +7,9 @@ function load(file,deps={}) {
   return exports;
 }
 const ctx=load("learningAiContext.ts");
-const {trialTutorFeedback:feedback}=load("trialTutorFeedback.ts",{"./learningAiContext":ctx});
+const {trialTutorFeedback:feedback}=load("trialTutorFeedback.ts",{
+  "./learningAiContext":ctx,"./tutorFollowUp":{tutorFollowUp:()=>null},
+});
 const initial=()=>ctx.makeFeedbackContext({task:"foundation",
   condition:{id:"height-practice",reasoning:{kind:"difference",start:20,target:60},support:"guided"},
   fields:[{key:"deltaZ",label:"Z 변화량",unit:"mm"}],answers:{deltaZ:"60"},reason:"목표 높이와 같은 값",record:null,history:[],
@@ -31,6 +33,16 @@ test("recognizes the actual foundation stage fieldStatuses without calculating a
   const text=feedback({...c,judgment:JSON.stringify({fieldStatuses:{deltaZ:"incorrect"},mathematicalStatus:"현재 단계 다시 확인"}),question:"왜 틀렸나요?"});
   assert.match(text,/기존 판정: 오답/);assert.match(text,/Z 변화량/);
   assert.match(feedback({...c,judgment:'{"fieldStatuses":{"deltaZ":"correct"}}'}),/확인된 항목 정답/);
+});
+test("uses submitted field values from the existing square judgment when the answer snapshot is stale",()=>{
+  const text=feedback({
+    task:"square",condition:JSON.stringify({fields:[{key:"p2x",label:"P2 X",unit:"mm"}]}),
+    answers:"{}",reason:"가로 길이만큼 더합니다.",judgment:JSON.stringify({
+      status:"incorrect",fields:[{key:"p2x",label:"P2 X",value:"330",matched:false}],
+    }),
+  });
+  assert.match(text,/P2 X=330mm/);
+  assert.doesNotMatch(text,/P2 X=미입력/);
 });
 test("compares only supplied virtual evidence with immutable first prediction and current answer",()=>{
   const c=initial();

@@ -10,7 +10,7 @@ function load(name){
   return result;
 }
 const {getShapeLesson,shapeLessonExpected,shapeLessonMatchesTarget}=load("shapeLearning");
-const {assessSquare,squareStudentSequence,squareExecutionKey,squareAnswersUnchanged,squareTutorJudgment,squarePlanMatchesTarget}=load("squareLearningFlow");
+const {assessSquare,squareStudentSequence,squareExecutionKey,squareAnswersUnchanged,squareTutorJudgment,squarePlanMatchesTarget,squareActionProgress}=load("squareLearningFlow");
 const {submittedAssessment,automaticHint}=load("submissionFeedback");
 const answers=lesson=>Object.fromEntries(Object.entries(shapeLessonExpected(lesson)).map(([k,v])=>[k,String(v)]));
 
@@ -56,6 +56,29 @@ test("0.1 tolerance retained; wrong challenge plan preserved and fails physical 
   draft.closeY="90";
   assert.equal(squareStudentSequence(lesson,draft).at(-1).coords.y,90);
 });
+test("square action cards keep exactly one current phase through mismatch, cause, correction and re-check",()=>{
+  const statuses=input=>squareActionProgress(input);
+  const current=state=>state.filter(status=>status==="current").length;
+  const mismatch={predictionSaved:true,revisionCycle:false,revisionAttempt:false,observationComplete:true,
+    hasMismatch:true,causeSaved:false,observationSaved:false};
+  assert.deepEqual(statuses({...mismatch,observationComplete:false}),["current","pending","pending","pending"]);
+  assert.deepEqual(statuses(mismatch),["complete","complete","current","pending"]);
+  assert.deepEqual(statuses({...mismatch,causeSaved:true}),["complete","complete","complete","current"]);
+  assert.deepEqual(statuses({...mismatch,predictionSaved:false,revisionCycle:true,revisionAttempt:false,observationComplete:false,
+    causeSaved:true}),["complete","complete","complete","current"]);
+  assert.deepEqual(statuses({...mismatch,revisionCycle:true,revisionAttempt:true,observationComplete:false,causeSaved:true}),
+    ["complete","complete","complete","current"]);
+  assert.deepEqual(statuses({...mismatch,revisionCycle:true,revisionAttempt:true,causeSaved:false}),["complete","complete","current","pending"]);
+  assert.deepEqual(statuses({...mismatch,revisionCycle:true,revisionAttempt:true,hasMismatch:false,causeSaved:false}),
+    ["complete","current","not-needed","complete"]);
+  const done=statuses({...mismatch,hasMismatch:false,observationSaved:true});
+  assert.deepEqual(done,["complete","complete","not-needed","not-needed"]);
+  assert.equal(current(done),0);
+  for(const input of [mismatch,{...mismatch,causeSaved:true},
+    {...mismatch,predictionSaved:false,revisionCycle:true,observationComplete:false,causeSaved:true},
+    {...mismatch,revisionCycle:true,revisionAttempt:true,hasMismatch:false,causeSaved:false}])
+    assert(current(statuses(input))<=1);
+});
 test("execution proof changes with submission, lesson, plan, Z/R or commands",()=>{
   const lesson=getShapeLesson("사각형",0),draft=answers(lesson),seq=squareStudentSequence(lesson,draft);
   const key=squareExecutionKey("condition","submission-1",seq);
@@ -81,7 +104,7 @@ test("objective mistakes yield valid bounded tutor context with student values a
   assert.equal(assessment.correct,false);
   const hint=automaticHint(context,assessment,1,1);
   assert.match(hint,/P2의 X.*250/s);assert.match(hint,/미입력/);assert.match(hint,/문제 조건/);
-  assert.match(hint,/1\\.|1\./);assert.match(hint,/실제 로봇을 실행할 수 없/);
+  assert.match(hint,/1\\.|1\./);assert.match(hint,/기초 지원 모드에서는 오답 계획의 실제 실행이 차단됩니다/);
   assert(!hint.includes("300"),"first hint must not supply P2X answer");
   const repeated=automaticHint(context,assessment,2,2,assessment);
   assert.match(repeated,/검산/);assert.notEqual(repeated,hint);

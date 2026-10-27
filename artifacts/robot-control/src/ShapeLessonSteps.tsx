@@ -3,7 +3,7 @@ import { parseLessonNumber } from "./curriculum";
 import { compareInquiry, currentInquiryComparison, latestInquiryRuns, type useMathInquiry } from "./MathInquiry";
 import { ExplanationFeedback } from "./ExplanationFeedbackPanel";
 import { shapeLessonAnswerMatches, shapeLessonFeedback, shapeLessonStages, type LessonQuestion, type ShapeLesson } from "./shapeLearning";
-import { assessSquare, squareTutorJudgment } from "./squareLearningFlow";
+import { assessSquare, squareTutorJudgment, squareActionProgress } from "./squareLearningFlow";
 import { LearningAiFeedback } from "./LearningAiFeedback";
 import { LEARNING_STAGES } from "./learningFramework";
 import "./shapeLessonSteps.css";
@@ -88,17 +88,25 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
   const diagnosisPlan = diagnosis ? squareFeedbackPlan(diagnosis, priorTypes.filter(type => type === diagnosis.type).length, supportMode,
     diagnosis.type === "match" ? priorTypes.at(-1) : undefined) : null;
   const diagnosisMismatch = !!diagnosis && diagnosis.type !== "match" && diagnosis.type !== "model-real";
-  const latestExplainedAttempt=[...q.history].reverse().find(item=>item.conditionKey===record?.conditionKey
-    &&item.mismatchDiagnoses?.some(entry=>!!entry.causeExplanation));
+  const latestExplainedAttempt=[...q.history].reverse().find(item=>{
+    const savedCondition=item.condition as {id?:string;lessonId?:string;supportMode?:string;support?:string}|null;
+    const sameCondition=record?item.conditionKey===record.conditionKey
+      :(savedCondition?.id===lesson.id||savedCondition?.lessonId===lesson.id)
+        &&(savedCondition.supportMode===supportMode||savedCondition.support===supportMode);
+    return sameCondition&&item.mismatchDiagnoses?.some(entry=>!!entry.causeExplanation);
+  });
   const revisionCycle=!!record&&(record.attemptKind==="revision"||!!record.previousId&&!!latestExplainedAttempt)
     ||!record&&!!latestExplainedAttempt;
   const causeSaved=!!record&&!!diagnosis&&record.mismatchDiagnoses?.some(entry=>entry.runCount===record.runs.length
     &&entry.type===diagnosis.type&&!!entry.causeExplanation);
+  const squareActionStatuses=squareActionProgress({predictionSaved:q.ready,revisionCycle,
+    revisionAttempt:record?.attemptKind==="revision",observationComplete:!!hasCompletedObservation,
+    hasMismatch:diagnosisMismatch,causeSaved:!!causeSaved,observationSaved:!!currentObservationSaved});
   const squareActionSteps=[
-    {title:"좌표 예상하고 실행하기",paper:"논문 ①~④",status:record?.attemptKind==="revision"||q.ready?"complete":activeStage<=3?"current":"pending"},
-    {title:"그려진 결과 확인하기",paper:"논문 ⑤·⑥",status:currentObservationSaved?"complete":hasCompletedObservation?"current":revisionCycle&&!record?"complete":q.ready?"current":"pending"},
-    {title:"필요할 때 질문 하나 받기",paper:"논문 ⑥",status:diagnosis?.type==="match"?"not-needed":causeSaved?"complete":diagnosisMismatch?"current":revisionCycle&&!record?"complete":hasCompletedObservation?"current":"pending"},
-    {title:"고쳐서 다시 그려보기",paper:"논문 ⑦ → ③·④",status:diagnosis?.type==="match"&&revisionCycle?"complete":causeSaved||revisionCycle?"current":diagnosis?.type==="match"?"not-needed":"pending"},
+    {title:"좌표 예상하고 실행하기",paper:"논문 ①~④",status:squareActionStatuses[0]},
+    {title:"그려진 결과 확인하기",paper:"논문 ⑤·⑥",status:squareActionStatuses[1]},
+    {title:"필요할 때 질문 하나 받기",paper:"논문 ⑥",status:squareActionStatuses[2]},
+    {title:"고쳐서 다시 그려보기",paper:"논문 ⑦ → ③·④",status:squareActionStatuses[3]},
   ] as const;
   const [cause, setCause] = useState("");
   const sentDiagnosis = useRef("");
@@ -108,10 +116,11 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
     const key = `${record.id}:${record.runs.length}:${diagnosis.type}`;
     if (sentDiagnosis.current === key) return;
     sentDiagnosis.current = key;
+    const diagnosisSource:"dt"|"hardware"|"mock"=diagnosis.evidence.source==="hardware"?"hardware":diagnosis.evidence.source==="mock"?"mock":"dt";
     const entry = { type: diagnosis.type, edge: diagnosis.edge, label: diagnosis.label, level: diagnosisPlan.level,
       question: diagnosisPlan.question, relationHint: diagnosisPlan.relationHint, supportMode,
       priorSameType: priorTypes.filter(type => type === diagnosis.type).length, teacherFlag: diagnosisPlan.teacherFlag, evidence: diagnosis.evidence,
-      source:diagnosis.evidence.source==="hardware"?"hardware":diagnosis.evidence.source==="mock"?"mock":"dt" };
+      source:diagnosisSource };
     q.recordDiagnosis(entry);
     const rows = assessSquare(lesson, record.prediction);
     const errors = rows.filter(row => !row.matched);
@@ -149,7 +158,7 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
     const before = activeStage as BeforeRunStep;
     setAttemptedStep(before);
     if(lesson.id.startsWith("square-")) {
-      q.requestAi(squareTutorJudgment(assessSquare(lesson,q.draft,before===3?questions:currentQuestions)));
+      q.requestAi(squareTutorJudgment(assessSquare(lesson,q.draft,before===3?questions:currentQuestions)),q.draft);
     }
     if (guided) q.feedbackEvent("guided-check", currentQuestions.map(question => question.key));
     if (currentQuestions.some(question => !hasAnswer(question, q.draft[question.key] ?? ""))) {
