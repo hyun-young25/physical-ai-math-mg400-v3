@@ -2,7 +2,7 @@ import { getLearningUser } from "./learningClient";
 import { LEARNING_CONTENT_VERSION } from "./learningSync";
 export const LEARNING_STAGES = [
   { id:1, short:"과제 이해", label:"과제 이해" },
-  { id:2, short:"수학 구조화", label:"수학 구조화" },
+  { id:2, short:"수학적 구조화", label:"수학적 구조화" },
   { id:3, short:"표현·예측", label:"표현·예측" },
   { id:4, short:"실행·측정", label:"실행·측정" },
   { id:5, short:"지각·표상", label:"지각·표상" },

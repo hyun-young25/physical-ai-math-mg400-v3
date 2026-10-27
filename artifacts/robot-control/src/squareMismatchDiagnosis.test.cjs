@@ -90,7 +90,7 @@ test("levels escalate with repeated same-type errors; challenge mode fades one s
 test("resolved after a mismatch asks a self-regulation question",()=>{
   const plan=squareFeedbackPlan(diagnoseSquare(lesson,correct(lesson)),0,"challenge","axis-swap");
   assert.equal(plan.level,"self-regulation");
-  assert.match(plan.question,/축·길이 뒤바뀜/);
+  assert.match(plan.question,/관측과 과제 조건이 달랐던/); assert.doesNotMatch(plan.question,/때문|계산 오류/);
 });
 
 test("history counting re-derives diagnoses from same-plan DT observations only",()=>{
@@ -120,7 +120,7 @@ test("automatic tutor text uses the diagnosis question instead of the answer lis
     diagnosis:{type:d.type,label:d.label,level:plan.level,levelLabel:plan.levelLabel,question:plan.question,relationHint:plan.relationHint}};
   const context={task:"square",condition:JSON.stringify({instruction:"조건"}),answers:"{}",judgment:JSON.stringify(judgment)};
   const text=automaticHint(context,submittedAssessment(context),1,1);
-  assert.match(text,/실행 결과 비교 · 2단계/);
+  assert.match(text,/실행 결과 비교 · 관계 확인/);
   assert(text.includes(plan.question));
   assert(text.includes(plan.relationHint));
   assert(!text.includes("내 입력 「400」"));

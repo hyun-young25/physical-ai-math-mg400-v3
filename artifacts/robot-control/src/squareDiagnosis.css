@@ -1,18 +1,27 @@
 /* Prediction–execution diagnosis for square lessons. Shares the shape-lesson scale. */
-.square-diagnosis { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid #fecaca; border-left: 4px solid #dc2626; border-radius: 8px; background: #fff7f7; color: #334155; min-width: 0; }
+.square-diagnosis { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid #c7d2fe; border-left: 4px solid #6366f1; border-radius: 8px; background: #f8faff; color: #334155; min-width: 0; }
 .square-diagnosis[data-type="match"] { border-color: #bbf7d0; border-left-color: #16a34a; background: #f6fef9; }
 .square-diagnosis[data-type="model-real"] { border-color: #fde68a; border-left-color: #d97706; background: #fffbeb; }
 .square-diagnosis p { margin: 0; }
-.square-diagnosis h4 { margin: 0; color: #991b1b; font-size: 15px; line-height: 1.45; }
+.square-diagnosis h4 { margin: 0; color: #3730a3; font-size: 15px; line-height: 1.45; }
 .square-diagnosis[data-type="match"] h4 { color: #166534; }
 .square-diagnosis[data-type="model-real"] h4 { color: #92400e; }
 .square-diagnosis-level { color: #64748b; font-size: 12px; font-weight: 600; letter-spacing: .01em; }
 .square-diagnosis-table { overflow-x: auto; }
+.square-diagnosis-summary { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; margin: 0; }
+.square-diagnosis-summary > div { min-width: 0; padding: 7px 8px; border: 1px solid #e2e8f0; border-radius: 6px; background: rgba(255,255,255,.76); }
+.square-diagnosis-summary dt { margin: 0 0 3px; color: #64748b; font-size: 11px; font-weight: 650; }
+.square-diagnosis-summary dd { margin: 0; color: #1e293b; font-size: 12px; line-height: 1.5; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .square-diagnosis table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
 .square-diagnosis th, .square-diagnosis td { padding: 6px 8px; border-bottom: 1px solid #f1d5d5; text-align: left; vertical-align: top; }
 .square-diagnosis thead th { color: #64748b; font-size: 12px; font-weight: 600; }
-.square-diagnosis td small { display: block; font-size: 11px; color: #15803d; }
-.square-diagnosis tr[data-same="false"] td small { color: #b91c1c; font-weight: 700; }
+.square-diagnosis-details { min-width: 0; font-size: 12px; }
+.square-diagnosis-details > summary { color: #4338ca; cursor: pointer; }
+.square-diagnosis-details[open] > :not(summary) { margin-top: 8px; }
+.square-diagnosis-honesty, .square-diagnosis-why, .square-diagnosis-evidence { color: #475569; font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+.square-diagnosis-question { padding: 9px 12px; border-radius: 6px; background: #fff; border: 1px solid #e2e8f0; color: #1e293b; font-size: 14px; font-weight: 500; line-height: 1.6; overflow-wrap: anywhere; }
+.square-diagnosis-question strong, .square-diagnosis-why strong { color: #3730a3; }
+.square-diagnosis-table { overflow-x: auto; max-width: 100%; }
 .square-diagnosis tr[data-focus] { background: #fee2e2; }
 .square-diagnosis tr[data-focus] th { color: #991b1b; }
 .square-diagnosis-question { padding: 9px 12px; border-radius: 6px; background: #fff; border: 1px solid #e2e8f0; color: #1e293b; font-size: 15px; font-weight: 600; line-height: 1.6; }
@@ -23,3 +32,9 @@
 .square-diagnosis-cause { display: flex; flex-direction: column; gap: 6px; color: #334155; font-size: 14px; font-weight: 600; }
 .square-diagnosis-cause textarea { width: 100%; min-width: 0; box-sizing: border-box; padding: 9px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-weight: 400; line-height: 1.6; resize: vertical; background: #fff; }
 .square-diagnosis-cause textarea:focus-visible { outline: 3px solid #0891b2; outline-offset: 2px; }
+.square-diagnosis-hypothesis-note { color: #64748b; font-size: 11px; font-weight: 400; line-height: 1.45; }
+@media (max-width: 520px) {
+  .square-diagnosis { padding: 10px; }
+  .square-diagnosis-summary { grid-template-columns: minmax(0,1fr); }
+  .square-diagnosis th, .square-diagnosis td { padding: 5px; font-size: 11px; }
+}

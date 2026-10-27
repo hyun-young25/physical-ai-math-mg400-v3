@@ -3,12 +3,12 @@ import { parseLessonNumber } from "./curriculum";
 import { compareInquiry, currentInquiryComparison, latestInquiryRuns, type useMathInquiry } from "./MathInquiry";
 import { ExplanationFeedback } from "./ExplanationFeedbackPanel";
 import { shapeLessonAnswerMatches, shapeLessonFeedback, shapeLessonStages, type LessonQuestion, type ShapeLesson } from "./shapeLearning";
-import { assessSquare, squareTutorJudgment, squareActionProgress } from "./squareLearningFlow";
+import { assessSquare, squareTutorJudgment } from "./squareLearningFlow";
 import { LearningAiFeedback } from "./LearningAiFeedback";
 import { LEARNING_STAGES } from "./learningFramework";
 import "./shapeLessonSteps.css";
 import { LearningJudgmentFields, sameJudgment } from "./LearningJudgment";
-import { diagnoseSquare, priorSquareDiagnoses, squareFeedbackPlan, squareMismatchName, type SquareObservedVertex, type SquareExecutionSource, type XY } from "./squareMismatchDiagnosis";
+import { diagnoseSquare, priorSquareDiagnoses, squareFeedbackPlan, squareMismatchName, squarePlannedVertices, type SquareObservedVertex, type SquareExecutionSource, type XY } from "./squareMismatchDiagnosis";
 import { SquareDiagnosisPanel } from "./SquareDiagnosisPanel";
 
 type LessonStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
@@ -64,7 +64,6 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
   const currentComparison = record && hasCompletedObservation ? currentInquiryComparison(record) : [];
   const hasReview = !!record?.answerReviews?.some(review => review.runCount === record.runs.length);
   const reasonFeedback = record?.explanationReviews?.filter(review => review.runCount === record.runs.length).at(-1);
-  const currentObservationSaved=!!record&&record.observations?.some(item=>item.runCount===record.runs.length&&item.acknowledged===true);
   const reflectionFeedback = record?.reflections.filter(review => review.runCount === record.runs.length).at(-1);
   const reflectionAnswers = record?.answerReviews?.filter(review => review.runCount === record.runs.length).at(-1)?.answers ?? record?.prediction;
   const reflectionCurrent = reflectionFeedback?.text === q.reflection.trim() && q.fields.every(field => reflectionFeedback?.answers?.[field.key] === reflectionAnswers?.[field.key]) && sameJudgment(reflectionFeedback?.judgment, q.judgment);
@@ -88,26 +87,6 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
   const diagnosisPlan = diagnosis ? squareFeedbackPlan(diagnosis, priorTypes.filter(type => type === diagnosis.type).length, supportMode,
     diagnosis.type === "match" ? priorTypes.at(-1) : undefined) : null;
   const diagnosisMismatch = !!diagnosis && diagnosis.type !== "match" && diagnosis.type !== "model-real";
-  const latestExplainedAttempt=[...q.history].reverse().find(item=>{
-    const savedCondition=item.condition as {id?:string;lessonId?:string;supportMode?:string;support?:string}|null;
-    const sameCondition=record?item.conditionKey===record.conditionKey
-      :(savedCondition?.id===lesson.id||savedCondition?.lessonId===lesson.id)
-        &&(savedCondition.supportMode===supportMode||savedCondition.support===supportMode);
-    return sameCondition&&item.mismatchDiagnoses?.some(entry=>!!entry.causeExplanation);
-  });
-  const revisionCycle=!!record&&(record.attemptKind==="revision"||!!record.previousId&&!!latestExplainedAttempt)
-    ||!record&&!!latestExplainedAttempt;
-  const causeSaved=!!record&&!!diagnosis&&record.mismatchDiagnoses?.some(entry=>entry.runCount===record.runs.length
-    &&entry.type===diagnosis.type&&!!entry.causeExplanation);
-  const squareActionStatuses=squareActionProgress({predictionSaved:q.ready,revisionCycle,
-    revisionAttempt:record?.attemptKind==="revision",observationComplete:!!hasCompletedObservation,
-    hasMismatch:diagnosisMismatch,causeSaved:!!causeSaved,observationSaved:!!currentObservationSaved});
-  const squareActionSteps=[
-    {title:"좌표 예상하고 실행하기",paper:"논문 ①~④",status:squareActionStatuses[0]},
-    {title:"그려진 결과 확인하기",paper:"논문 ⑤·⑥",status:squareActionStatuses[1]},
-    {title:"필요할 때 질문 하나 받기",paper:"논문 ⑥",status:squareActionStatuses[2]},
-    {title:"고쳐서 다시 그려보기",paper:"논문 ⑦ → ③·④",status:squareActionStatuses[3]},
-  ] as const;
   const [cause, setCause] = useState("");
   const sentDiagnosis = useRef("");
   useLayoutEffect(() => { setCause(""); }, [record?.id, record?.runs.length]);
@@ -132,6 +111,7 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
         evidence: diagnosis.evidence } }, record.prediction);
   }, [diagnosis?.type, diagnosisPlan?.level, record?.id, record?.runs.length]);
   const diagnosisPanel = diagnosis && diagnosisPlan ? <SquareDiagnosisPanel diagnosis={diagnosis} plan={diagnosisPlan}
+    plannedVertices={squarePlannedVertices(lesson, record?.prediction ?? {}) ?? undefined}
     cause={cause} onCauseChange={setCause} causeRequired={diagnosisMismatch && diagnosis.type !== "unreachable"} disabled={locked}/> : null;
 
   useLayoutEffect(() => {
@@ -248,7 +228,7 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
     {activeStage === 3 ? "예측 저장 · 실행 준비" : "확인하고 다음"}
   </button> : activeStage === 5 ? <button type="button" className="lesson-primary" disabled={locked || !hasCompletedObservation || (q.detailedReflection && !q.observation.trim())} onClick={() => { if (q.saveObservation()) setStep(6); }}>관찰 완료 · 비교하기</button>
     : activeStage === 6 ? !q.comparisonAvailable ? <button type="button" className="lesson-primary" disabled={locked} onClick={() => reopen()}>예측·조건 다시 확인</button>
-      : !q.checked ? <button type="button" className="lesson-primary" disabled={locked || (diagnosisMismatch && !cause.trim())} onClick={reviewAnswers}>{diagnosisMismatch ? "이유 저장 · 예측 고쳐 다시 실행" : "수정한 판단 확인"}</button>
+      : !q.checked ? <button type="button" className="lesson-primary" disabled={locked || (diagnosisMismatch && !cause.trim())} onClick={diagnosisMismatch ? () => setStep(7) : reviewAnswers}>{diagnosisMismatch ? "이유 확인 · 수정·재실행으로" : "수정한 판단 확인"}</button>
         : !q.reviewed ? <button type="button" className="lesson-primary" disabled={locked || !q.reflectionReady || !q.judgmentReady} onClick={() => {
             // The optional self-check plan after a resolved mismatch is kept with the diagnosis.
             if (diagnosis && diagnosisPlan && cause.trim()) q.recordDiagnosis({ type: diagnosis.type, label: diagnosis.label, level: diagnosisPlan.level,
@@ -258,17 +238,37 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
             q.explain();
           }}>{q.taskKind === "practice" ? "비교 확인 저장" : "내 설명 저장"}</button>
           : <button type="button" className="lesson-primary" disabled={locked} onClick={() => setStep(7)}>비교 완료 · 다음</button>
+    : activeStage === 7 && diagnosisMismatch ? <button type="button" className="lesson-primary" disabled={locked || !cause.trim()} onClick={reviewAnswers}>수정한 예측으로 재검증 준비</button>
     : activeStage === 7 ? <button type="button" className="lesson-primary" disabled={locked || !q.reviewed || !canAdvance} onClick={() => { if (!canAdvance) return; q.feedbackEvent("transfer"); onNewCondition(); }}>{nextLabel}</button> : null;
 
   return <div className="shape-lesson-steps" data-shape-stage={activeStage} data-support-mode={supportMode}>
-    {isSquare&&<ol className="square-action-progress" aria-label="사각형 과제 행동 진행">
-      {squareActionSteps.map((item,index)=><li key={item.title} data-status={item.status} aria-current={item.status==="current"?"step":undefined}>
-        <strong>{index+1}. {item.title}</strong>
-        <span>{item.status==="complete"?"완료":item.status==="current"?"현재":item.status==="not-needed"?"이번엔 필요 없음":"대기"}</span>
-        <small>{item.paper}</small>
-      </li>)}
-    </ol>}
     <p className="shape-step-progress" aria-live="polite">현재 단계 {activeStage}/7 · <strong>{STEP_TITLES[activeStage - 1]}</strong></p>
+    <details className="shape-stage-overview">
+      <summary>전체 학습 7단계 보기</summary>
+      <ol aria-label="과제 이해부터 수정·재실행까지의 학습 단계">
+        {STEP_TITLES.map((title,index)=>{
+          const stage=index+1;
+          const status=stage<activeStage?"complete":stage===activeStage?"current":"pending";
+          const group=stages[index];
+          return <li key={title} data-status={status} aria-current={status==="current"?"step":undefined}>
+            <div className="shape-stage-overview-heading">
+              <strong>{stage}. {title}</strong>
+              <span>{status==="complete"?"완료":status==="current"?"현재":"대기"}</span>
+              {stage<=3&&status==="complete"&&<button type="button" className="shape-step-text-button" disabled={locked}
+                aria-label={`${title} 다시 편집`} onClick={()=>reopen(stage as BeforeRunStep)}>수정</button>}
+            </div>
+            {stage<=3&&status==="complete"&&<div className="shape-stage-overview-content">
+              {group.map(question=><span key={question.key}>{question.label}: {displayAnswer(question,(q.record?.prediction??q.draft)[question.key]??"")}</span>)}
+            </div>}
+            {stage===4&&activeStage>4&&<p className="lesson-note">{record&&latestInquiryRuns(record).map(run=>run.summary).filter(Boolean).join(" ")}</p>}
+            {stage===5&&activeStage>5&&<p className="lesson-note">{q.detailedReflection
+              ?`관찰한 경로의 표현: ${record?.observations?.filter(item=>item.runCount===record.runs.length).at(-1)?.text??""}`
+              :"실행 장면 관찰 확인 완료"}</p>}
+            {stage===6&&activeStage>6&&<p className="lesson-note">{q.reflection||(q.judgment.decision==="maintain"?"처음 예측 근거 유지":"판단 수정")}</p>}
+          </li>;
+        })}
+      </ol>
+    </details>
     <section className="shape-step-active" aria-label={STEP_TITLES[activeStage - 1]}>
       {activeStage === 1 && <>
         <div className="shape-step-fields">{lesson.concept.map(question => renderQuestion(question))}</div>
@@ -334,6 +334,7 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
         {samePlanMeasurement&&!measurementDetail?.complete&&<p className="shape-step-feedback" role="status">
           {measurementDetail?.source==="mock"?"모의 GetPose 회신":"GetPose 회신"} 좌표 5개가 모두 확인되지 않아 실측 기반 진단은 완료되지 않았습니다. 입력 좌표나 이전 측정값으로 대체하지 않습니다.
         </p>}
+        <details className="shape-step-evidence"><summary>처음 예측과 확인값 자세히 보기</summary>
         <div className="shape-step-table-wrap" tabIndex={0} aria-label="처음 예측과 확인값 비교표">
           <table><thead><tr><th scope="col">항목</th><th scope="col">처음 예측</th><th scope="col">확인값</th>{hasReview && <th scope="col">수정한 판단</th>}</tr></thead>
             <tbody>{comparison.map(row => {
@@ -345,8 +346,9 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
               </tr>;
             })}</tbody>
           </table>
-        </div>
+        </div></details>
         {!q.comparisonAvailable ? <p className="shape-step-feedback">이번 실행에는 비교에 필요한 결과가 없습니다. 실행 조건을 다시 확인하세요. 결과가 없다는 이유로 예측을 오답 처리하지 않습니다.</p>
+          : !q.checked && diagnosisMismatch ? <p className="lesson-note">위 관측자료와 질문을 바탕으로 차이의 이유를 적은 뒤, ⑦ 수정·재실행에서 좌표를 고칩니다.</p>
           : !q.checked ? <>
             <p>차이가 난 항목의 관계를 다시 확인하세요. 처음 예측은 기록에 남습니다.</p>
             <div className="shape-step-fields">{currentComparison.filter(row => !row.matched).map(row => {
@@ -377,7 +379,15 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
           </>}
         </details>
       </>}
-      {activeStage === 7 && <>
+      {activeStage === 7 && diagnosisMismatch && <>
+        <p>관측한 차이를 바탕으로 좌표를 수정하세요. 저장 후 ③ 표현·예측 → ④ 실행·측정으로 돌아가 새 결과를 확인합니다.</p>
+        <p className="lesson-note">수정 이유: {cause}</p>
+        <div className="shape-step-fields">{currentComparison.filter(row => !row.matched).map(row => {
+          const question = questions.find(item => item.key === row.key);
+          return question ? renderQuestion(question, true) : null;
+        })}</div>
+      </>}
+      {activeStage === 7 && !diagnosisMismatch && <>
         <p>같은 조건에서 예측을 수정해 다시 실행하거나, 다음 과제에 적용하세요.</p>
         <p className="lesson-note">예측이 맞았다면 재실행 없이 다음 과제로 진행할 수 있습니다.</p>
         {!canAdvance && <p className="shape-step-feedback" role="status">{advanceBlockedReason ?? "이동 명령을 수정하고 다시 실행한 결과를 확인하세요."}</p>}
@@ -392,22 +402,10 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
           else if (activeStage === 7) setStep(6);
           else reopen();
         }}>{activeStage === 4 || activeStage === 5 ? "예측 수정" : "이전"}</button>}
-        {activeStage === 7 && <button type="button" className="shape-step-secondary" disabled={locked} onClick={() => reopen()}>예측 수정 · 재실행</button>}
+        {activeStage === 7 && !diagnosisMismatch && <button type="button" className="shape-step-secondary" disabled={locked} onClick={() => reopen()}>예측 수정 · 재실행</button>}
         {primary}
       </div>
     </section>
-    {activeStage > 1 && <details className="shape-step-completed">
-      <summary>완료한 단계 보기</summary>
-      {stages.map((group, index) => index + 1 < activeStage && <div className="shape-step-summary" key={index}>
-        <div><strong>{index + 1}. {STEP_TITLES[index]}</strong>
-          {group.map(question => <span key={question.key}>{question.label}: {displayAnswer(question, (q.record?.prediction ?? q.draft)[question.key] ?? "")}</span>)}
-        </div>
-        <button type="button" className="shape-step-text-button" disabled={locked} aria-label={`${STEP_TITLES[index]} 다시 편집`} onClick={() => reopen((index + 1) as BeforeRunStep)}>수정</button>
-      </div>)}
-      {activeStage > 4 && <p className="lesson-note">4. 실행·측정 완료 · {record && latestInquiryRuns(record).map(run => run.summary).filter(Boolean).join(" ")}</p>}
-      {activeStage > 5 && <p className="lesson-note">5. {q.detailedReflection ? `관찰한 경로의 표현: ${record?.observations?.filter(item => item.runCount === record.runs.length).at(-1)?.text ?? ""}` : "실행 장면 관찰 확인 완료"}</p>}
-      {activeStage > 6 && <p className="lesson-note">6. {q.reflection || (q.judgment.decision === "maintain" ? "처음 예측 근거 유지" : "판단 수정")}</p>}
-    </details>}
     <details className="shape-step-evidence"><summary>학습 기록 · {q.recordCount}회</summary>
       <p className="lesson-note">처음 예측과 근거, 실행, 수정한 판단과 설명을 구분해 보관합니다. 교사 검토가 필요한 설명도 함께 내려받습니다.</p>
       <button type="button" disabled={locked || !q.recordCount} onClick={q.download}>학습 기록 내려받기</button>

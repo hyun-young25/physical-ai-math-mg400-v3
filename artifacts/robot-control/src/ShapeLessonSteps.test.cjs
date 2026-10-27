@@ -485,6 +485,13 @@ for (const mode of ['guided', 'challenge']) test(`${mode}: all three shapes expo
 
 for (const shape of ['사각형', '삼각형', '동그라미']) test(`${shape}: comparison UI corrects a wrong prediction and revision requires another observation`, () => {
   const app = mountLesson(shape, 0, 'challenge'), numeric = app.lesson.calculation[0];
+  const stageOverview=nodes(app.tree).find(node=>node.props?.className==='shape-stage-overview');
+  assert.ok(stageOverview,'one collapsed seven-stage overview is shown');
+  assert.equal(stageOverview.props.open,undefined,'full stage list stays collapsed until requested');
+  const stages=nodes(stageOverview.props.children).filter(node=>node.type==='li'&&node.props?.['data-status']);
+  assert.equal(stages.length,7);
+  assert.equal(stages.filter(node=>node.props['data-status']==='current').length,1);
+  assert.equal(nodes(app.tree).some(node=>node.props?.className==='square-action-progress'),false);
   const wrong = String(Number(numeric.answer) + 25);
   app.complete({ [numeric.key]: wrong });
   const initialId = app.inquiry.record.id;
@@ -494,7 +501,7 @@ for (const shape of ['사각형', '삼각형', '동그라미']) test(`${shape}: 
   assertOneActivity(app, 6);
   assert.equal(nodes(app.tree).some(node => node.props?.['aria-label'] === '결과 해석'), false);
   assert.equal(app.inquiry.checked, false);
-  app.input(`다시 판단 ${numeric.label}`).onChange({ target: { value: String(numeric.answer) } }); app.render();
+  if(shape!=='사각형'){ app.input(`다시 판단 ${numeric.label}`).onChange({ target: { value: String(numeric.answer) } }); app.render(); }
   if(shape==='사각형'){
     // Execution-based diagnosis: the executed P1 → P2 edge is 125 mm, not the 100 mm condition.
     const panel=nodes(app.tree).find(node=>node.type==='SquareDiagnosisPanel');
@@ -502,13 +509,24 @@ for (const shape of ['사각형', '삼각형', '동그라미']) test(`${shape}: 
     assert.equal(panel.props.diagnosis.type,'arithmetic');
     assert.equal(panel.props.diagnosis.edge,'P1 → P2');
     assert.equal(panel.props.plan.level,'task');
+    assert.equal(panel.props.plan.levelLabel,'차이 관찰','support level is not numbered as a learning stage');
+    assert.equal(panel.props.plannedVertices.length,5,'student plan remains visible as separate evidence');
     assert.equal(panel.props.causeRequired,true);
     assert.equal(app.inquiry.record.mismatchDiagnoses[0].type,'arithmetic');
-    assert.equal(Boolean(app.button('이유 저장 · 예측 고쳐 다시 실행').disabled),true,'cause is required before revising');
+    assert.equal(Boolean(app.button('이유 확인 · 수정·재실행으로').disabled),true,'cause is required before revising');
     assert.equal(app.text.includes(`${numeric.label}${wrong} mm차이 있음${numeric.answer} mm`),false,'mismatched answer is not revealed');
     panel.props.onCauseChange('P1의 X에 가로 길이 100이 아니라 125를 더했다.'); app.render();
-    app.click('이유 저장 · 예측 고쳐 다시 실행');
+    app.click('이유 확인 · 수정·재실행으로');
+    assertOneActivity(app,7);
+    assert.equal(app.inquiry.record.id,initialId);
+    assert.equal(app.inquiry.ready,true,'Observation remains available while preparing the revision');
+    app.input(`다시 판단 ${numeric.label}`).onChange({target:{value:String(numeric.answer)}}); app.render();
+    app.click('수정한 예측으로 재검증 준비');
     assertOneActivity(app,3);
+    const correctionOverview=nodes(app.tree).find(node=>node.props?.className==='shape-stage-overview');
+    const correctionStages=nodes(correctionOverview.props.children).filter(node=>node.type==='li'&&node.props?.['data-status']);
+    assert.equal(correctionStages.filter(node=>node.props['data-status']==='current').length,1);
+    assert.equal(correctionStages[2].props['data-status'],'current','coordinate correction returns the seven-stage display to prediction');
     assert.equal(app.inquiry.ready,false);
     assert.equal(app.inquiry.checked,false);
     const saved=JSON.parse(app.storage.get('physical-ai-inquiry-evidence-v1'))[0].mismatchDiagnoses[0];
@@ -518,6 +536,10 @@ for (const shape of ['사각형', '삼각형', '동그라미']) test(`${shape}: 
     assert.equal(app.inquiry.record.previousId,initialId);
     assert.equal(app.inquiry.record.prediction[numeric.key],String(numeric.answer));
     assertOneActivity(app,4);
+    const executionOverview=nodes(app.tree).find(node=>node.props?.className==='shape-stage-overview');
+    const executionStages=nodes(executionOverview.props.children).filter(node=>node.type==='li'&&node.props?.['data-status']);
+    assert.equal(executionStages.filter(node=>node.props['data-status']==='current').length,1);
+    assert.equal(executionStages[3].props['data-status'],'current','revised prediction returns to execution and measurement');
     app.click('DT에서 실행');
     app.inquiry.finish('수정한 좌표를 새 DT에서 확인했습니다.',app.expected(),{closed:true, observedVertices: shape === '사각형' ? [{label:'P1',x:200,y:100},{label:'P2',x:300,y:100},{label:'P3',x:300,y:-100},{label:'P4',x:200,y:-100},{label:'P1',x:200,y:100}] : undefined});app.render();
     assertOneActivity(app,5);
@@ -591,7 +613,7 @@ for (const shape of ['사각형', '삼각형', '동그라미']) test(`${shape}: 
     const app = mountLesson(shape, index, 'challenge');
     assert.equal(app.text.includes('현재 단계 1/7 · 과제 이해'), true);
     app.fill('concept'); app.nextConcept();
-    assert.equal(app.text.includes('현재 단계 2/7 · 수학 구조화'), true);
+    assert.equal(app.text.includes('현재 단계 2/7 · 수학적 구조화'), true);
     for (const field of app.lesson.calculation) {
       assert.equal(nodes(app.tree).some(node => node.type === 'input' && node.props['aria-label'] === field.label), false,
         `${field.key}: calculations belong to expression/prediction, not the relation stage`);

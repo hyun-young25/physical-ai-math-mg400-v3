@@ -119,7 +119,7 @@ export function diagnoseSquare(lesson:ShapeLesson, answers:Record<string,string>
     const measured={meanError:errors.reduce((sum,n)=>sum+n,0)/errors.length,maxError:Math.max(...errors),
       meanOffset,count:observed.length,reference:"student-plan" as const};
     if(measured.maxError>MODEL_REAL_THRESHOLD_MM)
-      return {type:"model-real",label:"GetPose 실측 경로가 학생이 제출한 실행 좌표와 달라요. 학생의 계산 오류로 단정할 수 없습니다.",
+      return {type:"model-real",label:"브리지 회신 경로가 학생이 제출한 실행 좌표와 달라요. 학생의 계산 오류로 단정할 수 없습니다.",
         evidence:{...evidence,measured}};
   }
   if (planCorrect) {
@@ -130,9 +130,9 @@ export function diagnoseSquare(lesson:ShapeLesson, answers:Record<string,string>
       const measured={meanError:errors.reduce((sum,n)=>sum+n,0)/errors.length,maxError:Math.max(...errors),
         meanOffset,count:observed.length,reference:"target" as const};
       if(measured.maxError>MODEL_REAL_THRESHOLD_MM)
-        return {type:"model-real",label:"GetPose 실측 경로가 계산한 목표와 달라요. 학생의 계산 오류로 단정할 수 없습니다.",
+        return {type:"model-real",label:"브리지 회신 경로가 계산한 목표와 달라요. 학생의 계산 오류로 단정할 수 없습니다.",
           evidence:{...evidence,measured}};
-      return {type:"match",label:"예측과 GetPose 좌표가 허용 오차 안에서 일치해요",evidence:{...evidence,measured}};
+      return {type:"match",label:"예측과 브리지 회신 좌표가 허용 오차 안에서 일치해요",evidence:{...evidence,measured}};
     }
     const m = (options.measurements ?? []).filter(item => Number.isFinite(item.actual?.x) && Number.isFinite(item.target?.x));
     if (m.length) {
@@ -179,8 +179,8 @@ export function diagnoseSquare(lesson:ShapeLesson, answers:Record<string,string>
 }
 
 export const LEVEL_LABELS:Record<FeedbackLevel,string> = {
-  task:"1단계 · 무엇이 다른지 관찰", process:"2단계 · 관계 짚어보기",
-  worked:"3단계 · 예시와 선생님 도움", "self-regulation":"정리 · 다음 과제 점검",
+  task:"차이 관찰", process:"관계 확인",
+  worked:"예시와 선생님 도움", "self-regulation":"다음 과제 점검",
 };
 
 /**
@@ -196,7 +196,7 @@ export function squareFeedbackPlan(d:SquareDiagnosis, priorSameType:number, supp
   if (d.type === "match") {
     if (!resolvedPrior || resolvedPrior === "match") return null;
     return {level:"self-regulation",levelLabel:LEVEL_LABELS["self-regulation"],teacherFlag:false,
-      question:`이번에는 예측과 실행 결과가 일치했어요. 앞에서 ‘${squareMismatchName(resolvedPrior)}’ 때문에 달랐던 부분을, 다음 과제에서는 실행 전에 어떻게 미리 점검할 수 있을까요?`};
+      question:`이번에는 예측과 실행 결과가 일치했어요. 앞에서 관측과 과제 조건이 달랐던 부분을, 다음 과제에서는 실행 전에 어떻게 미리 점검할 수 있을까요?`};
   }
   const level = squareFeedbackLevel(priorSameType, supportMode);
   const c = d.evidence.condition, ex = d.evidence.executed, edge = d.edge ?? "";

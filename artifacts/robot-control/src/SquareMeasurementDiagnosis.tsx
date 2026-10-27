@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { useMathInquiry } from "./MathInquiry";
 import type { ShapeLesson } from "./shapeLearning";
-import { diagnoseSquare, priorSquareDiagnoses, squareFeedbackPlan, squareMismatchName, type SquareMeasurement } from "./squareMismatchDiagnosis";
+import { diagnoseSquare, priorSquareDiagnoses, squareFeedbackPlan, squareMismatchName, squarePlannedVertices, type SquareMeasurement } from "./squareMismatchDiagnosis";
 import { SquareDiagnosisPanel } from "./SquareDiagnosisPanel";
 
 /**
@@ -33,8 +33,14 @@ export function SquareMeasurementDiagnosis({ lesson, inquiry: q, measurements, t
         teacherFlag: plan.teacherFlag, evidence: diagnosis.evidence } }, record.prediction);
   }, [trialKey, diagnosis?.type, record?.id]);
   if (!diagnosis || !plan) return null;
+  const observedVertices=measurements.map((point,index)=>({
+    label:point.label??`P${index+1}`,x:point.actual.x,y:point.actual.y,
+  }));
   return <div>
-    <SquareDiagnosisPanel diagnosis={diagnosis} plan={plan} cause={cause} onCauseChange={setCause} disabled={disabled}/>
+    <SquareDiagnosisPanel diagnosis={diagnosis} plan={plan}
+      plannedVertices={squarePlannedVertices(lesson,record?.prediction??{})??undefined}
+      observedVertices={observedVertices} sourceLabel="실장비 GetPose 자료 · 제어기 보고 좌표"
+      cause={cause} onCauseChange={setCause} disabled={disabled}/>
     <button type="button" disabled={disabled || !cause.trim()} onClick={() => q.recordDiagnosis({
       type: diagnosis.type, label: diagnosis.label, level: plan.level, question: plan.question, relationHint: plan.relationHint,
       supportMode, priorSameType: 0, teacherFlag: plan.teacherFlag, evidence: diagnosis.evidence, source: "hardware", causeExplanation: cause })}>
