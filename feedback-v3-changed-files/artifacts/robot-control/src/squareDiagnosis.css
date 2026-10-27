@@ -1,0 +1,25 @@
+/* Prediction–execution diagnosis for square lessons. Shares the shape-lesson scale. */
+.square-diagnosis { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid #fecaca; border-left: 4px solid #dc2626; border-radius: 8px; background: #fff7f7; color: #334155; min-width: 0; }
+.square-diagnosis[data-type="match"] { border-color: #bbf7d0; border-left-color: #16a34a; background: #f6fef9; }
+.square-diagnosis[data-type="model-real"] { border-color: #fde68a; border-left-color: #d97706; background: #fffbeb; }
+.square-diagnosis p { margin: 0; }
+.square-diagnosis h4 { margin: 0; color: #991b1b; font-size: 15px; line-height: 1.45; }
+.square-diagnosis[data-type="match"] h4 { color: #166534; }
+.square-diagnosis[data-type="model-real"] h4 { color: #92400e; }
+.square-diagnosis-level { color: #64748b; font-size: 12px; font-weight: 600; letter-spacing: .01em; }
+.square-diagnosis-table { overflow-x: auto; }
+.square-diagnosis table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.square-diagnosis th, .square-diagnosis td { padding: 6px 8px; border-bottom: 1px solid #f1d5d5; text-align: left; vertical-align: top; }
+.square-diagnosis thead th { color: #64748b; font-size: 12px; font-weight: 600; }
+.square-diagnosis td small { display: block; font-size: 11px; color: #15803d; }
+.square-diagnosis tr[data-same="false"] td small { color: #b91c1c; font-weight: 700; }
+.square-diagnosis tr[data-focus] { background: #fee2e2; }
+.square-diagnosis tr[data-focus] th { color: #991b1b; }
+.square-diagnosis-question { padding: 9px 12px; border-radius: 6px; background: #fff; border: 1px solid #e2e8f0; color: #1e293b; font-size: 15px; font-weight: 600; line-height: 1.6; }
+.square-diagnosis-hint, .square-diagnosis-example, .square-diagnosis-measured { color: #475569; font-size: 13px; line-height: 1.6; }
+.square-diagnosis-hint strong { margin-right: 6px; color: #3730a3; }
+.square-diagnosis-example { padding-left: 10px; border-left: 2px solid #c7d2fe; }
+.square-diagnosis-teacher { color: #92400e; font-size: 13px; font-weight: 600; }
+.square-diagnosis-cause { display: flex; flex-direction: column; gap: 6px; color: #334155; font-size: 14px; font-weight: 600; }
+.square-diagnosis-cause textarea { width: 100%; min-width: 0; box-sizing: border-box; padding: 9px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-weight: 400; line-height: 1.6; resize: vertical; background: #fff; }
+.square-diagnosis-cause textarea:focus-visible { outline: 3px solid #0891b2; outline-offset: 2px; }
