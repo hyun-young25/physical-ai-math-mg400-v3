@@ -1,0 +1,65 @@
+diff --git a/artifacts/robot-control/src/PaperCoordinateStudyView.tsx b/artifacts/robot-control/src/PaperCoordinateStudyView.tsx
+index 356c63d..15b8e34 100644
+--- a/artifacts/robot-control/src/PaperCoordinateStudyView.tsx
++++ b/artifacts/robot-control/src/PaperCoordinateStudyView.tsx
+@@ -351,6 +351,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
+         <div className="pcv-header-meta"><span>현재 활동</span><strong>{activeTitle}</strong></div>
+       </header>
+ 
++      <details className="pcv-stage-details"><summary>현재 {state.stage}/7 · {activeTitle} · 전체 학습 7단계 보기</summary>
+       <nav className="pcv-stage-nav" aria-label="7단계 학습 흐름">
+         {STAGES.map((stage, index) => (
+           <button type="button" key={stage.id} className={`pcv-stage${state.stage === stage.id ? " is-current" : ""}`}
+@@ -358,7 +359,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
+             <span className="pcv-stage-index">{String(index + 1).padStart(2, "0")}</span><span>{stage.title}</span>
+           </button>
+         ))}
+-      </nav>
++      </nav></details>
+ 
+       {state.error && state.stage!==4 && <p className="pcv-alert" role="alert">{state.error}</p>}
+       <main className="pcv-main">
+diff --git a/artifacts/robot-control/src/RobotArm.tsx b/artifacts/robot-control/src/RobotArm.tsx
+index 1a0737d..d5231dd 100644
+--- a/artifacts/robot-control/src/RobotArm.tsx
++++ b/artifacts/robot-control/src/RobotArm.tsx
+@@ -771,7 +771,7 @@ export function RobotArm({
+ 
+   useLayoutEffect(() => {
+     if (!onLearningVisualChange) return;
+-    if (activeTab !== "rect") { onLearningVisualChange(null); return; }
++    if (activeTab !== "rect" || paperCoordinateOpen) { onLearningVisualChange(null); return; }
+     const answers = shapeLearningStep === 6 && inquiry.record
+       ? {...inquiry.record.prediction, ...inquiry.record.answerReviews?.at(-1)?.answers, ...inquiry.reviewDraft}
+       : inquiry.record?.prediction ?? inquiry.draft ?? {};
+@@ -803,7 +803,7 @@ export function RobotArm({
+       showProgram: inquiry.observed && !sequenceMatchesTarget,
+       sequenceMatchesTarget, measurementSource,
+     });
+-  }, [onLearningVisualChange, activeTab, shapeType, editableSeq, measuredPath, measurementSource, sequenceMatchesTarget,
++  }, [onLearningVisualChange, paperCoordinateOpen, activeTab, shapeType, editableSeq, measuredPath, measurementSource, sequenceMatchesTarget,
+     shapeRunPhase, shapeClosure, currentShapeLesson, squarePlan, shapeLearningStep, shapeQuestionKey, inquiry.record, inquiry.draft, inquiry.reviewDraft, inquiry.observed]);
+ 
+   useEffect(() => () => onLearningVisualChange?.(null), [onLearningVisualChange]);
+diff --git a/artifacts/robot-control/src/paperCoordinateStudyView.css b/artifacts/robot-control/src/paperCoordinateStudyView.css
+index 5d87a76..6818cf1 100644
+--- a/artifacts/robot-control/src/paperCoordinateStudyView.css
++++ b/artifacts/robot-control/src/paperCoordinateStudyView.css
+@@ -18,6 +18,17 @@
+   font-family: 'Pretendard', 'Segoe UI', sans-serif;
+ }
+ 
++/* This activity lives in the existing lesson panel, not a full-width dashboard. */
++.paper-coordinate-host .pcv-header { display:block; padding:14px 18px; }
++.paper-coordinate-host .pcv-header-title h1 { font-size:20px; }
++.paper-coordinate-host .pcv-header-meta { display:none; }
++.paper-coordinate-host .pcv-main { display:block; padding:16px 18px; }
++.paper-coordinate-host .pcv-side-note { margin-top:20px; padding:10px; }
++.pcv-stage-details { padding:10px 18px; font-size:12px; border-bottom:1px solid #d6d8d1; }
++.pcv-stage-details summary { cursor:pointer; color:#39438a; font-weight:700; }
++.paper-coordinate-host .pcv-stage-nav { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); padding:8px 0; }
++.pcv-success { padding:12px; color:#146b36; background:#eaf7ef; border:1px solid #a7d8b8; border-radius:8px; font-weight:700; }
++
+ .paper-coordinate-view *,
+ .paper-coordinate-view *::before,
+ .paper-coordinate-view *::after { box-sizing: border-box; }

@@ -771,7 +771,7 @@ export function RobotArm({
 
   useLayoutEffect(() => {
     if (!onLearningVisualChange) return;
-    if (activeTab !== "rect") { onLearningVisualChange(null); return; }
+    if (activeTab !== "rect" || paperCoordinateOpen) { onLearningVisualChange(null); return; }
     const answers = shapeLearningStep === 6 && inquiry.record
       ? {...inquiry.record.prediction, ...inquiry.record.answerReviews?.at(-1)?.answers, ...inquiry.reviewDraft}
       : inquiry.record?.prediction ?? inquiry.draft ?? {};
@@ -803,7 +803,7 @@ export function RobotArm({
       showProgram: inquiry.observed && !sequenceMatchesTarget,
       sequenceMatchesTarget, measurementSource,
     });
-  }, [onLearningVisualChange, activeTab, shapeType, editableSeq, measuredPath, measurementSource, sequenceMatchesTarget,
+  }, [onLearningVisualChange, paperCoordinateOpen, activeTab, shapeType, editableSeq, measuredPath, measurementSource, sequenceMatchesTarget,
     shapeRunPhase, shapeClosure, currentShapeLesson, squarePlan, shapeLearningStep, shapeQuestionKey, inquiry.record, inquiry.draft, inquiry.reviewDraft, inquiry.observed]);
 
   useEffect(() => () => onLearningVisualChange?.(null), [onLearningVisualChange]);

@@ -18,6 +18,17 @@
   font-family: 'Pretendard', 'Segoe UI', sans-serif;
 }
 
+/* This activity lives in the existing lesson panel, not a full-width dashboard. */
+.paper-coordinate-host .pcv-header { display:block; padding:14px 18px; }
+.paper-coordinate-host .pcv-header-title h1 { font-size:20px; }
+.paper-coordinate-host .pcv-header-meta { display:none; }
+.paper-coordinate-host .pcv-main { display:block; padding:16px 18px; }
+.paper-coordinate-host .pcv-side-note { margin-top:20px; padding:10px; }
+.pcv-stage-details { padding:10px 18px; font-size:12px; border-bottom:1px solid #d6d8d1; }
+.pcv-stage-details summary { cursor:pointer; color:#39438a; font-weight:700; }
+.paper-coordinate-host .pcv-stage-nav { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); padding:8px 0; }
+.pcv-success { padding:12px; color:#146b36; background:#eaf7ef; border:1px solid #a7d8b8; border-radius:8px; font-weight:700; }
+
 .paper-coordinate-view *,
 .paper-coordinate-view *::before,
 .paper-coordinate-view *::after { box-sizing: border-box; }

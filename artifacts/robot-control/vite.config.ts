@@ -49,6 +49,7 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
+    proxy: { "/__paper_mock": { target: "ws://127.0.0.1:8877", ws: true, rewrite: () => "/" } },
     port,
     strictPort: true,
     host: "0.0.0.0",

@@ -7,6 +7,12 @@ const short = (v:unknown, limit=170) => privateText(typeof v==="string" ? v : JS
 
 /** Reads supplied evidence only. Never grades answers or invents measurements. */
 export function trialTutorFeedback(c:FeedbackContext, result=false):string {
+  if (c.task === "paper-coordinate") {
+    const diagnosis=object(parse(c.judgment));
+    const source=/"source"\s*:\s*"mock"/.test(c.execution)?"모의 브리지 · 실측 아님"
+      :/"source"\s*:\s*"hardware"/.test(c.execution)?"제어기 보고 좌표 · 잉크 별도 확인":"DT 또는 실행 전 자료";
+    return privateText(`${source}. ${diagnosis.candidate??"아직 진단할 실행 관측이 없습니다."}\n${diagnosis.why??"기준점·축·단위를 먼저 확인하세요."}\n${diagnosis.question??"종이의 원점과 로봇 원점은 같나요?"}\n기본 질문입니다. 수치 판정은 학습 화면의 규칙 계산을 따르며, 사고 원인을 확정하지 않습니다.`).slice(0,700);
+  }
   const root=object(parse(c.condition));
   const condition=object(root.condition??root.problem??root);
   const answers=object(parse(c.answers));

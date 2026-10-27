@@ -44,7 +44,10 @@ function metadata(key: string, record: Json, paths: string[]) {
     : /fk|ik|kinematic/.test(task) ? "운동학" : "기초수학";
   if (key.includes("hardware") || task === "hardware-operations") chapter = "실장비 조작";
   if (task === "process-cell") chapter = "공정 확장";
+  if (task === "paper-coordinate") chapter = "도형 경로 · 종이 좌표 확장";
   const kinds = new Set<string>();
+  if (record.revalidation) kinds.add("새 목표 재검증 완료");
+  if (paths.some(p => /diagnosis/.test(p))) kinds.add("관측 기반 진단·질문");
   if (paths.some(p => /prediction|answers|draft|commands|plan/.test(p))) kinds.add("예측·수치 확정");
   if (paths.some(p => /feedback|hint|support|practice|checks/.test(p))) kinds.add("힌트·보충 지원");
   if (paths.some(p => /reflection|explanation|observation|judgment|reason|revision/.test(p))) kinds.add("관찰·비교·해석·수정");

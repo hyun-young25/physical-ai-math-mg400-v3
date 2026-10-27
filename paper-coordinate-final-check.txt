@@ -1,0 +1,55 @@
+
+> workspace@0.0.0 typecheck /home/runner/workspace
+> pnpm run typecheck:libs && pnpm -r --filter "./artifacts/**" --filter "./scripts" --if-present run typecheck
+
+
+> workspace@0.0.0 typecheck:libs /home/runner/workspace
+> tsc --build
+
+Scope: 4 of 10 workspace projects
+artifacts/api-server typecheck$ tsc -p tsconfig.json --noEmit
+artifacts/mockup-sandbox typecheck$ tsc -p tsconfig.json --noEmit
+artifacts/robot-control typecheck$ tsc -p tsconfig.json --noEmit
+scripts typecheck$ tsc -p tsconfig.json --noEmit
+scripts typecheck: Done
+artifacts/api-server typecheck: Done
+artifacts/mockup-sandbox typecheck: Done
+artifacts/robot-control typecheck: Done
+✔ translation, quarter turn, and 10 degree transform agree with measured frame (3.941103ms)
+✔ obeying an incorrect command is not task success; omitted rotation is identified (0.438037ms)
+✔ constant offset and scale patterns receive different questions (0.335444ms)
+✔ calculation mismatch is separate from a wrong model (0.21652ms)
+✔ tracking fault takes precedence over a student misconception (0.249512ms)
+✔ missing numeric fields never become zero (0.11526ms)
+✔ invalid, duplicate, stale, mixed and reversed reference samples rejected (0.660699ms)
+✔ partial, duplicate, old, invalid and mismatched execution packets rejected (0.586715ms)
+✔ fresh held-out run and linked hypothesis/revision are necessary for completion (0.529782ms)
+✔ repeat support escalates without claiming cognitive certainty (0.383394ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 467.245007
+
+> @workspace/robot-control@0.0.0 build /home/runner/workspace/artifacts/robot-control
+> vite build --config vite.config.ts
+
+vite v7.3.3 building client environment for production...
+transforming...
+✓ 2350 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/public/index.html                     1.63 kB │ gzip:   0.62 kB
+dist/public/assets/App-7VQdy163.css       98.69 kB │ gzip:  17.44 kB
+dist/public/assets/index-Dd2dPAMN.css    106.20 kB │ gzip:  19.20 kB
+dist/public/assets/index-B35FD-fB.js     228.46 kB │ gzip:  73.88 kB
+dist/public/assets/App-Gr6Rmb5o.js     1,899.16 kB │ gzip: 547.58 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 7.19s

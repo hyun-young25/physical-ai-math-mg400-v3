@@ -1,7 +1,9 @@
-import type { PaperDiagnosis, PaperEvidenceSource, PaperFrame, PaperGridPoint, PaperPointName, PaperPredictionPoint, PaperReferenceSample, PaperRunSnapshot, PaperStudentTransform, PaperTargetSet, PaperCoordinateLevel } from "./paperCoordinateStudy";
+import type { PaperTrialRecord, PaperReferenceSource, PaperDiagnosis, PaperEvidenceSource, PaperFrame, PaperGridPoint, PaperPointName, PaperPredictionPoint, PaperReferenceSample, PaperRunSnapshot, PaperStudentTransform, PaperTargetSet, PaperCoordinateLevel } from "./paperCoordinateStudy";
 
 export type PaperLessonStage = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export type PaperCoordinateStudyViewState = {
+  records: PaperTrialRecord[];
+  revalidationScope: string | null;
   stage: PaperLessonStage;
   level: PaperCoordinateLevel;
   targetSet: PaperTargetSet;
@@ -46,6 +48,7 @@ export type PaperCoordinateStudyViewState = {
 
 export type PaperCoordinateStudyViewActions = {
   onBack: () => void;
+  onExport: () => void;
   onStageChange: (stage: PaperLessonStage) => void;
   onLevelChange: (level: PaperCoordinateLevel) => void;
   onRecordCurrentReference: (point: PaperPointName) => void;
