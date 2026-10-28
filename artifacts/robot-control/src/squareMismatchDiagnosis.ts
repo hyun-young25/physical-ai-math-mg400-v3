@@ -12,6 +12,7 @@ import type { ShapeLesson } from "./shapeLearning";
 export type SquareMismatchType =
   | "match"
   | "displacement-as-position"
+  | "origin-missing"
   | "axis-swap"
   | "direction"
   | "closure"
@@ -198,12 +199,17 @@ export function squareFeedbackPlan(d:SquareDiagnosis, priorSameType:number, supp
     return {level:"self-regulation",levelLabel:LEVEL_LABELS["self-regulation"],teacherFlag:false,
       question:`이번에는 예측과 실행 결과가 일치했어요. 앞에서 관측과 과제 조건이 달랐던 부분을, 다음 과제에서는 실행 전에 어떻게 미리 점검할 수 있을까요?`};
   }
-  const level = squareFeedbackLevel(priorSameType, supportMode);
+  const level = d.type==="model-real" ? "task" : squareFeedbackLevel(priorSameType, supportMode);
   const c = d.evidence.condition, ex = d.evidence.executed, edge = d.edge ?? "";
   const e = d.edgeIndex ? d.evidence.edges?.[d.edgeIndex-1] : undefined;
   const v = d.edgeIndex && ex ? ex.vertices[d.edgeIndex] : undefined;
   let question = "", relationHint:string|undefined, example:string|undefined;
   switch (d.type) {
+    case "origin-missing":
+      question="종이 기준점 O와 종이 안에서의 이동량은 내 식에서 어떻게 연결되나요?";
+      relationHint="종이 좌표의 이동량을 로봇 기준점 좌표에 더하는 관계를 확인하세요.";
+      example="예: 기준점 (200, 20)에서 (+30, +10) 이동한 위치는 (230, 30)입니다.";
+      break;
     case "axis-swap":
       question = ex
         ? `로봇이 그린 도형은 X 방향 ${fmt(ex.width)} mm, Y 방향 ${fmt(ex.height)} mm예요. 과제의 가로(X 방향)·세로(Y 방향) 조건과 비교하면 무엇이 다른가요?`
@@ -242,7 +248,7 @@ export function squareFeedbackPlan(d:SquareDiagnosis, priorSameType:number, supp
     case "model-real": {
       const m = d.evidence.measured;
       question = m
-        ? `계산한 좌표와 가상(DT) 경로는 일치했는데, 실제 로봇은 꼭짓점에서 평균 ${fmt(m.meanError)} mm(최대 ${fmt(m.maxError)} mm) 어긋났어요. 어긋난 방향이 모든 꼭짓점에서 비슷한가요?`
+        ? `제출한 명령 좌표와 제어기 보고 좌표가 꼭짓점에서 평균 ${fmt(m.meanError)} mm(최대 ${fmt(m.maxError)} mm) 어긋났어요. 어긋난 방향이 모든 꼭짓점에서 비슷한가요?`
         : "계산·가상 결과와 실제 로봇 결과를 같은 좌표계에서 비교해 보세요.";
       relationHint = "우리 계산은 도구 끝점(TCP)과 기준 좌표계가 실제 로봇과 같다고 가정해요. 모든 점이 같은 방향으로 어긋난다면 이 가정 중 무엇이 다를 수 있을까요?";
       example = "예: 모든 점이 +X로 약 2 mm씩 어긋났다면 계산 실수보다 도구 길이나 기준점 설정의 차이를 먼저 의심할 수 있어요. (측정으로 확인한 원인은 아니에요.)";
@@ -265,7 +271,7 @@ export function squareFeedbackPlan(d:SquareDiagnosis, priorSameType:number, supp
 
 export function squareMismatchName(type:SquareMismatchType) {
   return ({
-    match:"일치", "displacement-as-position":"위치와 이동량 혼동", "axis-swap":"축·길이 뒤바뀜", direction:"방향(부호) 오류",
+    match:"일치", "origin-missing":"기준점 누락", "displacement-as-position":"위치와 이동량 혼동", "axis-swap":"축·길이 뒤바뀜", direction:"방향(부호) 오류",
     closure:"닫힘 오류", arithmetic:"계산 오류", "model-real":"모형–실물 차이", unreachable:"도달 불가 위치",
   } as Record<SquareMismatchType,string>)[type];
 }

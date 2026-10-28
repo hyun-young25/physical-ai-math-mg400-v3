@@ -4,7 +4,7 @@ import type { FeedbackContext } from "./learningAiContext";
 export const DIAG_VISUAL_UI_VERSION = "diag-visual-v2";
 export const COMPARISON_COLORS = { target:"#22c55e", executed:"#ff9f1c", mismatch:"#ff3b5c" } as const;
 export type SquareVisual = {
-  coordinateLabel?:string; connectedVerticesOnly?:boolean; match?:boolean; errorArrows?:boolean;
+  review?:{owner:string;selected:string;items:{id:string;label:string}[]}; toleranceMm?:number; coordinateLabel?:string; connectedVerticesOnly?:boolean; match?:boolean; errorArrows?:boolean;
   key:string; feedbackKey:string; stage:number; diagnosis:SquareDiagnosis; plan:SquareFeedbackPlan|null;
   target:SquareObservedVertex[]; observed:SquareObservedVertex[]; priorSameType:number; supportMode:"guided"|"challenge";
 };

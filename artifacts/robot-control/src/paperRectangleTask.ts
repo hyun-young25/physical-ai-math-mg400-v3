@@ -1,21 +1,24 @@
 import { PAPER_TARGETS, frameInversePoint, frameTransformPoint, getPaperFrameAngleDegrees } from "./paperCoordinateStudy";
 import type { PaperCoordinateLevel, PaperTargetSet, PaperGridPoint, PaperFrame, PaperRunSnapshot, PaperDiagnosis } from "./paperCoordinateStudy";
 import { getShapeLesson } from "./shapeLearning";
-import { diagnoseSquare, LEVEL_LABELS } from "./squareMismatchDiagnosis";
+import { diagnoseSquare, LEVEL_LABELS, squareFeedbackPlan, squareMismatchName } from "./squareMismatchDiagnosis";
 import type { SquareVisual } from "./squareComparisonVisual";
 import type { FeedbackContext } from "./learningAiContext";
 
 export const PAPER_RECTANGLE_TITLES = {
+  "advanced-paper-dt": "종이 기준점 (DT)",
+  "advanced-paper-hardware": "종이 위 경로 확인 (MG400)",
   "advanced-paper-quarter": "종이 위 사각형 · 직각 회전",
   "advanced-paper-rotated": "종이 위 사각형 · 비스듬히 놓인 종이",
 } as const;
-export const isPaperRectangle = (level:PaperCoordinateLevel) => level==="advanced-paper-quarter"||level==="advanced-paper-rotated";
+export const isPaperRectangle = (level:PaperCoordinateLevel) => level==="advanced-paper-quarter"||level==="advanced-paper-rotated"||level==="advanced-paper-dt"||level==="advanced-paper-hardware";
 export function paperTaskTargets(level:PaperCoordinateLevel,set:PaperTargetSet):PaperGridPoint[] {
   if(!isPaperRectangle(level))return PAPER_TARGETS[set];
+  if(level==="advanced-paper-dt"||level==="advanced-paper-hardware")return [[0,0],[11,0],[11,15],[0,15]].map(([xCm,yCm],i)=>({name:"P"+(i+1),xCm,yCm}));
   return [[2,2],[8,2],[8,6],[2,6]].map(([xCm,yCm],i)=>({name:"P"+(i+1),xCm,yCm}));
 }
 export const PAPER_PATTERN_LABELS:Record<NonNullable<PaperDiagnosis["pattern"]>,string>={
-  match:"목표와 일치",tracking:"명령–보고 위치 차이",translation:"이동 차이",rotation:"회전 오류",
+  match:"목표와 일치","origin-missing":"기준점 누락",tracking:"명령–보고 위치 차이",translation:"이동 차이",rotation:"회전 오류",
   scale:"배율 차이",calculation:"대입·계산 차이",mixed:"혼합 차이",
 };
 export const paperFeedbackKey=(c:Pick<FeedbackContext,"condition"|"answers"|"execution">)=>JSON.stringify(["paper",c.condition,c.answers,c.execution]);
@@ -34,7 +37,7 @@ export function paperTransformEstimate(frame:PaperFrame,targets:PaperGridPoint[]
     relativeAngle:Math.atan2(uy,ux)*180/Math.PI,paperAngle:getPaperFrameAngleDegrees(frame)};
 }
 export function paperRectangleVisual(frame:PaperFrame,targets:PaperGridPoint[],run:PaperRunSnapshot,diagnosis:PaperDiagnosis,
-  stage:number,feedbackKey:string,priorSameType:number):SquareVisual|null {
+  stage:number,feedbackKey:string,priorSameType:number,supportMode:"guided"|"challenge"="guided"):SquareVisual|null {
   if(targets.length!==4||run.observations.length!==4||diagnosis.status!=="complete")return null;
   const local=run.observations.map((o,i)=>{const p=frameInversePoint(frame,o.pose)!;return {x:p.xCm*10,y:p.yCm*10,z:0,label:"P"+(i+1)};});
   const localPlan=run.commands.map((o,i)=>{const p=frameInversePoint(frame,o.pose)!;return {x:p.xCm*10,y:p.yCm*10,z:0,label:"P"+(i+1)};});
@@ -45,11 +48,15 @@ export function paperRectangleVisual(frame:PaperFrame,targets:PaperGridPoint[],r
   base.pathPlan.rows.forEach((row,i)=>{answers[row.xKey]=String(localPlan[(i+1)%4].x);answers[row.yKey]=String(localPlan[(i+1)%4].y);});
   const edgeDiagnosis=diagnoseSquare(lesson,answers,{source:run.source==="teacher"?"dt":run.source,observedVertices:[...local,{...local[0],label:"P1"}]});
   if(!edgeDiagnosis)return null;
+  edgeDiagnosis.type=diagnosis.pattern==="tracking"?"model-real":diagnosis.pattern==="origin-missing"?"origin-missing":diagnosis.pattern==="match"?"match":edgeDiagnosis.type==="match"||edgeDiagnosis.type==="model-real"?"arithmetic":edgeDiagnosis.type;
+  edgeDiagnosis.label=diagnosis.candidate;
+  const metricRows=diagnosis.pattern==="tracking"?diagnosis.evidence:diagnosis.taskEvidence;
+  if(metricRows?.length)edgeDiagnosis.evidence.measured={count:metricRows.length,meanError:metricRows.reduce((a,e)=>a+e.distance,0)/metricRows.length,maxError:Math.max(...metricRows.map(e=>e.distance)),meanOffset:{x:metricRows.reduce((a,e)=>a+e.dx,0)/metricRows.length,y:metricRows.reduce((a,e)=>a+e.dy,0)/metricRows.length},reference:diagnosis.pattern==="tracking"?"student-plan":"target"};
   const level=diagnosis.pattern==="match"?"self-regulation":diagnosis.supportLevel===3?"worked":diagnosis.supportLevel===2?"process":"task";
   const target=targets.map((p,i)=>({...frameTransformPoint(frame,p),label:"P"+(i+1)}));
   const observed=run.observations.map((p,i)=>({...p.pose,label:"P"+(i+1)}));
-  return {key:run.id,feedbackKey,stage,diagnosis:edgeDiagnosis,plan:{level,levelLabel:LEVEL_LABELS[level],question:diagnosis.question,teacherFlag:false},
-    target:[...target,target[0]],observed:[...observed,observed[0]],priorSameType,supportMode:"guided",
+  return {key:run.id,feedbackKey,stage,diagnosis:edgeDiagnosis,plan:{...squareFeedbackPlan(edgeDiagnosis,priorSameType,supportMode),level,levelLabel:LEVEL_LABELS[level],question:diagnosis.question,teacherFlag:level==="worked"&&diagnosis.pattern!=="tracking"},
+    target:[...target,target[0]],observed:[...observed,observed[0]],priorSameType,supportMode,toleranceMm:diagnosis.toleranceMm??2,
     coordinateLabel:"종이 축 기준",connectedVerticesOnly:true,
     // The paper diagnosis remains authoritative; the square comparison only annotates edge geometry.
     match:diagnosis.pattern==="match",errorArrows:true};

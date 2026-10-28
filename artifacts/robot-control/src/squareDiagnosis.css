@@ -69,7 +69,7 @@
 .square-feedback-progress small { color:#64748b; }
 .square-level-advance { animation:square-level-pop .4s ease-out; }
 @keyframes square-level-pop { 50%{transform:scale(1.08)} }
-.square-edge-mismatch { animation:square-edge-pulse 1s ease-in-out infinite; }
+.square-edge-mismatch { animation:square-edge-pulse .6s ease-in-out 2; }
 @keyframes square-edge-pulse { 50%{opacity:.4} }
 .square-diagnosis-question { position:relative; padding:12px 14px; border-radius:12px 12px 12px 2px; font-size:16px; line-height:1.65; }
 .square-diagnosis-question strong { display:block; margin-bottom:4px; font-size:12px; }
@@ -97,3 +97,9 @@
 @media(prefers-reduced-motion:reduce){
  .square-level-advance,.square-edge-mismatch { animation:none; }
 }
+
+.square-edge-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.square-edge-cards article{padding:10px;border:1px solid #d4ddd8;border-radius:8px;background:#f6faf8}.square-edge-cards article[data-different="true"]{border:2px solid #e74658;background:#fff4f4}.square-edge-cards p{margin:4px 0;font-size:12px}.square-decision-section{border-top:1px solid #e2e8f0;padding:12px 0}.square-decision-section h3{font-size:14px;margin:0 0 8px}.square-type-chips{display:flex;gap:5px;flex-wrap:wrap}.square-type-chips span{font-size:11px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:12px;padding:3px 7px;color:#64748b}.square-type-chips [data-selected="true"]{color:#172554;background:#dbeafe;border-color:#2563eb;font-weight:700}.square-source-badge{font-size:11px;background:white;padding:4px 8px;border-radius:6px}
+
+.square-attempt-history{padding:10px;border:1px solid #dbe4f0;border-radius:8px;margin:8px 0}.square-attempt-history h3{font-size:13px}.square-attempt-history button{display:inline-flex;flex-direction:column;text-align:left;padding:6px;margin:3px;border:1px solid #cbd5e1;border-radius:6px;background:white;font-size:12px}.square-attempt-history small{max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.square-attempt-history [aria-pressed="true"]{background:#dbeafe;border-color:#2563eb}
+
+.square-3d-neutral{color:#64748b;border-color:#94a3b8;background:#f8fafc}

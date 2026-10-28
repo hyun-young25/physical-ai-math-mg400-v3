@@ -1,6 +1,7 @@
+import { omitsOrigin } from "./originMissing";
 import type { LessonPose } from "./curriculum";
 
-export type PaperRectangleLevel = "advanced-paper-quarter" | "advanced-paper-rotated";
+export type PaperRectangleLevel = "advanced-paper-quarter" | "advanced-paper-rotated" | "advanced-paper-dt" | "advanced-paper-hardware";
 export type PaperCoordinateLevel = "basic" | "quarter-turn" | "rotated" | PaperRectangleLevel;
 export type PaperTargetSet = "initial" | "revalidation";
 export type PaperPointName = "O" | "X" | "Y";
@@ -84,7 +85,7 @@ export type PaperDiagnosis = {
   question: string;
   why: string;
   tutorSource: "AI phrasing" | "default question";
-  pattern?: "match" | "tracking" | "translation" | "rotation" | "scale" | "mixed" | "calculation";
+  pattern?: "match" | "tracking" | "origin-missing" | "translation" | "rotation" | "scale" | "mixed" | "calculation";
   taskEvidence?: Array<{ point: string; dx: number; dy: number; distance: number; xCm: number; yCm: number }>;
   toleranceMm?: number;
   supportLevel?: number;
@@ -95,6 +96,9 @@ export type PaperTrialRecord = {
   task: "paper-coordinate";
   version: 1;
   uiVersion?: string;
+  taskVersion?: string;
+  support?: "guided" | "challenge";
+  pathConcept?: {motion:string;closeX:string;closeY:string};
   attempt: number;
   parentAttemptId: string | null;
   targetSet: PaperTargetSet;
@@ -274,7 +278,7 @@ export function validatePaperRunForDiagnosis(run: PaperRunSnapshot, frame: Paper
 
 /** Geometry is deterministic; these patterns are hypotheses, not cognitive diagnoses. */
 export function diagnosePaperRun(run: PaperRunSnapshot, frame: PaperFrame, currentPlanHash: string,
-  options: { toleranceMm?: number; transform?: PaperStudentTransform; repeated?: number; targets?: PaperGridPoint[] } = {}): PaperDiagnosis {
+  options: { toleranceMm?: number; transform?: PaperStudentTransform; repeated?: number; targets?: PaperGridPoint[]; detectOriginMissing?: boolean; support?: "guided"|"challenge" } = {}): PaperDiagnosis {
   const targets = options.targets ?? PAPER_TARGETS[run.targetSet];
   const invalid = validatePaperRunForDiagnosis(run, frame, currentPlanHash, targets);
   const source = run.source, tolerance = options.toleranceMm ?? PAPER_MEASURE_TOLERANCE_MM;
@@ -306,6 +310,9 @@ export function diagnosePaperRun(run: PaperRunSnapshot, frame: PaperFrame, curre
   if (tracking) {
     candidate = "명령과 보고 위치가 다릅니다. 먼저 실행·측정 조건을 확인합니다.";
     question = "학생의 식을 바꾸기 전에 명령 위치에 도착했는지, 좌표계와 펜 설정은 같은지 확인할까요?";
+  } else if (mismatch && options.detectOriginMissing && omitsOrigin(run.commands.map(c=>c.pose), targets.map(t=>frameTransformPoint(frame,t)), frame.samples.find(s=>s.point==="O")!.pose)) {
+    pattern="origin-missing"; candidate="제출한 네 예측에서 종이 기준점 O를 더하지 않은 패턴이 확인됐습니다. 생각의 원인은 학생 설명으로 확인합니다.";
+    question="종이 좌표를 로봇 좌표로 옮길 때 기준점 O는 식의 어디에 들어가나요?";
   } else if (mismatch) {
     const mean = {x:taskEvidence.reduce((a,e)=>a+e.dx,0)/targets.length,y:taskEvidence.reduce((a,e)=>a+e.dy,0)/targets.length};
     const spread = Math.max(...taskEvidence.map(e=>Math.hypot(e.dx-mean.x,e.dy-mean.y)));
@@ -335,9 +342,9 @@ export function diagnosePaperRun(run: PaperRunSnapshot, frame: PaperFrame, curre
       question="각 점의 원점·단위·축 부호 중 어떤 조건을 하나씩 바꿔 확인하면 원인을 구분할 수 있을까요?";
     }
   }
-  const supportLevel = Math.min(3,1+(options.repeated??0));
-  if (mismatch && supportLevel===2) question += " 기준점→축 방향→단위 순서로 식의 각 항과 연결해 보세요.";
-  if (mismatch && supportLevel===3) question += " 예: 1 cm=10 mm입니다. 한 점을 함께 검산하고, 계속 어렵다면 교사와 확인하세요.";
+  const supportLevel = tracking ? 1 : Math.min(3,1+Math.max(0,(options.repeated??0)-(options.support==="challenge"?1:0)));
+  if (!tracking && mismatch && supportLevel===2) question += " 기준점→축 방향→단위 순서로 식의 각 항과 연결해 보세요.";
+  if (!tracking && mismatch && supportLevel===3) question += " 예: 1 cm=10 mm입니다. 한 점을 함께 검산하고, 계속 어렵다면 교사와 확인하세요.";
   return {method:"rule-based",source,status:"complete",candidate,evidence,predictionEvidence,taskEvidence,
     pattern,firstMismatch:tracking?.point??mismatch?.point??null,question,
     why:`${numeric}. 허용오차 ${tolerance} mm(예비값). 이 수치 패턴에 맞춰 질문을 선택했습니다. 관측만으로 학습자의 사고 원인을 확정하지 않습니다.`,

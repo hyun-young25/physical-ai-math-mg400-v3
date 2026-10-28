@@ -12,6 +12,7 @@ function squareDependency(name){
   return exports;
 }
 module.exports = {
+  "./squareAttemptHistory":{useSquareAttemptHistory:()=>({items:[],reviewed:null,capture:()=>{},meta:{owner:"test",selected:"",items:[]}}),SquareAttemptHistory:()=>null,SquareAttemptReview:()=>null},
   "./paperRectangleTask": squareDependency("paperRectangleTask"),
   "./useSquareVisual": {useSquareVisual:()=>({visual:null})},
   "./squareComparisonVisual": squareDependency("squareComparisonVisual"),

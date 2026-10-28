@@ -4,6 +4,9 @@ import type { PaperTrialRecord, PaperReferenceSource, PaperDiagnosis, PaperEvide
 
 export type PaperLessonStage = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export type PaperCoordinateStudyViewState = {
+  rotationAllowed?:boolean;
+  pathConcept?:{motion:string;closeX:string;closeY:string};
+  gptQuestion?:string;
   comparison?:SquareVisual|null;
   transformEstimate?:ReturnType<typeof paperTransformEstimate>;
   priorSameType?:number;
@@ -52,6 +55,7 @@ export type PaperCoordinateStudyViewState = {
 };
 
 export type PaperCoordinateStudyViewActions = {
+  onPathConceptChange:(field:"motion"|"closeX"|"closeY",value:string)=>void;
   onBack: () => void;
   onExport: () => void;
   onStageChange: (stage: PaperLessonStage) => void;

@@ -1,5 +1,6 @@
 const {test}=require('node:test'), assert=require('node:assert/strict'), fs=require('node:fs'), Module=require('node:module'), path=require('node:path'), ts=require('typescript');
 const file=path.resolve(__dirname,'../artifacts/robot-control/src/paperCoordinateStudy.ts');
+const originalTs=require.extensions['.ts'];require.extensions['.ts']=(mod,file)=>mod._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,file);
 const m=new Module(file); m._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,file);
 const p=m.exports, now=Date.now();
 function frame(deg=0){const a=deg*Math.PI/180;const samples=[['O',0,0],['X',100,0],['Y',0,100]].map(([point,x,y],i)=>({point,pose:{x:225+x*Math.cos(a)-y*Math.sin(a),y:-90+x*Math.sin(a)+y*Math.cos(a),z:60,r:0},source:'mock',seq:i+1,capturedAt:now-100+i,ageMsAtCapture:0,user:0,tool:0,coordinateSystem:'User 0 / Tool 0',verifiedCoordinates:true}));const result=p.validatePaperFrame(samples,now);assert.ok(result.ok);return result.frame;}

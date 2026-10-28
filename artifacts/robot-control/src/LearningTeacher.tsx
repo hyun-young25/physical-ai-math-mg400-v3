@@ -1,7 +1,8 @@
+import { PAPER_ROTATION_SETTING } from "./paperMergedLesson";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FeedbackOperatorStatus from "./FeedbackOperatorStatus";
 import {
-  downloadTeacherCsv, listLearningStudents, listTeacherRecords,
+  downloadSquareAttemptCsv, downloadTeacherCsv, listLearningStudents, listTeacherRecords,
   type LearningEvent, type LearningFilter, type LearningStudent, type LearningUser,
 } from "./learningClient";
 import "./learningAccounts.css";
@@ -40,6 +41,8 @@ export default function LearningTeacher({ user, onLogout }: { user: LearningUser
   const [metaLoading, setMetaLoading] = useState(true);
   const [metaError, setMetaError] = useState("");
 
+  const [taskIndex,setTaskIndex]=useState(""),[taskVersion,setTaskVersion]=useState("");
+  const [rotationAllowed,setRotationAllowed]=useState(()=>localStorage.getItem(PAPER_ROTATION_SETTING)==="true");
   const [login, setLogin] = useState("");
   const [chapter, setChapter] = useState("");
   const [from, setFrom] = useState("");
@@ -97,6 +100,8 @@ export default function LearningTeacher({ user, onLogout }: { user: LearningUser
     finally { setCsvBusy(false); }
   }
 
+  async function attemptsCsv(){setCsvBusy(true);setCsvError("");try{await downloadSquareAttemptCsv({...filter,taskIndex,taskVersion});}catch(e){setCsvError(msg(e,"시도 CSV를 내려받지 못했습니다."));}finally{setCsvBusy(false);}}
+
   const sel = students.filter(s => !login || s.login === login);
   const sumEvents = sel.reduce((a, s) => a + s.record_count, 0);
   const sumAttempts = sel.reduce((a, s) => a + s.attempt_count, 0);
@@ -136,6 +141,7 @@ export default function LearningTeacher({ user, onLogout }: { user: LearningUser
 
         <main style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
           <FeedbackOperatorStatus/>
+          <section className="la-panel"><h3>종이 과제 교사 설정</h3><label><input type="checkbox" checked={rotationAllowed} onChange={e=>{setRotationAllowed(e.target.checked);localStorage.setItem(PAPER_ROTATION_SETTING,String(e.target.checked));}}/> 심화 2 회전 관계 허용 (기본 꺼짐)</label><p className="la-hint">이 브라우저에서 다음에 여는 심화 2부터 적용됩니다. 심화 1은 평행한 축의 기준점 덧셈을 학습합니다.</p></section>
           <section className="la-panel">
             <div className="la-filters">
               <label className="la-field">학생
@@ -165,6 +171,7 @@ export default function LearningTeacher({ user, onLogout }: { user: LearningUser
               </span>
             </div>
             <div className="la-hint" style={{ fontSize: 11 }}>사건은 제출·확정·실행·지원 등 기록 변경 이력입니다. 기록 묶음에는 여러 좌표 시도가 함께 들어갈 수 있습니다. 실제 시도 ID와 실행 회차는 원문 항목에서 구분합니다. CSV는 중첩 항목을 ‘항목 경로 / 값’으로 펼치므로 사건 한 건이 여러 행이 됩니다. 별도 이해도 시험 결과가 아닙니다.</div>
+            <div className="la-filters"><label className="la-field">시도 CSV 과제<select className="la-input" value={taskIndex} onChange={e=>setTaskIndex(e.target.value)}><option value="">전체 (과거 미기록 포함)</option>{["기초 1","기초 2","응용 1","응용 2","심화 1 · DT","심화 2 · MG400"].map((t,i)=><option key={i} value={i}>{t}</option>)}</select></label><label className="la-field">과제 버전<select className="la-input" value={taskVersion} onChange={e=>setTaskVersion(e.target.value)}><option value="">전체</option><option value="v4-paper-merged">v4-paper-merged</option><option value="legacy">과거 · 버전 미기록</option></select></label><button className="la-btn" disabled={csvBusy||dateInvalid} onClick={attemptsCsv}>시도별 CSV 내려받기</button></div><p className="la-hint">위 학생·날짜 조건을 적용합니다. 새 기록은 비교 한 회당 한 행입니다. 과거 기록은 당시 저장된 판정·질문만 내보내고 없는 값은 비웁니다. 과제 번호 필터는 번호가 미기록된 과거 행을 제외합니다. 교사 확인 필요는 표시 상태이며 별도 알림 전송을 뜻하지 않습니다.</p>
             {csvError && <div className="la-error" role="alert">{csvError}</div>}
           </section>
 

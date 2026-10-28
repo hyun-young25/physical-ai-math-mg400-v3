@@ -7,7 +7,9 @@ export function readEvidence<T>(key:string, valid:(value:unknown)=>value is T):T
   } catch { return []; }
 }
 export function writeEvidence(key:string, records:unknown[]):boolean {
-  try { setEvidenceItem(key,JSON.stringify(records));return true; }
+  try { setEvidenceItem(key,JSON.stringify(records));
+    if(typeof window!=="undefined"&&typeof window.dispatchEvent==="function")window.dispatchEvent(new CustomEvent("learning-evidence-written",{detail:{key}}));
+    return true; }
   catch { return false; }
 }
 export function downloadEvidence(filename:string,value:unknown) {

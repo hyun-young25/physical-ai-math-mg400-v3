@@ -124,7 +124,7 @@ const shots=process.env.SQUARE_DIAGNOSIS_SHOTS;
     await panel.waitFor();
     assert.equal(await panel.getAttribute("data-level"),level,`attempt ${n}`);
     if(level==="process"){await panel.getByText("자세한 근거 보기",{exact:true}).click();assert.match(await panel.innerText(),/관계 힌트/);}
-    if(level==="worked"){assert.match(await panel.innerText(),/선생님 화면에 도움 요청/);await panel.scrollIntoViewIfNeeded();await shot("06-level3-teacher.png");break;}
+    if(level==="worked"){assert.match(await panel.innerText(),/교사 확인 필요/);await panel.scrollIntoViewIfNeeded();await shot("06-level3-teacher.png");break;}
     await active().getByLabel("차이가 생긴 이유",{exact:true}).fill(`시도 ${n}: 아직 원인을 잘 모르겠습니다.`);
     await active().getByRole("button",{name:"이유 확인 · 수정·재실행으로",exact:true}).click();await stage(7);
     await active().getByRole("button",{name:"수정한 예측으로 재검증 준비",exact:true}).click();await stage(3);

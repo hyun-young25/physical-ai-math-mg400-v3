@@ -549,7 +549,7 @@ function ShapeLearningPanel({
       <LessonCoursePath label="도형 수업 경로" current={lessonIndex} disabled={locked || editorOpen}
         items={Array.from({length: SHAPE_LESSON_COUNT}, (_, index) => ({
           label: `${["기초", "응용", "심화"][Math.floor(index / 2)]} ${index % 2 + 1}`,
-          detail: shapeType==="사각형"&&index>=4 ? PAPER_RECTANGLE_TITLES[index===4?"advanced-paper-quarter":"advanced-paper-rotated"] : getShapeLesson(shapeType, index).title,
+          detail: shapeType==="사각형"&&index>=4 ? PAPER_RECTANGLE_TITLES[index===4?"advanced-paper-dt":"advanced-paper-hardware"] : getShapeLesson(shapeType, index).title,
         }))} onSelect={onLessonChange}/>
       <details className="shape-lesson-settings">
         <summary>
@@ -1494,7 +1494,7 @@ export function RobotArm({
 
   function selectShapeCourse(index:number) {
     if(status==="running")return;
-    if(shapeType==="사각형"&&index>=4){resetMission();setPaperLevel(index===4?"advanced-paper-quarter":"advanced-paper-rotated");}
+    if(shapeType==="사각형"&&index>=4){resetMission();setPaperLevel(index===4?"advanced-paper-dt":"advanced-paper-hardware");}
     else selectShapeLesson(index);
   }
 
@@ -1553,12 +1553,12 @@ export function RobotArm({
   if (paperCoordinateOpen) {
     return (
       <div className="paper-coordinate-host">
-        <LessonCoursePath label="도형 수업 경로" current={paperLevel==="advanced-paper-quarter"?4:5} disabled={status==="running"||paperBusy}
+        <LessonCoursePath label="도형 수업 경로" current={paperLevel==="advanced-paper-dt"?4:5} disabled={status==="running"||paperBusy}
           items={Array.from({length:SHAPE_LESSON_COUNT},(_,index)=>({label:`${["기초","응용","심화"][Math.floor(index/2)]} ${index%2+1}`,
-            detail:index>=4?PAPER_RECTANGLE_TITLES[index===4?"advanced-paper-quarter":"advanced-paper-rotated"]:getShapeLesson("사각형",index).title}))}
-          onSelect={index=>{if(status==="running"||paperBusy)return;if(index>=4)setPaperLevel(index===4?"advanced-paper-quarter":"advanced-paper-rotated");else{setPaperLevel(null);selectShapeLesson(index);}}}/>
+            detail:index>=4?PAPER_RECTANGLE_TITLES[index===4?"advanced-paper-dt":"advanced-paper-hardware"]:getShapeLesson("사각형",index).title}))}
+          onSelect={index=>{if(status==="running"||paperBusy)return;if(index>=4)setPaperLevel(index===4?"advanced-paper-dt":"advanced-paper-hardware");else{setPaperLevel(null);selectShapeLesson(index);}}}/>
 
-        <PaperCoordinateStudy key={paperLevel!} initialLevel={paperLevel!} onRunningChange={setPaperBusy}
+        <PaperCoordinateStudy key={paperLevel!} initialLevel={paperLevel!} supportMode={supportMode} onRunningChange={setPaperBusy}
           onBack={() => { paperDtCancelRef.current = true; setPaperLevel(null); }}
           hardwareConnected={hardwareConnected}
           currentPose={coords}

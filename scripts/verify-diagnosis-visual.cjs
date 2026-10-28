@@ -29,7 +29,7 @@ const html='<!doctype html><html lang="ko"><head><meta charset="utf-8"/><style>b
  for(const [button,level,n] of [["repeat2","task",2],["repeat3","process",3],["repeat4","worked",4]]){
   await page.getByRole("button",{name:button,exact:true}).click();assert.equal(await panel.getAttribute("data-level"),level);assert.match(await panel.innerText(),new RegExp("같은 오류 "+n+"회째"));
  }
- assert.match(await panel.innerText(),/선생님 화면에 도움 요청됨/);passed.push("2–3: arithmetic and unchanged challenge progression task/task/process/worked");
+ assert.match(await panel.innerText(),/교사 확인 필요/);passed.push("2–3: arithmetic and unchanged challenge progression task/task/process/worked");
  await page.getByRole("button",{name:"unreachable",exact:true}).click();await page.getByText("도달 불가 · 관절 해 없음",{exact:true}).waitFor();
  assert.equal(await page.getByRole("button",{name:"비교 재생",exact:true}).isDisabled(),true);passed.push("4: rejected point marker, no invented observed path");
  await page.getByRole("button",{name:"match",exact:true}).click();await page.getByText("✓ 목표와 일치",{exact:true}).waitFor();assert.equal(await panel.getAttribute("data-level"),"self-regulation");passed.push("5: match + self-regulation");

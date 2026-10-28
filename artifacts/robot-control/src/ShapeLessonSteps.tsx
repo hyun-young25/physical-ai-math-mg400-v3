@@ -1,3 +1,5 @@
+import { useSquareAttemptHistory,SquareAttemptHistory,SquareAttemptReview } from "./squareAttemptHistory";
+import { getShapeLesson } from "./shapeLearning";
 import { publishSquareVisual,clearSquareVisual } from "./squareVisualizationStore";
 import { squareFeedbackKey } from "./squareComparisonVisual";
 import { SquareReplayControls,SquareObservedDiagram } from "./SquareComparisonView";
@@ -118,11 +120,14 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
       target:(squareCondition(lesson)?.target??[]).map((p,i)=>({...p,z:lesson.pathPlan.start.z,label:i===4?"P1":"P"+(i+1)})),
       observed:diagnosis.evidence.source==="prediction"?[]:diagnosis.evidence.executed?.vertices??[],
       priorSameType:priorTypes.filter(type=>type===diagnosis.type).length,supportMode} : null;
-  const presentationKey=JSON.stringify(presentation);
-  useLayoutEffect(()=>{publishSquareVisual(fieldId,presentation);},[fieldId,presentationKey]);
+  const taskIndex=Array.from({length:6},(_,i)=>getShapeLesson("사각형",i).id).indexOf(lesson.id);
+  const attemptHistory=useSquareAttemptHistory(fieldId,taskIndex,presentation&&record?.taskVersion==="v4-paper-merged"?{id:presentation.key,recordId:record.id,runId:String(record.runs.length),taskVersion:record.taskVersion,taskIndex,supportMode,predictions:record.prediction,predictionReason:record.reason,observed:presentation.observed,studentCause:cause,createdAt:record.runs.at(-1)?.endedAt??record.submittedAt,visual:presentation}:null,locked);
+  const published=attemptHistory.reviewed?{...attemptHistory.reviewed.visual,stage:6,review:attemptHistory.meta}:presentation?{...presentation,review:attemptHistory.meta}:null;
+  const presentationKey=JSON.stringify(published);
+  useLayoutEffect(()=>{publishSquareVisual(fieldId,published);},[fieldId,presentationKey]);
   useLayoutEffect(()=>()=>clearSquareVisual(fieldId),[fieldId]);
   const diagnosisPanel = diagnosis && (diagnosisPlan || diagnosis.type==="match") ? <SquareDiagnosisPanel diagnosis={diagnosis} plan={diagnosisPlan} priorSameType={priorTypes.filter(type=>type===diagnosis.type).length} supportMode={supportMode}
-    plannedVertices={squarePlannedVertices(lesson, record?.prediction ?? {}) ?? undefined}
+    gptQuestion={attemptHistory.gptQuestion} plannedVertices={squarePlannedVertices(lesson, record?.prediction ?? {}) ?? undefined}
     cause={cause} onCauseChange={setCause} causeRequired={diagnosisMismatch && diagnosis.type !== "unreachable"} disabled={locked}/> : null;
 
   useLayoutEffect(() => {
@@ -181,6 +186,7 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
       teacherFlag:diagnosisPlan.teacherFlag,evidence:diagnosis.evidence,
       source:diagnosis.evidence.source==="hardware"?"hardware":diagnosis.evidence.source==="mock"?"mock":"dt",
       causeExplanation:cause});
+    attemptHistory.capture();
     const answers={...q.record?.prediction,...q.reviewDraft};
     q.requestAi(squareTutorJudgment(assessSquare(lesson,answers)),answers);
     // A changed answer is a new prediction, never approval of an old DT path.
@@ -246,13 +252,15 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
               question: diagnosisPlan.question, supportMode, priorSameType: 0, teacherFlag: false, evidence: diagnosis.evidence,
               source:diagnosis.evidence.source==="hardware"?"hardware":diagnosis.evidence.source==="mock"?"mock":"dt",
               causeExplanation: cause });
-            q.explain();
+            attemptHistory.capture();q.explain();
           }}>{q.taskKind === "practice" ? "비교 확인 저장" : "내 설명 저장"}</button>
           : <button type="button" className="lesson-primary" disabled={locked} onClick={() => setStep(7)}>비교 완료 · 다음</button>
     : activeStage === 7 && diagnosisMismatch ? <button type="button" className="lesson-primary" disabled={locked || !cause.trim()} onClick={reviewAnswers}>수정한 예측으로 재검증 준비</button>
     : activeStage === 7 ? <button type="button" className="lesson-primary" disabled={locked || !q.reviewed || !canAdvance} onClick={() => { if (!canAdvance) return; q.feedbackEvent("transfer"); onNewCondition(); }}>{nextLabel}</button> : null;
 
+  if(attemptHistory.reviewed)return <div className="shape-lesson-steps"><SquareAttemptHistory history={attemptHistory} locked={locked}/><SquareAttemptReview attempt={attemptHistory.reviewed}/></div>;
   return <div className="shape-lesson-steps" data-shape-stage={activeStage} data-support-mode={supportMode}>
+    {isSquare&&<SquareAttemptHistory history={attemptHistory} locked={locked}/>}
     <p className="shape-step-progress" aria-live="polite">현재 단계 {activeStage}/7 · <strong>{STEP_TITLES[activeStage - 1]}</strong></p>
     <details className="shape-stage-overview">
       <summary>전체 학습 7단계 보기</summary>
