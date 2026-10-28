@@ -1,6 +1,7 @@
 import type { LessonPose } from "./curriculum";
 
-export type PaperCoordinateLevel = "basic" | "quarter-turn" | "rotated";
+export type PaperRectangleLevel = "advanced-paper-quarter" | "advanced-paper-rotated";
+export type PaperCoordinateLevel = "basic" | "quarter-turn" | "rotated" | PaperRectangleLevel;
 export type PaperTargetSet = "initial" | "revalidation";
 export type PaperPointName = "O" | "X" | "Y";
 export type PaperReferenceSource = "hardware" | "mock" | "teacher";
@@ -93,6 +94,7 @@ export type PaperTrialRecord = {
   id: string;
   task: "paper-coordinate";
   version: 1;
+  uiVersion?: string;
   attempt: number;
   parentAttemptId: string | null;
   targetSet: PaperTargetSet;
@@ -242,16 +244,15 @@ export function makePaperPlanHash(frameId: string, targetSet: PaperTargetSet, tr
   })) });
 }
 
-export function validatePaperRunForDiagnosis(run: PaperRunSnapshot, frame: PaperFrame, currentPlanHash: string): string | null {
+export function validatePaperRunForDiagnosis(run: PaperRunSnapshot, frame: PaperFrame, currentPlanHash: string, targets = PAPER_TARGETS[run.targetSet]): string | null {
   if (run.status !== "completed" || !finite(run.endedAt) || !finite(run.startedAt) || run.endedAt! < run.startedAt)
     return "실행이 부분 완료 또는 중단되어 전체 비교를 완료할 수 없습니다.";
   if (run.frameId !== frame.id || run.planHash !== currentPlanHash)
     return "기준점 또는 예측이 바뀌었습니다. 이전 실행·측정은 재사용하지 않습니다.";
   if (run.source !== "dt" && (run.source !== frame.source || !["hardware", "mock"].includes(run.source)))
     return "기준점과 실행 관측은 같은 출처여야 합니다.";
-  const targets = PAPER_TARGETS[run.targetSet];
   if (!targets || run.observations.length !== targets.length || run.commands.length !== targets.length)
-    return "세 목표점 모두 새 회신이 있어야 비교할 수 있습니다.";
+    return "모든 목표점에 새 회신이 있어야 비교할 수 있습니다.";
   let previousSeq = run.startSequence ?? -1;
   for (let i = 0; i < run.observations.length; i++) {
     const o = run.observations[i], c = run.commands[i];
@@ -273,8 +274,9 @@ export function validatePaperRunForDiagnosis(run: PaperRunSnapshot, frame: Paper
 
 /** Geometry is deterministic; these patterns are hypotheses, not cognitive diagnoses. */
 export function diagnosePaperRun(run: PaperRunSnapshot, frame: PaperFrame, currentPlanHash: string,
-  options: { toleranceMm?: number; transform?: PaperStudentTransform; repeated?: number } = {}): PaperDiagnosis {
-  const invalid = validatePaperRunForDiagnosis(run, frame, currentPlanHash);
+  options: { toleranceMm?: number; transform?: PaperStudentTransform; repeated?: number; targets?: PaperGridPoint[] } = {}): PaperDiagnosis {
+  const targets = options.targets ?? PAPER_TARGETS[run.targetSet];
+  const invalid = validatePaperRunForDiagnosis(run, frame, currentPlanHash, targets);
   const source = run.source, tolerance = options.toleranceMm ?? PAPER_MEASURE_TOLERANCE_MM;
   if (invalid || !finite(tolerance) || tolerance <= 0) return {
     method: "rule-based", source, status: "incomplete", candidate: invalid ?? "허용오차가 유효하지 않습니다.",
@@ -282,7 +284,6 @@ export function diagnosePaperRun(run: PaperRunSnapshot, frame: PaperFrame, curre
     question: "어떤 새 관측이 있어야 이 결과를 비교할 수 있을까요?",
     why: "현재 계획과 같은 실행에서 받은 유효한 관측이 완성되지 않았기 때문입니다.", tutorSource: "default question",
   };
-  const targets = PAPER_TARGETS[run.targetSet];
   const evidence = run.observations.map(o => ({point:o.point, dx:o.pose.x-o.command.x, dy:o.pose.y-o.command.y,
     distance:Math.hypot(o.pose.x-o.command.x,o.pose.y-o.command.y,o.pose.z-o.command.z)}));
   const taskEvidence = run.observations.map((o,i) => {
@@ -300,16 +301,17 @@ export function diagnosePaperRun(run: PaperRunSnapshot, frame: PaperFrame, curre
   const mismatch = taskEvidence.find(e => e.distance > tolerance);
   let pattern: NonNullable<PaperDiagnosis["pattern"]> = tracking ? "tracking" : mismatch ? "mixed" : "match";
   let question = "새 종이 배치에서도 이 관계를 쓰려면 어떤 기준점을 먼저 확인해야 할까요?";
-  let candidate = "세 보고 위치가 종이 목표점과 예비 허용오차 안에서 일치합니다. 잉크 위치는 별도 확인입니다.";
+  let candidate = "모든 보고 위치가 종이 목표점과 예비 허용오차 안에서 일치합니다. 잉크 위치는 별도 확인입니다.";
   let numeric = `목표 대비 최대 차이 ${Math.max(...taskEvidence.map(e=>e.distance)).toFixed(2)} mm, 명령 대비 최대 차이 ${Math.max(...evidence.map(e=>e.distance)).toFixed(2)} mm`;
   if (tracking) {
     candidate = "명령과 보고 위치가 다릅니다. 먼저 실행·측정 조건을 확인합니다.";
     question = "학생의 식을 바꾸기 전에 명령 위치에 도착했는지, 좌표계와 펜 설정은 같은지 확인할까요?";
   } else if (mismatch) {
-    const mean = {x:taskEvidence.reduce((a,e)=>a+e.dx,0)/3,y:taskEvidence.reduce((a,e)=>a+e.dy,0)/3};
+    const mean = {x:taskEvidence.reduce((a,e)=>a+e.dx,0)/targets.length,y:taskEvidence.reduce((a,e)=>a+e.dy,0)/targets.length};
     const spread = Math.max(...taskEvidence.map(e=>Math.hypot(e.dx-mean.x,e.dy-mean.y)));
     const [a,b,c]=run.observations.map(o=>frameInversePoint(frame,o.pose)!);
-    // Targets deliberately form a non-collinear triangle with the first edge horizontal.
+    // The first three targets form a non-collinear triangle with a horizontal first edge.
+    // The same classifier also accepts the rectangle's fourth point as evidence.
     const [ta,tb,tc]=targets;
     const ux=(b.xCm-a.xCm)/(tb.xCm-ta.xCm),uy=(b.yCm-a.yCm)/(tb.xCm-ta.xCm);
     const vx=(c.xCm-a.xCm-ux*(tc.xCm-ta.xCm))/(tc.yCm-ta.yCm);
@@ -320,8 +322,8 @@ export function diagnosePaperRun(run: PaperRunSnapshot, frame: PaperFrame, curre
       pattern="calculation"; candidate="저장한 변환식과 직접 계산한 명령 좌표도 다릅니다. 대입·계산 과정을 확인할 후보입니다.";
       question="내 변환식에 종이 좌표를 대입한 값과 저장한 예측은 같나요? 단위와 부호를 한 항씩 확인해 볼까요?";
     } else if (spread <= tolerance) {
-      pattern="translation"; candidate="세 점이 비슷한 방향·크기로 이동했습니다. 원점 또는 공통 위치 편차를 확인할 후보입니다.";
-      question="세 점의 차이 화살표가 비슷합니다. 내 식의 원점과 기록한 종이 원점을 비교하면 무엇이 다른가요?";
+      pattern="translation"; candidate="관측점이 비슷한 방향·크기로 이동했습니다. 원점 또는 공통 위치 편차를 확인할 후보입니다.";
+      question="관측점의 차이 화살표가 비슷합니다. 내 식의 원점과 기록한 종이 원점을 비교하면 무엇이 다른가요?";
     } else if (Math.abs(sx-1)<0.04 && Math.abs(sy-1)<0.04 && Math.abs(ux*vx+uy*vy)<0.04 && Math.abs(angle)>2) {
       pattern="rotation"; candidate="점 사이 길이는 비슷하지만 축 방향이 돌아가 있습니다. 회전각·축 방향을 확인할 후보입니다.";
       question="점 사이 길이가 유지되는데 방향은 달라졌어요. O→X 기준선 방향을 내 식의 회전각과 비교해 볼까요?";
@@ -342,13 +344,13 @@ export function diagnosePaperRun(run: PaperRunSnapshot, frame: PaperFrame, curre
     tutorSource:"default question",toleranceMm:tolerance,supportLevel};
 }
 
-export function paperRevalidationScope(record: PaperTrialRecord, parent?: PaperTrialRecord): string | null {
+export function paperRevalidationScope(record: PaperTrialRecord, parent?: PaperTrialRecord, targets?: PaperGridPoint[]): string | null {
   if (!parent?.run || !parent.studentHypothesis?.trim() || !parent.revisionReason?.trim()
     || record.parentAttemptId!==parent.id || !record.run || !record.frame || !record.planHash
     || record.run.id===parent.run.id || record.run.source!==parent.run.source
     || record.run.startedAt <= (parent.run.endedAt??Infinity)
     || (record.targetSet===parent.targetSet && record.frame.id===parent.frame?.id)
-    || validatePaperRunForDiagnosis(record.run,record.frame,record.planHash)
+    || validatePaperRunForDiagnosis(record.run,record.frame,record.planHash,targets)
     || record.diagnosis?.pattern!=="match") return null;
   return record.run.source==="hardware" ? "제어기 보고 위치 기반 재검증 · 잉크 별도 확인"
     : record.run.source==="mock" ? "모의 브리지 재검증 완료 · 실측 아님" : "DT 재검증 완료 · 실측 아님";

@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { paperTaskTargets,isPaperRectangle,paperFeedbackKey,paperRectangleVisual,paperTransformEstimate } from "./paperRectangleTask";
+import { publishSquareVisual,clearSquareVisual } from "./squareVisualizationStore";
+import { useCallback, useEffect, useMemo, useRef, useState, useId, useLayoutEffect } from "react";
 import type { LessonPose } from "./curriculum";
 import { PaperCoordinateStudyView } from "./PaperCoordinateStudyView";
 import type { PaperCoordinateStudyViewState, PaperLessonStage } from "./paperCoordinateViewModel";
@@ -8,7 +10,7 @@ import {
   makePaperPlanHash, studentTransformPoint, validatePaperFrame, validatePaperRunForDiagnosis, paperRevalidationScope,
 } from "./paperCoordinateStudy";
 import type {
-  PaperCoordinateLevel, PaperDiagnosis, PaperEvidenceSource, PaperFrame, PaperGridPoint, PaperPointName,
+  PaperCoordinateLevel, PaperRectangleLevel, PaperDiagnosis, PaperEvidenceSource, PaperFrame, PaperGridPoint, PaperPointName,
   PaperPoseObservation, PaperPredictionPoint, PaperReferenceSample, PaperRunSnapshot, PaperStudentTransform,
   PaperTargetSet, PaperTrialRecord,
 } from "./paperCoordinateStudy";
@@ -39,23 +41,27 @@ const freshRecords = () => readEvidence(STORAGE_KEY, isRecord).map(record => {
 
 export type PaperCoordinateStudyProps = {
   onBack: () => void;
+  initialLevel?: PaperRectangleLevel;
+  onRunningChange?: (running:boolean)=>void;
   hardwareConnected: boolean;
   currentPose: LessonPose;
   canReach: (pose: LessonPose) => boolean;
   runDigitalTwin: (commands: LessonPose[]) => Promise<void>;
 };
 
-export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, canReach, runDigitalTwin }: PaperCoordinateStudyProps) {
+export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, canReach, runDigitalTwin, initialLevel, onRunningChange }: PaperCoordinateStudyProps) {
+  const visualOwner=useId();
+  const initialRecord=useRef(freshRecords().filter(r=>!initialLevel||r.level===initialLevel).at(-1));
   const practice = usePractice();
   const practiceRef = useRef(practice);
   practiceRef.current = practice;
   const [records, setRecords] = useState<PaperTrialRecord[]>(freshRecords);
   const recordsRef = useRef(records);
   recordsRef.current = records;
-  const [activeId, setActiveId] = useState<string | null>(() => freshRecords().at(-1)?.id ?? null);
-  const [stage, setStage] = useState<PaperLessonStage>(() => (freshRecords().at(-1)?.stage as PaperLessonStage) ?? 1);
-  const [level, setLevel] = useState<PaperCoordinateLevel>(() => freshRecords().at(-1)?.level ?? "basic");
-  const [transformDraft, setTransformDraft] = useState<PaperStudentTransform>(() => freshRecords().at(-1)?.transform ?? { ...EMPTY_TRANSFORM });
+  const [activeId, setActiveId] = useState<string | null>(() => initialRecord.current?.id ?? null);
+  const [stage, setStage] = useState<PaperLessonStage>(() => (initialRecord.current?.stage as PaperLessonStage) ?? 1);
+  const [level, setLevel] = useState<PaperCoordinateLevel>(() => initialRecord.current?.level ?? initialLevel ?? "basic");
+  const [transformDraft, setTransformDraft] = useState<PaperStudentTransform>(() => initialRecord.current?.transform ?? { ...EMPTY_TRANSFORM });
   const [manualInputs, setManualInputs] = useState(emptyManualInputs);
   const [predictionDraft, setPredictionDraft] = useState<PaperPredictionPoint[]>([]);
   const [inkDraft, setInkDraft] = useState<Array<{ point: string; xCm: number | null; yCm: number | null }>>([]);
@@ -72,9 +78,9 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
   const activeRunRef = useRef(false);
   const [diagnosisOverride, setDiagnosisOverride] = useState<PaperDiagnosis | null>(null);
 
-  const active = records.find(record => record.id === activeId) ?? records.at(-1) ?? null;
+  const active = records.find(record => record.id === activeId) ?? null;
   const currentTargetSet: PaperTargetSet = active?.targetSet ?? "initial";
-  const targetPoints = PAPER_TARGETS[currentTargetSet];
+  const targetPoints = paperTaskTargets(level,currentTargetSet);
   const frame = active?.frame ?? null;
   const samples = active?.referenceSamples ?? frame?.samples ?? [];
   const currentMeasurement = practice.snap.measurement;
@@ -96,7 +102,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
       ?? active?.predictions?.find(item => item.name === point.name);
     return existing ?? { ...point, robotX: "", robotY: "", robotZ: "", robotR: "" };
   }), [targetPoints, predictionDraft, active?.predictions]);
-  const predictionsComplete = draftTargets.length === 3
+  const predictionsComplete = draftTargets.length === targetPoints.length
     && draftTargets.every(point => [point.robotX, point.robotY].every(value => value.trim() !== "" && Number.isFinite(Number(value))));
   const persistedPredictions = active?.predictions ?? [];
   const selectedPlanHash = active?.planHash ?? "";
@@ -108,7 +114,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     && [selectedTransform.originX, selectedTransform.originY, selectedTransform.millimetersPerCentimeter, selectedTransform.rotationDegrees]
       .every(value => value.trim() !== "" && Number.isFinite(Number(value)))
     && Number(selectedTransform.millimetersPerCentimeter) > 0 && !!selectedTransform.explanation.trim();
-  const planHash = frame && active?.transform && persistedPredictions.length === 3
+  const planHash = frame && active?.transform && persistedPredictions.length === targetPoints.length
     ? `${makePaperPlanHash(frame.id, currentTargetSet, active.transform, persistedPredictions)}|lift:${liftHeight ?? "unset"}` : "";
   const samePlan = !!planHash && planHash === selectedPlanHash
     && JSON.stringify(transformDraft) === JSON.stringify(active?.transform)
@@ -139,7 +145,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
   }) => {
     const previousAttempts = recordsRef.current.filter(record => record.task === "paper-coordinate").length;
     const created: PaperTrialRecord = {
-      id: crypto.randomUUID(), task: "paper-coordinate", version: 1, attempt: previousAttempts + 1,
+      id: crypto.randomUUID(), task: "paper-coordinate", version: 1, uiVersion:"diag-visual-v2", attempt: previousAttempts + 1,
       parentAttemptId: options.parentAttemptId, targetSet: options.targetSet, level: options.level,
       status: options.frame ? "model" : "references", stage: options.frame ? 2 : 1,
       dataSource: options.frame?.source ?? "teacher", createdAt: timeIso(), updatedAt: timeIso(),
@@ -152,8 +158,8 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     setStage((options.frame ? 2 : 1) as PaperLessonStage);
     setLevel(options.level);
     setTransformDraft(options.transform ?? { ...EMPTY_TRANSFORM });
-    setPredictionDraft(PAPER_TARGETS[options.targetSet].map(point => ({ ...point, robotX: "", robotY: "", robotZ: "", robotR: "" })));
-    setInkDraft(PAPER_TARGETS[options.targetSet].map(point => ({ point: point.name, xCm: null, yCm: null })));
+    setPredictionDraft(paperTaskTargets(options.level,options.targetSet).map(point => ({ ...point, robotX: "", robotY: "", robotZ: "", robotR: "" })));
+    setInkDraft(paperTaskTargets(options.level,options.targetSet).map(point => ({ point: point.name, xCm: null, yCm: null })));
     setDiagnosisOverride(null);
     setPageError("");
     setTransformFeedback("");
@@ -167,9 +173,9 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     setStage((active.stage as PaperLessonStage) ?? (active.frame ? 2 : 1));
     setLevel(active.level);
     setTransformDraft(active.transform ?? { ...EMPTY_TRANSFORM });
-    setPredictionDraft(active.predictions ?? PAPER_TARGETS[active.targetSet].map(point => ({ ...point, robotX: "", robotY: "", robotZ: "", robotR: "" })));
+    setPredictionDraft(active.predictions ?? paperTaskTargets(active.level,active.targetSet).map(point => ({ ...point, robotX: "", robotY: "", robotZ: "", robotR: "" })));
     setInkDraft(active.inkReadings?.map(reading => ({ point: reading.point, xCm: reading.xCm, yCm: reading.yCm }))
-      ?? PAPER_TARGETS[active.targetSet].map(point => ({ point: point.name, xCm: null, yCm: null })));
+      ?? paperTaskTargets(active.level,active.targetSet).map(point => ({ point: point.name, xCm: null, yCm: null })));
     setHypothesisDraft(active.studentHypothesis ?? "");
     setRevisionDraft(active.revisionReason ?? "");
     setLiftDraft(active.liftHeight ? String(active.liftHeight.z) : "");
@@ -177,7 +183,8 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
 
   useEffect(() => {
     activeRunRef.current = running;
-  }, [running]);
+    onRunningChange?.(running);
+  }, [running,onRunningChange]);
   useEffect(() => () => {
     const currentPractice = practiceRef.current;
     currentPractice.cancelConfirmation();
@@ -212,7 +219,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     setStage((validFrame ? 2 : 1) as PaperLessonStage);
     if (validFrame) {
       setTransformDraft({ ...EMPTY_TRANSFORM });
-      setPredictionDraft(PAPER_TARGETS[updated.targetSet].map(point => ({ ...point, robotX: "", robotY: "", robotZ: "", robotR: "" })));
+      setPredictionDraft(paperTaskTargets(updated.level,updated.targetSet).map(point => ({ ...point, robotX: "", robotY: "", robotZ: "", robotR: "" })));
       setTransformFeedback("기준점이 규칙 검사를 통과했습니다. 정답 변환식이나 로봇 목표 좌표는 채우지 않았습니다.");
     }
   };
@@ -232,7 +239,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
       setStage(nextStage);
       if (active) upsert({ ...active, stage: nextStage });
       if (nextStage === 6 && active?.run && active.frame && active.planHash) {
-        const invalid = validatePaperRunForDiagnosis(active.run, active.frame, active.planHash);
+        const invalid = validatePaperRunForDiagnosis(active.run, active.frame, active.planHash,targetPoints);
         if (invalid) {
           const invalidDiagnosis: PaperDiagnosis = {
             method: "rule-based", source: active.run.source, status: "invalidated",
@@ -243,12 +250,13 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
           };
           setDiagnosisOverride(invalidDiagnosis);
         } else {
-          const initial = diagnosePaperRun(active.run,active.frame,active.planHash,{transform:active.transform,toleranceMm:practice.setupDraft.positionTolerance});
-          const repeated = records.filter(r=>r.id!==active.id && r.diagnosis?.pattern===initial.pattern).length;
-          const enriched = diagnosePaperRun(active.run,active.frame,active.planHash,{transform:active.transform,toleranceMm:practice.setupDraft.positionTolerance,repeated});
+          const initial = diagnosePaperRun(active.run,active.frame,active.planHash,{transform:active.transform,toleranceMm:practice.setupDraft.positionTolerance,targets:targetPoints});
+          const repeated = records.filter(r=>r.id!==active.id && (!isPaperRectangle(level)||r.level===level) && r.diagnosis?.pattern===initial.pattern).length;
+          const enriched = diagnosePaperRun(active.run,active.frame,active.planHash,{transform:active.transform,toleranceMm:practice.setupDraft.positionTolerance,repeated,targets:targetPoints});
           let diagnosed: PaperTrialRecord = {...active,diagnosis:enriched,status:"diagnosed",stage:6,diagnosisToleranceMm:practice.setupDraft.positionTolerance};
           const parent = records.find(r=>r.id===active.parentAttemptId);
-          const scope = paperRevalidationScope(diagnosed,parent);
+          const scope = (!isPaperRectangle(level)||diagnosed.frame?.id!==parent?.frame?.id)
+            ?paperRevalidationScope(diagnosed,parent,targetPoints):null;
           if (scope) diagnosed={...diagnosed,status:"revalidated",revalidation:{parentAttemptId:parent!.id,runId:active.run.id,source:active.run.source,checkedAt:Date.now(),scope}};
           setDiagnosisOverride(enriched);
           upsert(diagnosed,scope??"진단 근거와 실제 제공 질문을 저장했습니다.");
@@ -256,7 +264,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
       }
     },
     onLevelChange: nextLevel => {
-      if (running) return;
+      if (running || initialLevel) return;
       if (active?.run) { setPageError("실행이 있는 시도는 그대로 보존합니다. 수준 변경은 다음 시도에서 선택하세요."); return; }
       setLevel(nextLevel);
       if (active) upsert({ ...active, level: nextLevel });
@@ -324,7 +332,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
         predictionModelComparison: errors.map((distance, index) => ({ point: testPoints[index].name, dx: predicted[index]?.x! - framePoints[index].x, dy: predicted[index]?.y! - framePoints[index].y, distance })),
       });
       setStage(2);
-      setPredictionDraft(PAPER_TARGETS[updated.targetSet].map(point => ({ ...point, robotX: "", robotY: "", robotZ: "", robotR: "" })));
+      setPredictionDraft(paperTaskTargets(updated.level,updated.targetSet).map(point => ({ ...point, robotX: "", robotY: "", robotZ: "", robotR: "" })));
       setTransformFeedback(message);
     },
     onPredictionChange: (point, field, value) => {
@@ -338,7 +346,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     onSavePrediction: () => {
       if (running) return;
       if (!active?.frame || !active.transform || !predictionsComplete) {
-        setPredictionFeedback("먼저 학생의 변환 관계를 저장하고 세 목표의 X·Y 좌표를 직접 입력하세요.");
+        setPredictionFeedback("먼저 학생의 변환 관계를 저장하고 모든 목표의 X·Y 좌표를 직접 입력하세요.");
         return;
       }
       if (active.run) {
@@ -451,7 +459,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
       setRevisionDraft(reason.trim());
       setTransformDraft(transformDraft);
       setStage(2);
-      setPageError(`새 시도 ${child.attempt}가 이전 시도 ${parent.attempt}와 연결됐습니다. 새 목표점 D/E/F를 예측하세요.`);
+      setPageError(`새 시도 ${child.attempt}가 이전 시도 ${parent.attempt}와 연결됐습니다. 새 목표점를 예측하세요.`);
     },
     onChooseNewTarget: () => {
       if (active?.targetSet === "revalidation") { setStage(3); return; }
@@ -464,11 +472,11 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
         frame: active.frame, referenceSamples: active.referenceSamples, transform: transformDraft, liftHeight: active.liftHeight,
       });
       setStage(3);
-      setPageError(`새 목표점 D/E/F를 위한 시도 ${child.attempt}가 연결됐습니다.`);
+      setPageError(`새 목표점를 위한 시도 ${child.attempt}가 연결됐습니다.`);
     },
-    onMovePaper: () => {
-      if (!active?.studentHypothesis?.trim() || !revisionDraft.trim()) { setPageError("원인 가설과 수정 이유를 적어 주세요."); return; }
-      const parent = upsert({ ...active, revisionReason:revisionDraft.trim(), status: active.run ? "revised" : active.status, revalidationTarget: "revalidation", stage: 7 });
+    onMovePaper: reason => {
+      if (!active?.studentHypothesis?.trim() || !reason.trim()) { setPageError("원인 가설과 수정 이유를 적어 주세요."); return; }
+      const parent = upsert({ ...active, revisionReason:reason.trim(), status: active.run ? "revised" : active.status, revalidationTarget: "revalidation", stage: 7 });
       createTrial({ targetSet: "revalidation", level: parent.level, parentAttemptId: parent.id });
       setManualInputs(emptyManualInputs());
       setPageError("종이 위치가 바뀐 새 시도입니다. 기존 기준점·승인·관측은 재사용하지 않습니다.");
@@ -480,7 +488,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     if (active?.run?.source !== "dt" && active?.run) {
       setPageError("연결된 실행 기록은 보존합니다. 수정 이유를 적고 새 시도에서 다시 실행하세요."); return;
     }
-    if (!active?.frame || !active.transform || !samePlan || persistedPredictions.length !== 3) {
+    if (!active?.frame || !active.transform || !samePlan || persistedPredictions.length !== targetPoints.length) {
       setPageError("현재 기준점·변환식·예측이 같은 저장본인지 확인하세요. 바뀐 계획에는 새 예측이 필요합니다.");
       return;
     }
@@ -632,16 +640,16 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
       } else {
         const endedAt = Date.now();
         const completed = { ...runningRecord, status: "completed" as const, endedAt, observations: observed };
-        const check = validatePaperRunForDiagnosis(completed, active.frame, planHash);
+        const check = validatePaperRunForDiagnosis(completed, active.frame, planHash,targetPoints);
         const complete = !check && observed.length === points.length;
         upsert({
           ...active, run: complete ? completed : { ...completed, status: "partial" as const, error: check ?? "새 TCP 보고 좌표 꼭짓점 누락" },
           status: complete ? "observed" : "incomplete", stage: 4,
           ...(liveSource === "hardware" && complete ? { dataSource: "hardware" as const } : { dataSource: "mock" as const }),
-        }, complete ? "같은 계획의 세 새 TCP 보고 좌표 응답을 기록했습니다." : "실행은 완료로 인정되지 않았습니다. 새 측정 근거가 부족합니다.");
+        }, complete ? "같은 계획의 모든 새 TCP 보고 좌표 응답을 기록했습니다." : "실행은 완료로 인정되지 않았습니다. 새 측정 근거가 부족합니다.");
         setPageError(complete
           ? liveSource === "mock" ? "모의 브리지 회신을 저장했습니다. 실측이 아니며 실제 로봇 증거로 사용할 수 없습니다." : "제어기 TCP 보고 좌표 응답을 저장했습니다. 잉크 접촉 측정은 아닙니다."
-          : `실행 결과가 불완전합니다. ${check ?? "세 점의 새 응답이 모두 필요합니다."}`);
+          : `실행 결과가 불완전합니다. ${check ?? "모든 목표점의 새 응답이 모두 필요합니다."}`);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "실행을 완료하지 못했습니다.";
@@ -658,7 +666,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     if (!practice.hardware) return "실장비 또는 모의 브리지 연결을 선택하고 기존 승인·준비 절차를 완료하세요.";
     if (practice.snap.connection !== "connected" || !practice.snap.source) return "로봇 옆 PC 브리지 연결이 필요합니다.";
     if (practice.snap.source === "hardware" && frame?.source !== "hardware") return "실제 TCP 보고 좌표 기준점 O/X/Y가 필요합니다.";
-    if (!frame || !active?.transform || !samePlan || persistedPredictions.length !== 3) return "같은 기준점·예측으로 DT를 먼저 완료하세요.";
+    if (!frame || !active?.transform || !samePlan || persistedPredictions.length !== targetPoints.length) return "같은 기준점·예측으로 DT를 먼저 완료하세요.";
     if (!dtReadyForPhysical) return "현재 저장된 계획의 DT 완주가 필요합니다.";
     if (!liftRecord || liftRecord.source !== practice.snap.source || liftHeight === null || surfaceZ === null || liftHeight <= surfaceZ) return "측정된 종이 높이와 같은 출처의 펜 들기 높이가 필요합니다.";
     if (!practice.snap.setup || practice.session.readiness(true)) return practice.session.readiness(true) ?? "연결·준비·서보 확인을 완료하세요.";
@@ -666,7 +674,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
       || liftRecord.user !== practice.snap.setup.user || liftRecord.tool !== practice.snap.setup.tool) return "기준점·높이·실행의 User/Tool 설정이 다릅니다.";
     if (!currentPoseRead || !originPose
       || poseDistance(currentPoseRead, { ...originPose, z: surfaceZ! }) > practice.snap.setup.positionTolerance) return "사람이 제조사 프로그램에서 O에 펜 끝을 맞춘 뒤, 현재 위치를 다시 확인하세요.";
-    if (persistedPredictions.some(prediction => ![prediction.robotX, prediction.robotY].every(value => Number.isFinite(Number(value))))) return "세 점의 저장된 예측 좌표가 필요합니다.";
+    if (persistedPredictions.some(prediction => ![prediction.robotX, prediction.robotY].every(value => Number.isFinite(Number(value))))) return "모든 목표점의 저장된 예측 좌표가 필요합니다.";
     const commands = persistedPredictions.map(prediction => ({ x: Number(prediction.robotX), y: Number(prediction.robotY), z: surfaceZ!, r: originPose!.r }));
     const unsafe = commands.find(command => targetProblem(command, practice.snap.setup!) || !canReach(command));
     if (unsafe) return targetProblem(unsafe, practice.snap.setup!) ?? "기구학 검사에서 도달 불가입니다.";
@@ -686,7 +694,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     targetPoints, predictions: draftTargets, predictionsReady: predictionsComplete,
     predictionFeedback,
     run,
-    runAvailable: (!run || run.source === "dt") && !!frame && !!active?.transform && samePlan && persistedPredictions.length === 3
+    runAvailable: (!run || run.source === "dt") && !!frame && !!active?.transform && samePlan && persistedPredictions.length === targetPoints.length
       && liftHeight !== null && persistedPredictions.every(item => [item.robotX, item.robotY].every(v => Number.isFinite(Number(v))))
       && persistedPredictions.every(item => canReach({
         x: Number(item.robotX), y: Number(item.robotY), z: surfaceZ ?? 0,
@@ -721,6 +729,17 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     execution:JSON.stringify(run?[{source:run.source,status:run.status,observations:run.observations,taskEvidence:state.diagnosis?.taskEvidence,inkReadings:active?.inkReadings??[]}]:[]),
     support:"challenge",attempts:Math.min(records.length,1000),
   };
+  const shownDiagnosis = samePlan&&frame&&run?.status==="completed"
+    ?state.diagnosis??diagnosePaperRun(run,frame,planHash,{transform:active?.transform,targets:targetPoints,toleranceMm:practice.setupDraft.positionTolerance}):null;
+  const priorSameType=records.filter(r=>r.id!==active?.id&&r.level===level&&r.diagnosis?.pattern===shownDiagnosis?.pattern).length;
+  const comparison=isPaperRectangle(level)&&shownDiagnosis&&frame&&run&&!running&&(stage===5||stage===6)
+    ?paperRectangleVisual(frame,targetPoints,run,shownDiagnosis,stage,paperFeedbackKey(context),priorSameType):null;
+  state.comparison=comparison;
+  state.transformEstimate=comparison&&frame&&run?paperTransformEstimate(frame,targetPoints,run):null;
+  state.priorSameType=priorSameType;
+  const comparisonKey=JSON.stringify(comparison);
+  useLayoutEffect(()=>{publishSquareVisual(visualOwner,comparison);},[visualOwner,comparisonKey]);
+  useLayoutEffect(()=>()=>clearSquareVisual(visualOwner),[visualOwner]);
   const ai=useLearningAi(context);
   return <><LearningAiFeedback ai={ai}/><PaperCoordinateStudyView state={state} actions={actions}/></>;
 }

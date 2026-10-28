@@ -614,3 +614,11 @@
   .paper-coordinate-view *::before,
   .paper-coordinate-view *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+
+/* Only the paper lesson owns this scroll surface. */
+.curriculum-body:has(.paper-coordinate-host) { overflow-y:auto; }
+.paper-coordinate-host { flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding:10px; }
+.paper-coordinate-host > .lesson-course-path { flex-shrink:0; }
+.paper-transform-estimate { padding:12px; border:1px solid #c7d2fe; border-radius:8px; background:#eef2ff; overflow-wrap:anywhere; }
+.paper-transform-estimate small { color:#475569; }
+.paper-diagnosis-visual { margin:14px 0; }

@@ -61,24 +61,30 @@ const shots=process.env.SQUARE_DIAGNOSIS_SHOTS;
   assert.equal(await panel.getAttribute("data-level"),"task");
   const text=await panel.innerText();
   assert.match(text,/X 방향 200 mm, Y 방향 100 mm/);
-  assert.match(text,/P1 → P2[\s\S]*\+X 100 mm[\s\S]*\+X 200 mm[\s\S]*다름/);
+  assert.match(text,/P1 → P2[\s\S]*\+X 100 mm[\s\S]*\+X 200 mm/);
+  await panel.getByText("자세한 근거 보기",{exact:true}).click();
+  assert.match(await panel.getByRole("table").innerText(),/P1 → P2[\s\S]*\+X 100 mm[\s\S]*\+X 200 mm[\s\S]*차이/);
   assert.doesNotMatch(text,/\(300, 100\)|\(300, −100\)/,"correct vertices are not revealed");
   assert.equal(await id("button-shape-hardware-run").count(),0,"a wrong plan never qualifies for hardware");
   passed.push("wrong (axis-swapped) plan runs in DT only and is diagnosed from the executed edges, without revealing answers");
   // The tutor opens with the same leveled question (rule-based, no AI call needed).
-  await page.getByText(/실행 결과 비교 · 1단계/).first().waitFor();
-  assert.match(await page.getByText(/실행 결과 비교 · 1단계/).first().innerText(),/X 방향 200 mm, Y 방향 100 mm/);
+  if(await page.getByTestId("button-ai-tutor-open").count())await page.getByTestId("button-ai-tutor-open").click();
+  const tag=page.locator(".ait-evidence-tag").last();
+  assert.equal(await tag.isEnabled(),true);await tag.click();
+  assert.equal(await page.getByTestId("square-visual-summary").getAttribute("data-emphasized"),"true");
+  await page.getByTestId("button-ai-tutor-close").click();
   passed.push("tutor shows the diagnosis question (level 1: observe what differs)");
   await panel.scrollIntoViewIfNeeded();await shot("03-diagnosis-and-tutor.png");
 
   // 2) A cause explanation is required before revising; then only coordinates are re-planned.
-  const revise=active().getByRole("button",{name:"이유 저장 · 예측 고쳐 다시 실행",exact:true});
+  const revise=active().getByRole("button",{name:"이유 확인 · 수정·재실행으로",exact:true});
   assert.equal(await revise.isDisabled(),true);
-  for(const [label,value] of [["다시 판단 P2의 X","300"],["다시 판단 P3의 X","300"],["다시 판단 P3의 Y","-100"],["다시 판단 P4의 Y","-100"]])
-    if(await active().getByLabel(label,{exact:true}).count())await active().getByLabel(label,{exact:true}).fill(value);
   await active().getByLabel("차이가 생긴 이유",{exact:true}).fill("가로는 X 방향 100 mm인데 세로 길이 200을 X에 더해서 눕혀진 사각형이 됐습니다.");
   await shot("04-cause-explained.png");
-  await revise.click();await stage(3);
+  await revise.click();await stage(7);
+  for(const [label,value] of [["다시 판단 P2의 X","300"],["다시 판단 P3의 X","300"],["다시 판단 P3의 Y","-100"],["다시 판단 P4의 Y","-100"]])
+    if(await active().getByLabel(label,{exact:true}).count())await active().getByLabel(label,{exact:true}).fill(value);
+  await active().getByRole("button",{name:"수정한 예측으로 재검증 준비",exact:true}).click();await stage(3);
   let saved=await records();
   assert.equal(saved[0].mismatchDiagnoses[0].type,"axis-swap");
   assert.match(saved[0].mismatchDiagnoses[0].causeExplanation,/세로 길이 200을 X에/);
@@ -93,7 +99,7 @@ const shots=process.env.SQUARE_DIAGNOSIS_SHOTS;
   await panel.waitFor();
   assert.equal(await panel.getAttribute("data-type"),"match");
   assert.equal(await panel.getAttribute("data-level"),"self-regulation");
-  assert.match(await panel.innerText(),/축·길이 뒤바뀜/);
+  assert.match(await panel.innerText(),/예측과 실행 일치/);
   await panel.scrollIntoViewIfNeeded();await shot("05-corrected-match.png");
   await active().getByLabel("차이가 생긴 이유",{exact:true}).fill("각 변에서 변하는 축과 길이를 먼저 표시하고 계산한다.");
   await active().getByLabel("비교 후 내 판단",{exact:true}).selectOption("maintain");
@@ -106,6 +112,7 @@ const shots=process.env.SQUARE_DIAGNOSIS_SHOTS;
 
   // 4) Repeated same-type errors in one session escalate: challenge mode keeps the observation
   //    question one step longer, then names the relation, then gives a worked example + teacher flag.
+  await page.evaluate(()=>localStorage.clear()); // New isolated learner for the repetition scenario.
   await page.goto(new URL("__square-flow",base).href);await page.locator(".shape-step-progress").waitFor();
   await page.locator(".shape-lesson-settings summary").click();
   await page.getByLabel("도형 학습 지원",{exact:true}).selectOption("challenge");
@@ -116,10 +123,11 @@ const shots=process.env.SQUARE_DIAGNOSIS_SHOTS;
     await active().getByRole("button",{name:"관찰 완료 · 비교하기",exact:true}).click();await stage(6);
     await panel.waitFor();
     assert.equal(await panel.getAttribute("data-level"),level,`attempt ${n}`);
-    if(level==="process")assert.match(await panel.innerText(),/관계 힌트/);
+    if(level==="process"){await panel.getByText("자세한 근거 보기",{exact:true}).click();assert.match(await panel.innerText(),/관계 힌트/);}
     if(level==="worked"){assert.match(await panel.innerText(),/선생님 화면에 도움 요청/);await panel.scrollIntoViewIfNeeded();await shot("06-level3-teacher.png");break;}
     await active().getByLabel("차이가 생긴 이유",{exact:true}).fill(`시도 ${n}: 아직 원인을 잘 모르겠습니다.`);
-    await active().getByRole("button",{name:"이유 저장 · 예측 고쳐 다시 실행",exact:true}).click();await stage(3);
+    await active().getByRole("button",{name:"이유 확인 · 수정·재실행으로",exact:true}).click();await stage(7);
+    await active().getByRole("button",{name:"수정한 예측으로 재검증 준비",exact:true}).click();await stage(3);
   }
   const flagged=(await records()).flatMap(r=>r.mismatchDiagnoses??[]);
   assert.deepEqual(flagged.map(d=>d.level),["task","task","process","worked"]);

@@ -125,7 +125,7 @@ export function setEvidenceItem(key: string, text: string) {
 }
 export function recordLearningAction(task: string, kind: string, payload: Json, source = "dt") {
   const id = crypto.randomUUID();
-  captureEvidence("physical-ai-action-events-v1", { id, task, status: kind, dataSource: source, ...payload });
+  captureEvidence("physical-ai-action-events-v1", { id, task, status: kind, dataSource: source, ...payload, uiVersion:"diag-visual-v2" });
 }
 export function flushLearningQueue():Promise<boolean>{
   if(inFlight)return inFlight;

@@ -1,7 +1,12 @@
+import type { SquareVisual } from "./squareComparisonVisual";
+import type { paperTransformEstimate } from "./paperRectangleTask";
 import type { PaperTrialRecord, PaperReferenceSource, PaperDiagnosis, PaperEvidenceSource, PaperFrame, PaperGridPoint, PaperPointName, PaperPredictionPoint, PaperReferenceSample, PaperRunSnapshot, PaperStudentTransform, PaperTargetSet, PaperCoordinateLevel } from "./paperCoordinateStudy";
 
 export type PaperLessonStage = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export type PaperCoordinateStudyViewState = {
+  comparison?:SquareVisual|null;
+  transformEstimate?:ReturnType<typeof paperTransformEstimate>;
+  priorSameType?:number;
   records: PaperTrialRecord[];
   revalidationScope: string | null;
   stage: PaperLessonStage;
@@ -68,7 +73,7 @@ export type PaperCoordinateStudyViewActions = {
   onSaveHypothesis: (value: string) => void;
   onRevise: (reason: string) => void;
   onChooseNewTarget: () => void;
-  onMovePaper: () => void;
+  onMovePaper: (reason:string) => void;
 };
 
 export type PaperCoordinateStudyViewProps = {

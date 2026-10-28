@@ -1,3 +1,7 @@
+import { PAPER_RECTANGLE_TITLES } from "./paperRectangleTask";
+import type { PaperRectangleLevel } from "./paperCoordinateStudy";
+import { SquareObservedDiagram } from "./SquareComparisonView";
+import { useSquareVisual } from "./useSquareVisual";
 import { MeasurementFeedbackReview, registerMeasurementReview } from "./MeasurementFeedbackReview";
 import { TaskStartPoint, moveVirtualTaskStart } from "./TaskStartPoint";
 import { MathInquiryPanel, useMathInquiry } from "./MathInquiry";
@@ -76,6 +80,8 @@ function ShapeDiagram({ seq, currentStep, status, shapeType, measuredPath = [] }
   seq: SeqStep[]; currentStep: number; status: MissionStatus; shapeType: ShapeType;
   measuredPath?: Coords[];
 }) {
+  const comparison=useSquareVisual();
+  if(shapeType==="사각형"&&comparison.visual&&comparison.visual.stage>=5&&comparison.visual.stage<=6)return <SquareObservedDiagram/>;
   const W = 340, H = 160, padding = 22;
   const waypoints = seq.map((step, index) => ({ step, index }))
     .filter(item => item.step.coords && Number.isFinite(item.step.coords.x) && Number.isFinite(item.step.coords.y));
@@ -543,7 +549,7 @@ function ShapeLearningPanel({
       <LessonCoursePath label="도형 수업 경로" current={lessonIndex} disabled={locked || editorOpen}
         items={Array.from({length: SHAPE_LESSON_COUNT}, (_, index) => ({
           label: `${["기초", "응용", "심화"][Math.floor(index / 2)]} ${index % 2 + 1}`,
-          detail: getShapeLesson(shapeType, index).title,
+          detail: shapeType==="사각형"&&index>=4 ? PAPER_RECTANGLE_TITLES[index===4?"advanced-paper-quarter":"advanced-paper-rotated"] : getShapeLesson(shapeType, index).title,
         }))} onSelect={onLessonChange}/>
       <details className="shape-lesson-settings">
         <summary>
@@ -674,7 +680,9 @@ export function RobotArm({
   const [shapeInitialPose, setShapeInitialPose] = useState<ShapePoseSnapshot | null>(null);
   const [shapeClosure, setShapeClosure] = useState<ShapeClosure | null>(null);
   const [shapeStorageFailed, setShapeStorageFailed] = useState(false);
-  const [paperCoordinateOpen, setPaperCoordinateOpen] = useState(false);
+  const [paperLevel,setPaperLevel] = useState<PaperRectangleLevel|null>(null);
+  const paperCoordinateOpen=paperLevel!==null;
+  const [paperBusy,setPaperBusy]=useState(false);
   const paperDtCancelRef = useRef(false);
   const [dtCompletionKey, setDtCompletionKey] = useState<string | null>(null);
   const shapeEvidenceRef = useRef<Record<string, unknown>[] | null>(null);
@@ -1484,9 +1492,15 @@ export function RobotArm({
     setConditionRound(n=>n+1);
   }
 
+  function selectShapeCourse(index:number) {
+    if(status==="running")return;
+    if(shapeType==="사각형"&&index>=4){resetMission();setPaperLevel(index===4?"advanced-paper-quarter":"advanced-paper-rotated");}
+    else selectShapeLesson(index);
+  }
+
   function changeShapeCondition() {
     if (!inquiry.reviewed || !completedShapeRun || !sequenceMatchesTarget) return;
-    selectShapeLesson((shapeLessonIndex+1)%SHAPE_LESSON_COUNT);
+    selectShapeCourse((shapeLessonIndex+1)%SHAPE_LESSON_COUNT);
   }
 
   /* ── render ── */
@@ -1539,13 +1553,19 @@ export function RobotArm({
   if (paperCoordinateOpen) {
     return (
       <div className="paper-coordinate-host">
-        <PaperCoordinateStudy
-          onBack={() => { paperDtCancelRef.current = true; setPaperCoordinateOpen(false); }}
+        <LessonCoursePath label="도형 수업 경로" current={paperLevel==="advanced-paper-quarter"?4:5} disabled={status==="running"||paperBusy}
+          items={Array.from({length:SHAPE_LESSON_COUNT},(_,index)=>({label:`${["기초","응용","심화"][Math.floor(index/2)]} ${index%2+1}`,
+            detail:index>=4?PAPER_RECTANGLE_TITLES[index===4?"advanced-paper-quarter":"advanced-paper-rotated"]:getShapeLesson("사각형",index).title}))}
+          onSelect={index=>{if(status==="running"||paperBusy)return;if(index>=4)setPaperLevel(index===4?"advanced-paper-quarter":"advanced-paper-rotated");else{setPaperLevel(null);selectShapeLesson(index);}}}/>
+
+        <PaperCoordinateStudy key={paperLevel!} initialLevel={paperLevel!} onRunningChange={setPaperBusy}
+          onBack={() => { paperDtCancelRef.current = true; setPaperLevel(null); }}
           hardwareConnected={hardwareConnected}
           currentPose={coords}
           canReach={pose => !!onComputeIK(pose.x, pose.y, pose.z, pose.r, onGetJoints().j3)}
           runDigitalTwin={runPaperDigitalTwin}
         />
+        <details className="pcv-details"><summary>이전 심화 과제·학습 기록 보기</summary>{[4,5].map(index=><button key={index} disabled={paperBusy||status==="running"} onClick={()=>{setPaperLevel(null);selectShapeLesson(index);}}>이전 심화 {index-3} · {getShapeLesson("사각형",index).title}</button>)}</details>
       </div>
     );
   }
@@ -1603,12 +1623,6 @@ export function RobotArm({
 
         {activeTab === "rect" ? (
           <>
-            {shapeType === "사각형" && <button type="button" className="pcv-extension-entry"
-              onClick={() => setPaperCoordinateOpen(true)} disabled={status === "running"}>
-              <strong>확장 탐구</strong>
-              <span>사각형에서 배운 좌표를 종이 기준점에 적용하기</span>
-              <small>같은 7단계 학습 흐름 · 새 과제에서 다시 돌아올 수 있습니다</small>
-            </button>}
             <TaskStartPoint taskKey={`shape:${currentShapeLesson.id}:${shapeType}:${resetKey}`} start={currentShapeLesson.pathPlan.start ?? null}
               coords={coords} disabled={status==="running"} legacyConnected={hardwareConnected}
               onVirtualMove={p=>moveVirtualTaskStart({model:{ik:onComputeIK},joints:_joints,onMoveTo,onMoveEnd},p)}/>
@@ -1659,7 +1673,7 @@ export function RobotArm({
               activeStep={shapeLearningStep}
               completedShapeRun={completedShapeRun}
               onStageChange={setShapeLessonStage} onQuestionFocus={setShapeQuestionKey}
-              onLessonChange={selectShapeLesson}
+              onLessonChange={selectShapeCourse}
               seq={editableSeq}
               executionSeq={shapeType==="사각형"?executionSeq:undefined}
               continuousExecution={shapeType==="사각형"?<div className="lesson-notice">

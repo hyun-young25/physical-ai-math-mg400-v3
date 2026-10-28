@@ -1,3 +1,6 @@
+import { SquareComparisonOverlay } from "./SquareComparisonOverlay";
+import { SquareComparisonControls,SquareFallbackComparison } from "./SquareComparisonView";
+import { useSquareVisual } from "./useSquareVisual";
 import { MotionComparisonOverlay, MotionComparisonLegend } from "./MotionComparisonOverlay";
 import type { MotionComparisonVisual } from "./motionComparison";
 import { useState, useEffect, useRef, Suspense, useMemo, useCallback, Component } from "react";
@@ -3120,6 +3123,9 @@ function ModelLoadingFallback() {
 }
 
 function ThreeDScene({ suctionZoomOpen, onSuctionZoomClose, joints, liveJointsRef, liveCoordsRef, coords, viewPreset = "free", homeViewKey, onViewFree, annotations, highlightJoint, highlightCoord, highlightLinks, focusTcp, showFloorRect, traceKey, learningVisual, axisLessonVisual, coordinateVisual, motionVisual, kinematicsVisual, coordinateStudyViewKey, shapeStudyViewKey, kinematicsStudyViewKey, compactCoordinateHelp, endEffector = "suction", pickBlockState, onContextLost, onContextRestored }:{ suctionZoomOpen?:boolean; onSuctionZoomClose?:()=>void; joints:Joints; liveJointsRef?: React.MutableRefObject<Joints | null>; liveCoordsRef?: React.MutableRefObject<{x:number;y:number;z:number;r:number}|null>; coords?:{x:number;y:number;z?:number}; viewPreset?:ViewPreset; homeViewKey?:number; onViewFree?:()=>void; annotations?:{l1:boolean;l2:boolean;endEff:boolean;projection?:boolean}; highlightJoint?:"j1"|"j2"|"j3"|"j4"|null; highlightCoord?:"x"|"y"|"z"|"r"|null; highlightLinks?:{l1:boolean;l2:boolean}|null; focusTcp?:{startZ?:number;targetZ?:number}|null; showFloorRect?:boolean; traceKey?:number; learningVisual?:LearningVisualState|null; axisLessonVisual?:AxisLessonVisual|null; coordinateVisual?:CoordinateVisual|null; motionVisual?:MotionComparisonVisual|null; kinematicsVisual?:KinematicsVisual|null; coordinateStudyViewKey?:number; shapeStudyViewKey?:number; kinematicsStudyViewKey?:number; compactCoordinateHelp?:boolean; endEffector?:"pen"|"suction"; pickBlockState?:{ gripActive:boolean; missionDone:boolean }; onContextLost:()=>void; onContextRestored:()=>void }) {
+  const comparison=useSquareVisual();
+  const comparisonShown=!!comparison.visual&&comparison.enabled;
+
   const suctionSourceRef = useRef<THREE.Group|null>(null);
   const suctionSlotRef = useRef<HTMLDivElement|null>(null);
   const suctionAngleRef = useRef<HTMLOutputElement|null>(null);
@@ -3254,6 +3260,7 @@ function ThreeDScene({ suctionZoomOpen, onSuctionZoomClose, joints, liveJointsRe
         <Suspense fallback={<ModelLoadingFallback/>}>
           <URDFRobot suctionSourceRef={suctionSourceRef} joints={joints} liveJointsRef={liveJointsRef} onLinkHover={handleHover} linkRefs={linkMeshRefs} jointAnchorRefs={jointAnchorRefs} showL1={annotations?.l1} showL2={annotations?.l2} showBadges={annotations?.endEff} endEffTrackerRef={endEffMeshRef} highlightJoint={highlightJoint} highlightLinks={highlightLinks} l31LeftTarget={debugLeftHole} l31RightTarget={debugRightHole} l21UpperHole={debugUpperHole} l32YOffset={debugL32Y} l31PosOffset={l31PosOffset} l31RotOffset={l31RotOffset} l31UpperHoleTilt={l31UpperHoleTilt} onL31Delta={handleL31Delta} onL31DragStart={handleL31DragStart} onL31DragEnd={handleL31DragEnd} onL31RotChange={setL31RotOffset} onL31LeftTargetChange={(v) => setDebugLeftHole(v)} applyL31RotRef={applyL31RotRef} l31Locked={l31Locked} endEffector={endEffector}/>
         </Suspense>
+        <SquareComparisonOverlay/>
         {pickBlockState && (
           <PickBlocks gripActive={pickBlockState.gripActive} missionDone={pickBlockState.missionDone}/>
         )}
@@ -3270,8 +3277,8 @@ function ThreeDScene({ suctionZoomOpen, onSuctionZoomClose, joints, liveJointsRe
           coords={{x:coords.x,y:coords.y,z:coords.z ?? 0}} liveCoordsRef={liveCoordsRef}/>}
         {motionVisual && <MotionComparisonOverlay visual={motionVisual}/>}
         {kinematicsVisual && <KinematicsJointMarker visual={kinematicsVisual} anchors={jointAnchorRefs} joints={joints} liveJointsRef={liveJointsRef}/>}
-        {showFloorRect && learningVisual && <LearningFloorOverlay visual={learningVisual}/>} 
-        {showFloorRect && liveCoordsRef && <FloorRectTrace liveCoordsRef={liveCoordsRef} tcpRef={endEffMeshRef} traceKey={traceKey ?? 0} active={learningVisual?.traceActive ?? false} visible={learningVisual?.traceVisible ?? false} endpoint={learningVisual?.traceEndpoint}/>}
+        {showFloorRect && learningVisual && !comparisonShown && <LearningFloorOverlay visual={learningVisual}/>}
+        {showFloorRect && liveCoordsRef && <FloorRectTrace liveCoordsRef={liveCoordsRef} tcpRef={endEffMeshRef} traceKey={traceKey ?? 0} active={learningVisual?.traceActive ?? false} visible={(learningVisual?.traceVisible ?? false) && !comparisonShown} endpoint={learningVisual?.traceEndpoint}/>}
         {(annotations?.endEff || annotations?.projection) && !highlightLinks && endEffWorldPos && <EndEffectorProjection worldPos={endEffWorldPos} coords={coords}/>}
         {focusTcp && endEffWorldPos && <TcpFocusHighlight worldPos={endEffWorldPos} startZ={focusTcp.startZ} targetZ={focusTcp.targetZ} currentZ={coords?.z}/>}
         {!axisLessonVisual && !coordinateVisual && highlightCoord && endEffWorldPos && <CoordGuideArrows worldPos={endEffWorldPos} axis={highlightCoord}/>}
@@ -3468,12 +3475,13 @@ export function RobotScene({ suctionZoomOpen, onSuctionZoomClose, joints, liveJo
     return () => window.clearTimeout(timer);
   }, [contextLost, restartRenderer]);
 
-  if (!webglAvailable) return <IsoFallback joints={sj}/>;
+  if (!webglAvailable) return <div style={{width:"100%",height:"100%",position:"relative"}}><IsoFallback joints={sj}/><SquareFallbackComparison/><SquareComparisonControls/></div>;
   return (
     <div style={{ width:"100%", height:"100%", position:"relative" }}>
       <CanvasErrorBoundary key={rendererKey} joints={sj}>
         <ThreeDScene suctionZoomOpen={suctionZoomOpen} onSuctionZoomClose={onSuctionZoomClose} joints={sj} liveJointsRef={liveJointsRef} liveCoordsRef={liveCoordsRef} coords={coords} viewPreset={viewPreset} homeViewKey={homeViewKey} onViewFree={onViewFree} annotations={annotations} highlightJoint={highlightJoint} highlightCoord={highlightCoord} highlightLinks={highlightLinks} focusTcp={focusTcp} showFloorRect={showFloorRect} traceKey={traceKey} learningVisual={learningVisual} axisLessonVisual={axisLessonVisual} coordinateVisual={coordinateVisual} motionVisual={motionVisual} kinematicsVisual={kinematicsVisual} coordinateStudyViewKey={coordinateStudyViewKey} shapeStudyViewKey={shapeStudyViewKey} kinematicsStudyViewKey={kinematicsStudyViewKey} compactCoordinateHelp={compactCoordinateHelp} endEffector={endEffector} pickBlockState={pickBlockState} onContextLost={handleContextLost} onContextRestored={handleContextRestored}/>
       </CanvasErrorBoundary>
+      <SquareComparisonControls/>
       {contextLost && (
         <div role="status" style={{
           position:"absolute", inset:0, zIndex:20,

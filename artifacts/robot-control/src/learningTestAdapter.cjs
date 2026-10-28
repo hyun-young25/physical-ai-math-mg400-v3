@@ -12,10 +12,15 @@ function squareDependency(name){
   return exports;
 }
 module.exports = {
+  "./paperRectangleTask": squareDependency("paperRectangleTask"),
+  "./useSquareVisual": {useSquareVisual:()=>({visual:null})},
+  "./squareComparisonVisual": squareDependency("squareComparisonVisual"),
+  "./squareVisualizationStore": { publishSquareVisual:()=>{},clearSquareVisual:()=>{} },
+  "./SquareComparisonView": { SquareReplayControls:"SquareReplayControls",SquareObservedDiagram:"SquareObservedDiagram" },
   "./squareLearningFlow": squareDependency("squareLearningFlow"),
   "./squareMismatchDiagnosis": squareDependency("squareMismatchDiagnosis"),
   "./SquareDiagnosisPanel": { SquareDiagnosisPanel: "SquareDiagnosisPanel" },
-  "./LearningAiFeedback": { LearningAiFeedback: () => null, useLearningAi: () => ({request:()=>Promise.resolve()}) },
+  "./LearningAiFeedback": { LearningAiFeedback: () => null, useLearningAi: context => ({context,request:()=>Promise.resolve()}) },
   "./learningAiContext": { makeFeedbackContext: () => ({}), numericFeedbackContext:()=>({}) },
   "./learningClient": { getLearningUser: () => null },
   "./learningSync": {

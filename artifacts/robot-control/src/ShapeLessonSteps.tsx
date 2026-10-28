@@ -1,3 +1,6 @@
+import { publishSquareVisual,clearSquareVisual } from "./squareVisualizationStore";
+import { squareFeedbackKey } from "./squareComparisonVisual";
+import { SquareReplayControls,SquareObservedDiagram } from "./SquareComparisonView";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { parseLessonNumber } from "./curriculum";
 import { compareInquiry, currentInquiryComparison, latestInquiryRuns, type useMathInquiry } from "./MathInquiry";
@@ -8,7 +11,7 @@ import { LearningAiFeedback } from "./LearningAiFeedback";
 import { LEARNING_STAGES } from "./learningFramework";
 import "./shapeLessonSteps.css";
 import { LearningJudgmentFields, sameJudgment } from "./LearningJudgment";
-import { diagnoseSquare, priorSquareDiagnoses, squareFeedbackPlan, squareMismatchName, squarePlannedVertices, type SquareObservedVertex, type SquareExecutionSource, type XY } from "./squareMismatchDiagnosis";
+import { diagnoseSquare, priorSquareDiagnoses, squareFeedbackPlan, squareMismatchName, squarePlannedVertices, squareCondition, type SquareObservedVertex, type SquareExecutionSource, type XY } from "./squareMismatchDiagnosis";
 import { SquareDiagnosisPanel } from "./SquareDiagnosisPanel";
 
 type LessonStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
@@ -110,7 +113,15 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
         relationHint: diagnosisPlan.relationHint, example: diagnosisPlan.example, teacherFlag: diagnosisPlan.teacherFlag,
         evidence: diagnosis.evidence } }, record.prediction);
   }, [diagnosis?.type, diagnosisPlan?.level, record?.id, record?.runs.length]);
-  const diagnosisPanel = diagnosis && diagnosisPlan ? <SquareDiagnosisPanel diagnosis={diagnosis} plan={diagnosisPlan}
+  const presentation = diagnosis && record && !locked && (activeStage===5||activeStage===6||diagnosis.type==="unreachable"&&activeStage===4)
+    ? {key:record.id+":"+record.runs.length,feedbackKey:squareFeedbackKey(q.ai.context,diagnosis.evidence),stage:activeStage,diagnosis,plan:diagnosisPlan,
+      target:(squareCondition(lesson)?.target??[]).map((p,i)=>({...p,z:lesson.pathPlan.start.z,label:i===4?"P1":"P"+(i+1)})),
+      observed:diagnosis.evidence.source==="prediction"?[]:diagnosis.evidence.executed?.vertices??[],
+      priorSameType:priorTypes.filter(type=>type===diagnosis.type).length,supportMode} : null;
+  const presentationKey=JSON.stringify(presentation);
+  useLayoutEffect(()=>{publishSquareVisual(fieldId,presentation);},[fieldId,presentationKey]);
+  useLayoutEffect(()=>()=>clearSquareVisual(fieldId),[fieldId]);
+  const diagnosisPanel = diagnosis && (diagnosisPlan || diagnosis.type==="match") ? <SquareDiagnosisPanel diagnosis={diagnosis} plan={diagnosisPlan} priorSameType={priorTypes.filter(type=>type===diagnosis.type).length} supportMode={supportMode}
     plannedVertices={squarePlannedVertices(lesson, record?.prediction ?? {}) ?? undefined}
     cause={cause} onCauseChange={setCause} causeRequired={diagnosisMismatch && diagnosis.type !== "unreachable"} disabled={locked}/> : null;
 
@@ -331,6 +342,7 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
       </>}
       {activeStage === 6 && record && <>
         {diagnosisPanel}
+        {diagnosis&&<><SquareObservedDiagram/><SquareReplayControls/></>}
         {samePlanMeasurement&&!measurementDetail?.complete&&<p className="shape-step-feedback" role="status">
           {measurementDetail?.source==="mock"?"모의 GetPose 회신":"GetPose 회신"} 좌표 5개가 모두 확인되지 않아 실측 기반 진단은 완료되지 않았습니다. 입력 좌표나 이전 측정값으로 대체하지 않습니다.
         </p>}
@@ -412,5 +424,6 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
     </details>
     {q.storageFailed && <p className="shape-step-feedback" role="alert">기기 저장 공간에 기록을 보관하지 못했습니다. 새로고침 전에 학습 기록을 내려받아 주세요.</p>}
     {lesson.id.startsWith("square-") && <LearningAiFeedback ai={q.ai}/>}
+    <small className="square-ui-version">화면 버전: 진단 시각화 v2</small>
   </div>;
 }

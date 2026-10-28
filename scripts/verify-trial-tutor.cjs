@@ -90,13 +90,13 @@ let browser;
   assert.ok(records[0].runs.some(r=>r.status==="completed"));
   assert.equal(await page.evaluate(()=>localStorage.getItem("mg400:visit:trial-isolated-visit:physical-ai-inquiry-feedback-v1")),null);
   passed.push("정답 후 가상 이동·최초 예측과 결과 비교·풀이 보존·체험 대화는 학습 기록과 분리");
-  await page.screenshot({path:"/tmp/mg400-trial-tutor-desktop.png"});
+  await page.screenshot({path:require("node:path").join(require("node:os").tmpdir(),"mg400-trial-tutor-desktop.png")});
   await page.setViewportSize({width:390,height:844});
   await page.waitForTimeout(100);
   for(const id of ["input-ai-tutor","button-ai-tutor-send","button-ai-tutor-close"]) {
     const box=await page.getByTestId(id).boundingBox();assert.ok(box&&box.y>=0&&box.y+box.height<=844&&box.x>=0&&box.x+box.width<=390);
   }
-  await page.screenshot({path:"/tmp/mg400-trial-tutor-mobile.png"});
+  await page.screenshot({path:require("node:path").join(require("node:os").tmpdir(),"mg400-trial-tutor-mobile.png")});
   passed.push("390×844 모바일 입력·전송·닫기 표시");
   await page.setViewportSize({width:1280,height:900});
   await page.getByText("☰",{exact:true}).click();

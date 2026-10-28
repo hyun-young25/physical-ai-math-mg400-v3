@@ -1,3 +1,4 @@
+import { SquareDiagnosisVisualSummary,SquareFeedbackProgress } from "./SquareComparisonView";
 import type { SquareDiagnosis, SquareFeedbackPlan, SquareObservedVertex } from "./squareMismatchDiagnosis";
 import "./squareDiagnosis.css";
 
@@ -48,10 +49,10 @@ function questionReason(diagnosis:SquareDiagnosis) {
  * Summarizes observed evidence without treating a geometric mismatch as proof of a
  * learner's cognitive cause. The learner's explanation remains a saved hypothesis.
  */
-export function SquareDiagnosisPanel({ diagnosis, plan, plannedVertices, observedVertices:observedVerticesOverride, sourceLabel:sourceLabelOverride, cause, onCauseChange, causeRequired, disabled }: {
-  diagnosis:SquareDiagnosis; plan:SquareFeedbackPlan; plannedVertices?:SquareObservedVertex[]; cause?:string; onCauseChange?:(text:string)=>void;
+export function SquareDiagnosisPanel({ diagnosis, plan, plannedVertices, observedVertices:observedVerticesOverride, sourceLabel:sourceLabelOverride, cause, onCauseChange, causeRequired, disabled, priorSameType=0, supportMode="guided" }: {
+  diagnosis:SquareDiagnosis; plan:SquareFeedbackPlan|null; plannedVertices?:SquareObservedVertex[]; cause?:string; onCauseChange?:(text:string)=>void;
   observedVertices?:SquareObservedVertex[]; sourceLabel?:string;
-  causeRequired?:boolean; disabled?:boolean;
+  causeRequired?:boolean; disabled?:boolean; priorSameType?:number; supportMode?:"guided"|"challenge";
 }) {
   const edges = diagnosis.evidence.edges ?? [];
   const measured = diagnosis.evidence.measured;
@@ -67,9 +68,13 @@ export function SquareDiagnosisPanel({ diagnosis, plan, plannedVertices, observe
     :diagnosis.evidence.rejected
       ?`실행 좌표 회신 없음 · 도달 불가 점 (${fmt(diagnosis.evidence.rejected.x)}, ${fmt(diagnosis.evidence.rejected.y)})`
       :"이번 실행의 좌표 관측 없음";
-  return <section className="square-diagnosis" data-type={diagnosis.type} data-level={plan.level} aria-label="실행 결과와 과제 조건 비교" data-testid="square-diagnosis">
+  return <section className="square-diagnosis" data-type={diagnosis.type} data-level={plan?.level??"self-regulation"} aria-label="실행 결과와 과제 조건 비교" data-testid="square-diagnosis">
     <p className="square-diagnosis-source">{sourceLabel}</p>
-    <p className="square-diagnosis-level">질문 도움 · {plan.levelLabel}</p>
+    <SquareDiagnosisVisualSummary diagnosis={diagnosis} observed={observedVertices??[]}/>
+    {plan&&<p className="square-diagnosis-question"><strong>확인 질문</strong> {plan.question}</p>}
+    <SquareFeedbackProgress plan={plan} match={diagnosis.type==="match"} priorSameType={priorSameType} supportMode={supportMode}/>
+    <details className="square-diagnosis-details">
+      <summary>자세한 근거 보기</summary>
     <dl className="square-diagnosis-summary">
       <div><dt>과제 조건</dt><dd>{conditionText}</dd></div>
       <div><dt>학생 계획</dt><dd>{pointList(plannedVertices)}</dd></div>
@@ -78,10 +83,8 @@ export function SquareDiagnosisPanel({ diagnosis, plan, plannedVertices, observe
     </dl>
     <h4>{diagnosis.label}</h4>
     <p className="square-diagnosis-honesty">규칙 기반 비교가 좌표와 변의 차이를 표시합니다. 이 차이만으로 학생의 생각 원인을 확정하지 않습니다. 튜터 질문은 확인된 근거를 살펴보도록 돕습니다.</p>
-    <p className="square-diagnosis-question"><strong>확인 질문</strong> {plan.question}</p>
     <p className="square-diagnosis-why"><strong>왜 이 질문인가요?</strong> {questionReason(diagnosis)}</p>
-    <details className="square-diagnosis-details">
-      <summary>관측 좌표와 변별 근거 보기</summary>
+
       {diagnosis.type !== "match" && edges.length > 0 && diagnosis.type !== "model-real" && <div className="square-diagnosis-table" tabIndex={0} aria-label="변별 과제 조건과 이번 실행 관측">
       <table>
         <thead><tr><th scope="col">변</th><th scope="col">과제 조건</th><th scope="col">관측 이동</th><th scope="col">비교</th></tr></thead>
@@ -99,12 +102,11 @@ export function SquareDiagnosisPanel({ diagnosis, plan, plannedVertices, observe
     </div>}
       {observedVertices?.length===5&&<p className="square-diagnosis-evidence">관측 꼭짓점: {pointList(observedVertices)}</p>}
       {measured && <p className="square-diagnosis-measured">비교 꼭짓점 {measured.count}개 · 평균 차이 {fmt(measured.meanError)} mm · 최대 차이 {fmt(measured.maxError)} mm · 평균 편차 (ΔX {fmt(measured.meanOffset.x)}, ΔY {fmt(measured.meanOffset.y)} mm)</p>}
-      {plan.relationHint && <p className="square-diagnosis-hint"><strong>관계 힌트</strong> {plan.relationHint}</p>}
-      {plan.example && <p className="square-diagnosis-example">{plan.example}</p>}
+      {plan?.relationHint && <p className="square-diagnosis-hint"><strong>관계 힌트</strong> {plan.relationHint}</p>}
+      {plan?.example && <p className="square-diagnosis-example">{plan.example}</p>}
     </details>
-    {plan.teacherFlag && <p className="square-diagnosis-teacher" role="status">같은 차이가 반복되어 선생님 화면에 도움 요청을 표시했어요.</p>}
     {onCauseChange && <label className="square-diagnosis-cause">
-      {causeRequired ? "이 차이를 설명할 수 있다고 생각하는 이유 (예측을 고치기 전에 적어 주세요)" : plan.level === "self-regulation" ? "다음 과제에서 미리 점검할 방법 (선택)" : "이 차이에 대한 내 설명 (선택)"}
+      {causeRequired ? "이 차이를 설명할 수 있다고 생각하는 이유 (예측을 고치기 전에 적어 주세요)" : plan?.level === "self-regulation" ? "다음 과제에서 미리 점검할 방법 (선택)" : "이 차이에 대한 내 설명 (선택)"}
       <textarea aria-label="차이가 생긴 이유" rows={2} maxLength={1000} disabled={disabled} value={cause ?? ""}
         onChange={event => onCauseChange(event.target.value)}
         placeholder={mismatch ? "확인된 차이를 설명할 수 있는 생각을 적으세요. 확실하지 않으면 가설이라고 표시해도 됩니다." : "다음 과제에서 먼저 확인할 관계를 적어 보세요."}/>
