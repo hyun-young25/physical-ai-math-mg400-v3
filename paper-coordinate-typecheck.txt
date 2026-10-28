@@ -1,2 +1,20 @@
-{"status":"ok"} local API 200
-{"status":"ok"} preview API 200
+ M artifacts/robot-control/vite.config.ts
+ M paper-coordinate-typecheck.txt
+diff --git a/artifacts/robot-control/vite.config.ts b/artifacts/robot-control/vite.config.ts
+index 22325e0..f515672 100644
+--- a/artifacts/robot-control/vite.config.ts
++++ b/artifacts/robot-control/vite.config.ts
+@@ -49,7 +49,6 @@ export default defineConfig({
+     emptyOutDir: true,
+   },
+   server: {
+-    proxy: { "/__paper_mock": { target: "ws://127.0.0.1:8877", ws: true, rewrite: () => "/" } },
+     port,
+     strictPort: true,
+     host: "0.0.0.0",
+paper-coordinate-final-check.txt
+paper-coordinate-review.patch
+paper-coordinate-typecheck.txt
+paper-layout.patch
+feedback-v3
+python3 tools/mg400-bridge/server.py --mock --port 8877 --allow-origin https://85dd1949-4bfa-45ac-bfbe-b9fef008fb74-00-707hed4jr9sa.pike.replit.dev
