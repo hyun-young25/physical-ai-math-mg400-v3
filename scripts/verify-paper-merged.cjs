@@ -10,7 +10,7 @@ const fixture=require("./verify-square-flow.cjs").fixture.replace("style:{height
  await context.route("**/__paper-rectangle",r=>r.fulfill({contentType:"text/html",body:fixture}));
  const page=await context.newPage();page.on("pageerror",e=>errors.push(e.message));page.setDefaultTimeout(15000);
  await page.goto("http://localhost/__paper-rectangle");
- const shots=path.resolve(__dirname,"../../diagnosis-qa");fs.mkdirSync(shots,{recursive:true});
+ const shots=process.env.DIAG_SHOTS||path.resolve(__dirname,"../../diagnosis-qa");fs.mkdirSync(shots,{recursive:true});
  const click=async name=>page.getByRole("button",{name,exact:true}).click();
 
  await page.getByRole("button",{name:/종이 기준점 \(DT\)/}).click();

@@ -8,6 +8,9 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      DIAG_SHOTS: ${{ github.workspace }}/diagnosis-qa
+      SQUARE_DIAGNOSIS_SHOTS: ${{ github.workspace }}/diagnosis-qa
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,6 +52,6 @@ jobs:
         if: always()
         with:
           name: diagnosis-screenshots
-          path: ../diagnosis-qa/*.png
+          path: diagnosis-qa/*.png
           if-no-files-found: ignore
           retention-days: 7
