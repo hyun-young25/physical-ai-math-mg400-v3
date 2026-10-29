@@ -1,17 +1,13 @@
+import { isMergedPaper,isPaperDT } from "./paperMergedLesson";
+import { LEARNING_STAGES } from "./learningFramework";
+import { PaperDiagnosisVisual } from "./PaperDiagnosisVisual";
+import { PAPER_RECTANGLE_TITLES,isPaperRectangle } from "./paperRectangleTask";
 import { useEffect, useId, useState } from "react";
 import type { PaperPointName } from "./paperCoordinateStudy";
 import type { PaperCoordinateStudyViewProps, PaperLessonStage } from "./paperCoordinateViewModel";
 import "./paperCoordinateStudyView.css";
 
-const STAGES: Array<{ id: PaperLessonStage; title: string }> = [
-  { id: 1, title: "과제 이해" },
-  { id: 2, title: "수학적 구조화" },
-  { id: 3, title: "표현·예측" },
-  { id: 4, title: "실행·측정" },
-  { id: 5, title: "지각·표상" },
-  { id: 6, title: "비교·해석" },
-  { id: 7, title: "수정·재실행" },
-];
+const STAGES = LEARNING_STAGES.map((s,i)=>({id:(i+1) as PaperLessonStage,title:s.label}));
 
 const SOURCE_LABELS: Record<string, string> = {
   hardware: "실장비 · 제어기 TCP 보고 좌표",
@@ -21,6 +17,7 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 const LEVEL_LABELS = {
+  ...PAPER_RECTANGLE_TITLES,
   basic: "기본",
   "quarter-turn": "직각 회전",
   rotated: "회전",
@@ -52,6 +49,7 @@ function StatusPill({ children, tone = "neutral" }: { children: string; tone?: "
 
 export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStudyViewProps) {
   const id = useId();
+  const rectangle=isPaperRectangle(state.level),merged=isMergedPaper(state.level),dtOnly=isPaperDT(state.level),grid=merged?20:10;
   const [hypothesisDraft, setHypothesisDraft] = useState(state.studentHypothesis);
   const [revisionDraft, setRevisionDraft] = useState(state.revisionReason);
 
@@ -63,20 +61,22 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
   const predictionFor = (name: string) => state.predictions.find(prediction => prediction.name === name);
 
   const renderPaperGrid = () => (
-    <div className="pcv-grid-wrap" aria-label="10×10 cm 종이 좌표 격자">
+    <div className="pcv-grid-wrap" aria-label={grid+"×"+grid+" cm 종이 좌표 격자"}>
       <div className="pcv-grid">
         {state.targetPoints.map(point => (
           <span
             key={point.name}
             className="pcv-grid-point"
-            style={{ left: `${point.xCm * 10}%`, top: `${100 - point.yCm * 10}%` }}
+            style={{ left: `${point.xCm * 100/grid}%`, top: `${100 - point.yCm * 100/grid}%` }}
             aria-label={`종이 점 ${point.name}, x ${point.xCm} cm, y ${point.yCm} cm`}
           ><span>{point.name}</span></span>
         ))}
-        {state.stage>=5 && <svg viewBox="-1 -1 12 12" style={{position:"absolute",inset:"-10%",width:"120%",height:"120%",overflow:"visible"}} aria-label="목표와 보고 위치의 차이 화살표">
+        {state.stage>=5 && <svg viewBox={[-grid/10,-grid/10,grid*1.2,grid*1.2].join(" ")} style={{position:"absolute",inset:"-10%",width:"120%",height:"120%",overflow:"visible"}} aria-label="목표와 보고 위치의 차이 화살표">
           <defs><marker id={`${id}-arrow`} markerWidth="4" markerHeight="4" refX="3" refY="2" orient="auto"><path d="M0,0 L4,2 L0,4" fill="#c24135"/></marker></defs>
+          {rectangle&&<polyline points={[...state.targetPoints,state.targetPoints[0]].map(p=>p.xCm+","+(grid-p.yCm)).join(" ")} fill="none" stroke="#22c55e" strokeWidth=".06" strokeDasharray=".2 .12"/>}
+          {rectangle&&state.convertedReadings.length===4&&<polyline points={[...state.convertedReadings,state.convertedReadings[0]].map(p=>p.xCm+","+(grid-(p.yCm??0))).join(" ")} fill="none" stroke="#ff9f1c" strokeWidth=".06"/>}
           {state.convertedReadings.map(o=>{const t=state.targetPoints.find(t=>t.name===o.point);if(!t||o.xCm===null||o.yCm===null)return null;
-            return <g key={o.point}><line x1={t.xCm} y1={10-t.yCm} x2={o.xCm} y2={10-o.yCm} stroke="#c24135" strokeWidth=".04" markerEnd={`url(#${id}-arrow)`}/><circle cx={o.xCm} cy={10-o.yCm} r=".12" fill="#c24135"/><text x={o.xCm+.18} y={10-o.yCm-.1} fontSize=".35" fill="#9b2720">{o.point} 보고</text></g>;})}
+            return <g key={o.point}><line x1={t.xCm} y1={grid-t.yCm} x2={o.xCm} y2={grid-o.yCm} stroke="#c24135" strokeWidth=".04" markerEnd={`url(#${id}-arrow)`}/><circle cx={o.xCm} cy={grid-o.yCm} r=".12" fill="#c24135"/><text x={o.xCm+.18} y={grid-o.yCm-.1} fontSize=".35" fill="#9b2720">{o.point} 보고</text></g>;})}
         </svg>}
         {state.samples.map(sample => {
           const positions: Record<PaperPointName, { x: number; y: number }> = {
@@ -84,12 +84,12 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
           };
           const position = positions[sample.point];
           return <span key={`reference-${sample.point}`} className={`pcv-grid-reference pcv-grid-reference--${sample.point}`}
-            style={{ left: `${position.x * 10}%`, top: `${100 - position.y * 10}%` }} aria-hidden="true">{sample.point}</span>;
+            style={{ left: `${position.x * 100/grid}%`, top: `${100 - position.y * 100/grid}%` }} aria-hidden="true">{sample.point}</span>;
         })}
         <span className="pcv-grid-axis pcv-grid-axis--x">x</span>
         <span className="pcv-grid-axis pcv-grid-axis--y">y</span>
       </div>
-      <div className="pcv-grid-scale"><span>0</span><span>5</span><span>10 cm</span></div>
+      <div className="pcv-grid-scale"><span>0</span><span>{grid/2}</span><span>{grid} cm</span></div>
     </div>
   );
 
@@ -135,20 +135,22 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
     switch (state.stage) {
       case 1:
         return <>
-          <p className="pcv-lead">기존 사각형 수업의 좌표 생각을 종이 위의 10×10 cm 격자로 옮겨 봅니다.</p>
+          <p className="pcv-lead">{merged?"종이 원점에서 시작하는 가로 110 mm, 세로 150 mm (11×15 cm) 직사각형을 예측합니다.":rectangle?"종이 (2, 2) cm에서 시작하는 가로 6 cm, 세로 4 cm 직사각형의 네 꼭짓점을 예측합니다.":"기존 사각형 수업의 좌표 생각을 종이 위의 10×10 cm 격자로 옮겨 봅니다."}</p>
+          {rectangle&&<p className="pcv-callout">{merged?(dtOnly?"주어진 O를 기준으로 로봇 좌표 = O + 종이 안의 이동량 관계를 확인하세요. DT 전용 과제입니다.":"O/X/Y를 기록하고 종이 축을 로봇 축과 나란히 맞추세요. 실장비는 각 꼭짓점에서 펜을 들고 내리는 점 확인 방식입니다. 연속 잉크 선 그리기는 검증하지 않습니다."):state.level==="advanced-paper-quarter"?"종이 x축이 로봇 X축에서 90° 돌아가도록 놓고 O/X/Y를 기록하세요.":"종이를 비스듬히 놓고 O/X/Y를 기록하세요. 종이 방향은 기준점으로 확인합니다."} 기준점을 기록하기 전에는 목표 로봇 좌표가 정해지지 않습니다.</p>}
           <div className="pcv-task-strip">
-            <div><span className="pcv-eyebrow">종이 격자</span><strong>10 × 10 cm</strong><small>가는 눈금 1 mm · 굵은 눈금 1 cm</small></div>
+            <div><span className="pcv-eyebrow">종이 격자</span><strong>{grid} × {grid} cm</strong><small>가는 눈금 1 mm · 굵은 눈금 1 cm</small></div>
             <div><span className="pcv-eyebrow">현재 목표 묶음</span><strong>{state.targetSet === "initial" ? "첫 목표" : "다시 확인할 목표"}</strong>
               <small>{state.level ? LEVEL_LABELS[state.level] : "수준 미선택"}</small></div>
           </div>
           <label className="pcv-field">
             <span>좌표 상황</span>
-            <select aria-label="좌표 상황 선택" value={state.level} onChange={event => actions.onLevelChange(event.target.value as typeof state.level)}>
+            <select aria-label="좌표 상황 선택" disabled={rectangle} value={state.level} onChange={event => actions.onLevelChange(event.target.value as typeof state.level)}>
+              <option value="advanced-paper-dt">심화 1 · 종이 기준점 (DT)</option><option value="advanced-paper-hardware">심화 2 · 종이 위 경로 확인 (MG400)</option><option value="advanced-paper-quarter">심화 1 · 직각 회전</option><option value="advanced-paper-rotated">심화 2 · 비스듬히 놓인 종이</option>
               <option value="basic">기본</option><option value="quarter-turn">직각 회전</option><option value="rotated">회전</option>
             </select>
           </label>
-          <a className="pcv-button" href="/paper-coordinate-grid-a4.pdf" target="_blank" rel="noreferrer">인쇄용 모눈종이 PDF · A4 100%</a>
-          <section className="pcv-alignment">
+          <a className="pcv-button" href={merged?"/paper-coordinate-grid-20cm.svg":"/paper-coordinate-grid-a4.pdf"} target="_blank" rel="noreferrer">인쇄용 모눈종이 · 100% 실제 크기</a>
+          {dtOnly?<section className="pcv-callout"><h3>주어진 기준점 · DT 과제 조건</h3>{state.samples.map(p=><p key={p.point}>{p.point}: ({p.pose.x}, {p.pose.y}) mm · Z {p.pose.z} mm</p>)}<p>종이 x축은 로봇 X+, y축은 로봇 Y+ · 1 cm = 10 mm입니다.</p></section>:<section className="pcv-alignment">
             <h3>종이 정렬과 기준점 기록</h3>
             <p>교사는 제조사 소프트웨어에서 종이를 정렬한 뒤 현재 위치를 읽어 O, X, Y 기준점으로 기록합니다. 핸드 가이딩은 현재 브라우저 브리지에서 지원되지 않습니다.</p>
             <div className="pcv-reference-grid">{POINTS.map(renderReferenceEntry)}</div>
@@ -157,7 +159,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
               <p>실장비 기준은 컨트롤러가 보고한 TCP 보고 좌표이며 잉크 위치 측정이 아닙니다. 모의·DT 자료는 실제 측정값이 아니고, 교사가 입력한 좌표도 측정값이 아닙니다.</p>
             </div>
             {state.referenceError && <p className="pcv-alert" role="alert">{state.referenceError}</p>}
-          </section>
+          </section>}
           <div className="pcv-target-layout">
             {renderPaperGrid()}
             <div className="pcv-target-list">
@@ -181,15 +183,15 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
               onChange={event => actions.onTransformChange("originX", event.target.value)} /></label>
             <label className="pcv-field"><span>원점 Y (mm)</span><input type="number" step="any" inputMode="decimal" value={state.transform.originY}
               onChange={event => actions.onTransformChange("originY", event.target.value)} /></label>
-            <label className="pcv-field"><span>종이 x축이 향하는 방향</span><select value={state.transform.axisDirection}
+            {(!merged||state.rotationAllowed)&&<label className="pcv-field"><span>종이 x축이 향하는 방향</span><select value={state.transform.axisDirection}
               onChange={event => actions.onTransformChange("axisDirection", event.target.value)}>
               <option value="">방향 선택</option><option value="x+">로봇 X+</option><option value="y+">로봇 Y+</option>
               <option value="x-">로봇 X−</option><option value="y-">로봇 Y−</option>
-            </select></label>
+            </select></label>}
             <label className="pcv-field"><span>1 cm당 길이 (mm)</span><input type="number" step="any" inputMode="decimal" value={state.transform.millimetersPerCentimeter}
               onChange={event => actions.onTransformChange("millimetersPerCentimeter", event.target.value)} /></label>
-            <label className="pcv-field"><span>추가 회전 (°)</span><input type="number" step="any" inputMode="decimal" value={state.transform.rotationDegrees}
-              onChange={event => actions.onTransformChange("rotationDegrees", event.target.value)} /></label>
+            {(!merged||state.rotationAllowed)&&<label className="pcv-field"><span>추가 회전 (°)</span><input type="number" step="any" inputMode="decimal" value={state.transform.rotationDegrees}
+              onChange={event => actions.onTransformChange("rotationDegrees", event.target.value)} /></label>}
           </div>
           <label className="pcv-field"><span>이 관계를 선택한 이유</span><textarea rows={3} value={state.transform.explanation}
             onChange={event => actions.onTransformChange("explanation", event.target.value)} /></label>
@@ -199,6 +201,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
       case 3:
         return <>
           <p className="pcv-lead">2단계에서 세운 관계를 참고해, 각 종이 목표점의 로봇 좌표를 직접 예측하고 실행 전에 저장합니다.</p>
+          {merged&&<fieldset className="pcv-concept-block"><legend>직선 이동과 닫힘 관계</legend><label>직선 경로 명령 <select aria-label="직선 경로 명령" disabled={!!state.run} value={state.pathConcept?.motion??""} onChange={e=>actions.onPathConceptChange("motion",e.target.value)}><option value="">선택</option><option>MoveJ</option><option>MoveL</option></select></label>{(["closeX","closeY"] as const).map((f,i)=><label key={f}>닫힌 경로의 Δ{i?"Y":"X"} 합 (mm)<input type="number" aria-label={"닫힌 경로 Δ"+(i?"Y":"X")+" 합"} disabled={!!state.run} value={state.pathConcept?.[f]??""} onChange={e=>actions.onPathConceptChange(f,e.target.value)}/></label>)}</fieldset>}
           <div className="pcv-predictions">
             <h3>내 로봇 좌표 예측</h3>
             <p className="pcv-note">아래는 직접 적는 예측 입력입니다. 목표 로봇 좌표는 자동으로 공개되지 않습니다.</p>
@@ -228,8 +231,8 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
           <div className="pcv-button-row pcv-button-row--wrap">
             <button type="button" className="pcv-button pcv-button--primary" onClick={actions.onRunDT}
               disabled={state.running || !state.runAvailable}>{state.running ? "처리 중" : "DT에서 확인"}</button>
-            <button type="button" className="pcv-button pcv-button--outline" onClick={actions.onRunPhysical}
-              disabled={state.running || !state.physicalAvailable}>{state.currentSource === "mock" ? "모의 브리지에서 시험" : "실장비에서 확인"}</button>
+            {!dtOnly&&<button type="button" className="pcv-button pcv-button--outline" onClick={actions.onRunPhysical}
+              disabled={state.running || !state.physicalAvailable}>{state.currentSource === "mock" ? "모의 브리지에서 시험" : "실장비에서 확인"}</button>}
           </div>
           <section className="pcv-callout pcv-height-check">
             <strong>종이 높이와 펜 이동 높이</strong>
@@ -261,6 +264,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
       case 5:
         return <>
           <p className="pcv-lead">컨트롤러가 보고한 TCP 좌표와 종이 위 잉크 자국은 별개의 관찰입니다. 제어기 좌표를 변환한 결과가 잉크를 측정하거나 보증하지 않습니다.</p>
+          <PaperDiagnosisVisual state={state}/>
           <section className="pcv-controller-observations" aria-label="실행에서 받은 컨트롤러 위치 관측">
             <h3>실행에서 받은 컨트롤러 위치</h3>
             {state.run?.observations.length ? <>
@@ -303,15 +307,17 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
           <p className="pcv-lead">예측, 제어기 보고 위치, 종이에서 읽은 잉크 좌표를 구분해서 살펴봅니다.</p>
           {renderPaperGrid()}
           {state.revalidationScope && <p className="pcv-success" role="status">{state.revalidationScope}</p>}
+          <PaperDiagnosisVisual state={state} cause={hypothesisDraft} onCauseChange={setHypothesisDraft} onSaveCause={()=>actions.onSaveHypothesis(hypothesisDraft)}/>
           {state.diagnosis ? <section className="pcv-interpretation" aria-label="비교 해석">
             <div className="pcv-interpretation-head"><StatusPill tone={state.diagnosis.status === "complete" ? "good" : "warn"}>{state.diagnosis.status === "complete" ? "비교 자료 준비됨" : state.diagnosis.status === "invalidated" ? "자료 다시 확인 필요" : "비교 미완료"}</StatusPill>
               <span>{sourceLabel(state.diagnosis.source)}</span></div>
-            <h3>{state.diagnosis.candidate}</h3>
+            {!rectangle&&<h3>{state.diagnosis.candidate}</h3>}
             <p className="pcv-note">자료 기반 규칙 진단 · 지원 {state.diagnosis.supportLevel??1}단계 · 아래 질문은 기본 질문입니다. AI 튜터에는 같은 관측 근거를 전달합니다.</p>
-            <p className="pcv-question">{state.diagnosis.question}</p>
+            {!rectangle&&<p className="pcv-question">{state.diagnosis.question}</p>}
             <p className="pcv-note">{state.diagnosis.why}</p>
             <details className="pcv-details">
-              <summary>비교 근거 자세히 보기</summary>
+              <summary>자세한 근거 보기</summary>
+              <p>{state.diagnosis.candidate}</p>
               <EvidenceRows title="제어기 보고와 명령 차이" rows={state.diagnosis.evidence} />
               <EvidenceRows title="종이 목표 대비 보고 위치 차이" rows={state.diagnosis.taskEvidence??[]} />
               <EvidenceRows title="내 변환식 대비 명령 좌표 차이" rows={state.diagnosis.predictionEvidence} />
@@ -319,9 +325,9 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
               <p>판정 방식: {state.diagnosis.method} · 질문 출처: {state.diagnosis.tutorSource}</p>
             </details>
           </section> : <div className="pcv-empty-card"><strong>비교 자료를 기다리는 중</strong><p>실행 결과와 관찰 기록이 전달되면 이곳에 표시됩니다.</p></div>}
-          <label className="pcv-field"><span>내가 생각하는 이유 (원인을 단정하지 않고 후보로)</span><textarea rows={4} value={hypothesisDraft}
+          {!state.comparison&&<><label className="pcv-field"><span>내가 생각하는 이유 (원인을 단정하지 않고 후보로)</span><textarea rows={4} value={hypothesisDraft}
             onChange={event => setHypothesisDraft(event.target.value)} /></label>
-          <button type="button" className="pcv-button pcv-button--primary" onClick={() => actions.onSaveHypothesis(hypothesisDraft)} disabled={state.running}>생각 저장</button>
+          <button type="button" className="pcv-button pcv-button--primary" onClick={() => actions.onSaveHypothesis(hypothesisDraft)} disabled={state.running}>생각 저장</button></>}
         </>;
       case 7:
         return <>
@@ -331,12 +337,12 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
             onChange={event => setRevisionDraft(event.target.value)} /></label>
           <div className="pcv-button-row pcv-button-row--wrap">
             <button type="button" className="pcv-button pcv-button--primary" onClick={() => actions.onRevise(revisionDraft)} disabled={state.running}>이유와 수정 기록</button>
-            <button type="button" className="pcv-button pcv-button--outline" onClick={actions.onChooseNewTarget} disabled={state.running}>다른 목표로 이어가기</button>
+            {!rectangle&&<button type="button" className="pcv-button pcv-button--outline" onClick={actions.onChooseNewTarget} disabled={state.running}>다른 목표로 이어가기</button>}
           </div>
           <div className="pcv-callout pcv-callout--compact">
             <strong>종이 위치가 바뀌었나요?</strong>
             <p>종이를 옮긴 뒤에는 기존 기준점을 그대로 쓰지 않습니다. 종이를 정렬하고 기준점을 다시 기록해 주세요.</p>
-            <button type="button" className="pcv-button pcv-button--quiet" onClick={actions.onMovePaper} disabled={state.running}>종이를 옮겼어요 · 기준점 다시 기록</button>
+            <button type="button" className="pcv-button pcv-button--quiet" onClick={()=>actions.onMovePaper(revisionDraft)} disabled={state.running}>종이를 옮겼어요 · 기준점 다시 기록</button>
           </div>
         </>;
     }
@@ -344,14 +350,14 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
 
   return (
     <section className="paper-coordinate-view" aria-label="종이 좌표 변환 학습">
-      <header className="pcv-header">
-        <button type="button" className="pcv-back" onClick={actions.onBack}>← <span>사각형 수업으로</span></button>
-        <div className="pcv-header-title"><span className="pcv-eyebrow">MG400 · 좌표 확장 활동</span><h1>종이 좌표를 로봇 좌표로</h1>
+      {!merged&&<header className="pcv-header">
+        <button type="button" className="pcv-back" onClick={actions.onBack} disabled={state.running}>← <span>사각형 수업으로</span></button>
+        <div className="pcv-header-title"><span className="pcv-eyebrow">MG400 · {rectangle?"사각형 심화 과제":"좌표 확장 활동"}</span><h1>{rectangle?LEVEL_LABELS[state.level]:"종이 좌표를 로봇 좌표로"}</h1>
           <p>사각형에서 배운 좌표 관계를 실제 크기의 격자에 이어 봅니다.</p></div>
         <div className="pcv-header-meta"><span>현재 활동</span><strong>{activeTitle}</strong></div>
-      </header>
+      </header>}
 
-      <details className="pcv-stage-details"><summary>현재 {state.stage}/7 · {activeTitle} · 전체 학습 7단계 보기</summary>
+      <div className="pcv-stage-details">
       <nav className="pcv-stage-nav" aria-label="7단계 학습 흐름">
         {STAGES.map((stage, index) => (
           <button type="button" key={stage.id} className={`pcv-stage${state.stage === stage.id ? " is-current" : ""}`}
@@ -359,7 +365,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
             <span className="pcv-stage-index">{String(index + 1).padStart(2, "0")}</span><span>{stage.title}</span>
           </button>
         ))}
-      </nav></details>
+      </nav></div>
 
       {state.error && state.stage!==4 && <p className="pcv-alert" role="alert">{state.error}</p>}
       <main className="pcv-main">
@@ -384,7 +390,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
 
       <div className="pcv-button-row"><button className="pcv-button" disabled={state.running||state.stage===1} onClick={()=>actions.onStageChange((state.stage-1) as PaperLessonStage)}>이전</button><button className="pcv-button pcv-button--primary" disabled={state.running||state.stage===7} onClick={()=>actions.onStageChange((state.stage+1) as PaperLessonStage)}>다음 단계</button></div>
       <details className="pcv-details pcv-records"><summary>시도 연결 기록 · {state.records.length}회</summary>
-        {state.records.map(r=><article key={r.id}><h3>시도 {r.attempt} · {sourceLabel(r.run?.source??r.dataSource)}</h3><p>{r.targetSet==="initial"?"첫 목표 A/B/C":"새 목표 D/E/F"} · 이전 시도 {state.records.find(p=>p.id===r.parentAttemptId)?.attempt??"없음"}</p><p>관측 {r.run?.observations.length??0}개 · {r.diagnosis?.candidate??"비교 전"}</p><p>가설: {r.studentHypothesis??"작성 전"} · 수정: {r.revisionReason??"작성 전"}</p><p>{r.revalidation?.scope??"재검증 완료 전"}</p></article>)}
+        {state.records.map(r=><article key={r.id}><h3>시도 {r.attempt} · {sourceLabel(r.run?.source??r.dataSource)}</h3><p>{isPaperRectangle(r.level)?"사각형 P1/P2/P3/P4":r.targetSet==="initial"?"첫 목표 A/B/C":"새 목표 D/E/F"} · 이전 시도 {state.records.find(p=>p.id===r.parentAttemptId)?.attempt??"없음"}</p><p>관측 {r.run?.observations.length??0}개 · {r.diagnosis?.candidate??"비교 전"}</p><p>가설: {r.studentHypothesis??"작성 전"} · 수정: {r.revisionReason??"작성 전"}</p><p>{r.revalidation?.scope??"재검증 완료 전"}</p></article>)}
         <button className="pcv-button" onClick={actions.onExport}>연결된 학습 기록 내려받기</button>
       </details>
       <details className="pcv-details pcv-records">
@@ -422,6 +428,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
       {state.saveState !== "ready" && <p className="pcv-save-status" role="status" aria-live="polite">
         {state.saveState === "saving" ? "기록을 저장하는 중입니다." : state.saveState === "saved" ? state.saveMessage || "기록이 저장되었습니다." : state.saveMessage || "기록을 저장하지 못했습니다."}
       </p>}
+      <small className="square-ui-version">과제 버전: {merged?"v4-paper-merged":"기존 종이 과제"}</small>
     </section>
   );
 }

@@ -30,10 +30,12 @@ export const listLearningStudents = () => learningRequest<{ students: LearningSt
 export const filterQuery = (f: LearningFilter) => new URLSearchParams(Object.entries(f).filter(([,v]) => !!v) as [string,string][]).toString();
 export const listTeacherRecords = (f: LearningFilter, offset=0) =>
   learningRequest<{ records: LearningEvent[]; total: number; offset: number; limit: number }>(`/teacher/records?${filterQuery(f)}&offset=${offset}`);
-export async function downloadTeacherCsv(f: LearningFilter = {}) {
-  const res = await fetch(`${API}/teacher/csv?${filterQuery(f)}`, { credentials: "same-origin",
+export type AttemptFilter=LearningFilter&{taskIndex?:string;taskVersion?:string};
+export const downloadSquareAttemptCsv=(f:AttemptFilter)=>downloadTeacherCsv(f,true);
+export async function downloadTeacherCsv(f: LearningFilter = {},attempts=false) {
+  const res = await fetch(`${API}/teacher/${attempts?"attempts/csv":"csv"}?${filterQuery(f)}`, { credentials: "same-origin",
     headers: { "X-Learning-Account": activeUser?.id ?? "" } });
   if (!res.ok) { const data=await res.json(); throw new Error(data.error ?? "CSV를 내려받지 못했습니다."); }
   const url=URL.createObjectURL(await res.blob()); const a=document.createElement("a");
-  a.href=url; a.download="MG400-학습기록.csv"; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+  a.href=url; a.download=attempts?"MG400-시도별기록.csv":"MG400-학습기록.csv"; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
 }

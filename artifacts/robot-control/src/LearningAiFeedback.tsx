@@ -1,3 +1,4 @@
+import { squareEvidenceTag,type SquareEvidenceTag } from "./squareComparisonVisual";
 import { useEffect, useRef, useState } from "react";
 import type { LearningFeedback, LearningFeedbackInput } from "@workspace/api-client-react";
 import { getLearningUser } from "./learningClient";
@@ -17,14 +18,14 @@ type Activity = ReturnType<typeof learningRecordContext> & {
   feedbackStatus:"requested"|"displayed"|"discarded";trigger:Trigger;question?:string;
   automatic?:boolean;
 };
-export type TutorMessage={id:string;role:"student"|"tutor";text:string;source?:"openai"|"rules";at?:string;automatic?:boolean;unavailable?:boolean};
+export type TutorMessage={id:string;role:"student"|"tutor";text:string;source?:"openai"|"rules";at?:string;automatic?:boolean;unavailable?:boolean;evidence?:SquareEvidenceTag};
 const rows=()=>readEvidence<Activity>(KEY,(x):x is Activity=>!!x&&typeof x==="object"&&"id" in x);
 const delivered=(context:FeedbackContext)=>rows().filter(x=>x.feedbackStatus==="displayed"&&x.feedback&&feedbackProblemKey(x.prediction)===feedbackProblemKey(context));
 type DeliveredTurn=Pick<Activity,"id"|"prediction"|"feedback"|"question"|"automatic">;
 const messagesFor=(history:DeliveredTurn[]):TutorMessage[]=>history.flatMap(row=>[
   ...(row.question?[{id:row.id+"-question",role:"student" as const,text:row.question,at:row.feedback!.createdAt}]:[]),
   {id:row.id,role:"tutor" as const,text:row.feedback!.text,source:row.feedback!.provider,at:row.feedback!.createdAt,automatic:row.automatic,
-    unavailable:!!row.feedback!.failureReason},
+    unavailable:!!row.feedback!.failureReason,evidence:row.feedback!.failureReason?undefined:squareEvidenceTag(row.prediction)},
 ]);
 
 export function useLearningAi(context:FeedbackContext,editVersion="") {

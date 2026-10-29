@@ -19,7 +19,7 @@ export function csvCell(value: unknown) {
 }
 export const CSV_HEADERS = ["수업 코드","학생 아이디","단원","과제","기록 ID","사건 ID","사건 종류",
   "기록 시각(UTC)","서버 수신 시각(UTC)","콘텐츠 버전","출처","최초 예측","수정·확정값",
-  "실행 결과","지원 사용","근거·비교·해석","독립 수행","변경 경로","학습 방문 ID","항목 경로","항목 값"];
+  "실행 결과","지원 사용","근거·비교·해석","독립 수행","변경 경로","학습 방문 ID","항목 경로","항목 값","화면 버전"];
 function overview(value: unknown) {
   if (value === undefined || value === null) return "";
   const text = typeof value === "string" ? value : JSON.stringify(value);
@@ -42,7 +42,7 @@ export function* csvRows(event: Obj) {
     first = false;
     if (typeof value === "string" && value.length > 30000) {
       for (let offset=0;offset<value.length;offset+=30000)
-        yield [...columns,`${path} (문자 ${offset}~${Math.min(offset+30000,value.length)})`,value.slice(offset,offset+30000)].map(csvCell).join(",")+"\r\n";
-    } else yield [...columns,path,value].map(csvCell).join(",")+"\r\n";
+        yield [...columns,`${path} (문자 ${offset}~${Math.min(offset+30000,value.length)})`,value.slice(offset,offset+30000),p.uiVersion??""].map(csvCell).join(",")+"\r\n";
+    } else yield [...columns,path,value,p.uiVersion??""].map(csvCell).join(",")+"\r\n";
   }
 }

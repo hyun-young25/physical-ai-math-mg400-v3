@@ -1,0 +1,57 @@
+name: Validate paper lessons
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DIAG_SHOTS: ${{ github.workspace }}/diagnosis-qa
+      SQUARE_DIAGNOSIS_SHOTS: ${{ github.workspace }}/diagnosis-qa
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck shared libraries
+        run: pnpm run typecheck:libs
+      - name: Typecheck application and API
+        run: |
+          pnpm --filter @workspace/robot-control run typecheck
+          pnpm --filter @workspace/api-server run typecheck
+      - name: Test diagnosis, evidence and CSV authorization
+        run: |
+          node --test artifacts/robot-control/src/paperMergedLesson.test.cjs artifacts/robot-control/src/paperRectangleTask.test.cjs artifacts/robot-control/src/squareMismatchDiagnosis.test.cjs artifacts/robot-control/src/squareComparisonVisual.test.cjs artifacts/api-server/src/lib/squareAttemptCsv.test.cjs artifacts/api-server/src/routes/learningOwner.test.cjs
+          node scripts/verify-paper-coordinate.cjs
+      - name: Production build
+        run: pnpm --filter @workspace/robot-control run build
+      - name: Install test browser
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Test merged paper course and read-only history
+        run: timeout 180s node scripts/verify-paper-merged.cjs
+      - name: Test square diagnosis flow
+        run: timeout 180s node --require ./scripts/isolated-ui-fixtures.cjs scripts/verify-square-diagnosis.cjs
+      - name: Test 3D visualization
+        run: timeout 180s node scripts/verify-diagnosis-visual.cjs
+      - name: Test existing tutor behavior with mocked responses
+        run: |
+          timeout 180s node --require ./scripts/isolated-ui-fixtures.cjs scripts/verify-ai-feedback.cjs
+          timeout 180s node --require ./scripts/isolated-ui-fixtures.cjs scripts/verify-trial-tutor.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: diagnosis-screenshots
+          path: diagnosis-qa/*.png
+          if-no-files-found: ignore
+          retention-days: 7

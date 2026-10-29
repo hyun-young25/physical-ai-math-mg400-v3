@@ -13,6 +13,7 @@ export const LEARNING_STAGES = [
 const sessionId=globalThis.crypto?.randomUUID?.()??String(Date.now())+"-"+String(Math.random());
 export function learningRecordContext(source:"dt"|"virtual"|"hardware"|"math") {
   return { schemaVersion:3, sessionId, contentVersion:LEARNING_CONTENT_VERSION,
+    ...({uiVersion:"diag-visual-v2"} as {uiVersion?:string}),
     ...(getLearningUser() ? { learningAccountId:getLearningUser()!.id } : {}),
     dataSource:source, supportProvider:"rule-based",
     framework:{version:"seven-stage-v1",stages:LEARNING_STAGES,

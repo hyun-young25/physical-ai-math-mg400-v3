@@ -1,3 +1,4 @@
+import { squareEvidenceTag } from "./squareComparisonVisual";
 import { useRef, useSyncExternalStore } from "react";
 import { feedbackProblemKey, type FeedbackContext } from "./learningAiContext";
 import { getLearningUser } from "./learningClient";
@@ -61,9 +62,9 @@ export function useSubmissionFeedback(context:FeedbackContext,mode:TutorMode){
       if(carryToNext&&assessment.correct)carried.current={key,id:turn.id};
       threads.set(key,next);emit();
     },
-    messages:turns.map(t=>({id:t.id,role:"tutor" as const,text:display(t),source:"rules" as const,at:t.at,automatic:true})),
+    messages:turns.map(t=>({id:t.id,role:"tutor" as const,text:display(t),source:"rules" as const,at:t.at,automatic:true,evidence:squareEvidenceTag(t.context)})),
     providedMessages:()=>turns.filter(t=>t.threadKey===key&&threads.get(t.threadKey)?.turns.find(row=>row.id===t.id)?.seen)
-      .map(t=>({id:t.id,role:"tutor" as const,text:display(t),source:"rules" as const,at:t.at,automatic:true})),
+      .map(t=>({id:t.id,role:"tutor" as const,text:display(t),source:"rules" as const,at:t.at,automatic:true,evidence:squareEvidenceTag(t.context)})),
     unread:unseen.length,preview:unseen.length?display(unseen.at(-1)!):undefined,
     storageFailed:related.some(([,t])=>t.storageFailed),
     acknowledge:()=>{

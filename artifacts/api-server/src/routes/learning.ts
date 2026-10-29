@@ -1,3 +1,4 @@
+import { ATTEMPT_HEADERS,attemptRows,parseAttemptFilter,matchesAttempt,attemptCsvLine } from "../lib/squareAttemptCsv";
 import { Router, type Request, type Response, type IRouter } from "express";
 import { pool } from "@workspace/db";
 import { eraseCookie, COOKIE, digest, loginLimit } from "../lib/learningSecurity";
@@ -173,5 +174,37 @@ router.get("/learning/teacher/csv", async (req, res) => {
     }
   }
   res.end();
+});
+router.get("/learning/teacher/attempts/csv", async (req,res)=>{
+ if(!requireLearningOwner(req,res))return;
+ let f;try{f=parseAttemptFilter(req.query);}catch{res.status(400).json({error:"시도 필터가 올바르지 않습니다."});return;}
+ const login=req.query.login;
+ if(login!==undefined&&(typeof login!=="string"||login.length>200)){res.status(400).json({error:"학생 필터가 올바르지 않습니다."});return;}
+ const ceiling=await pool.query("SELECT COALESCE(max(sequence),0) AS n FROM learning_events");
+ const limit=ceiling.rows[0].n;
+ res.set("Content-Type","text/csv; charset=utf-8");
+ res.set("Content-Disposition",'attachment; filename="mg400-square-attempts.csv"');
+ res.write("\uFEFF"+ATTEMPT_HEADERS.map(csvCell).join(",")+"\r\n");
+ let after=0;
+ // Select the latest snapshot first, then filter by the attempt date. Stable ceiling prevents duplicate rows during updates.
+ while(!res.destroyed){
+ const result=await pool.query(
+ `SELECT * FROM (
+ SELECT DISTINCT ON (e.account_id,e.visit_id,e.store_key,e.record_id,
+ CASE WHEN e.task='paper-coordinate' THEN e.payload->'run'->>'id' ELSE '' END) e.*
+ FROM learning_events e JOIN learning_accounts a ON a.id=e.account_id
+ WHERE a.role IN ('student','learner') AND ($1::text IS NULL OR a.login=$1)
+ AND e.task IN ('square-attempt','square','paper-coordinate') AND e.sequence<=$2
+ ORDER BY e.account_id,e.visit_id,e.store_key,e.record_id,
+ CASE WHEN e.task='paper-coordinate' THEN e.payload->'run'->>'id' ELSE '' END,e.sequence DESC
+ ) latest WHERE sequence>$3 ORDER BY sequence LIMIT 100`,[login||null,limit,after]);
+ if(!result.rowCount)break;
+ for(const event of result.rows){
+ for(const row of attemptRows(event).filter(r=>matchesAttempt(r,f))){
+ if(res.destroyed)break;
+ if(!res.write(attemptCsvLine(row)))await new Promise<void>(resolve=>{const done=()=>{res.off("drain",done);res.off("close",done);resolve();};res.once("drain",done);res.once("close",done);if(res.destroyed)done();});
+ }after=Number(event.sequence);
+ }
+ }res.end();
 });
 export default router;

@@ -1,10 +1,13 @@
+import type { SquareEvidenceTag } from "./squareComparisonVisual";
+import { useSquareVisual } from "./useSquareVisual";
+import { emphasizeSquareEvidence } from "./squareVisualizationStore";
 import { useEffect, useId, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { Bot, ChevronDown, RotateCcw, SendHorizontal, X } from "lucide-react";
 import "./TutorWindow.css";
 import type { TutorMode } from "./tutorMode";
 
-export type TutorMessage = { id: string; role: "student" | "tutor"; text: string; source?: "openai" | "rules"; unavailable?:boolean };
+export type TutorMessage = { id: string; role: "student" | "tutor"; text: string; source?: "openai" | "rules"; unavailable?:boolean; evidence?:SquareEvidenceTag };
 export type TutorQuickAction = { label: string; enabled: boolean; question: string };
 export type TutorWindowProps = {
   open: boolean;
@@ -26,6 +29,15 @@ export type TutorWindowProps = {
 const MAX = 1000;
 
 export default function TutorWindow({ open, onToggle, contextLabel, pending, status, messages, onSend, quickActions, onRetry, storageFailed, mode, onModeChange, unread=0, preview }: TutorWindowProps) {
+  const comparison=useSquareVisual();
+  const highlightedMessages=useRef(new Set<string>());
+  useEffect(()=>{
+    if(!open)return;
+    for(const message of messages){
+      if(!message.evidence||highlightedMessages.current.has(message.id))continue;
+      if(emphasizeSquareEvidence(message.evidence.key,message.evidence.edgeIndex))highlightedMessages.current.add(message.id);
+    }
+  },[open,messages,comparison.visual?.feedbackKey]);
   const [draft, setDraft] = useState("");
   const composing = useRef(false);
   const sendLock = useRef(false);
@@ -112,6 +124,7 @@ export default function TutorWindow({ open, onToggle, contextLabel, pending, sta
           </header>
 
           <div className="ait-scroll">
+          {comparison.visual&&<span className="ait-feedback-level">{comparison.visual.plan?.levelLabel??(comparison.visual.diagnosis.type==="match"?"다음 과제 점검":"차이 관찰")}</span>}
           <p className="ait-note">현재 화면에서 전달된 자료만 참고해요. 이전 답변은 당시 입력 기준입니다. 정답 판정과 실행 승인은 학습 화면에서 직접 하세요.</p>
           <div className="ait-mode">
             <label>응답 방식
@@ -135,6 +148,13 @@ export default function TutorWindow({ open, onToggle, contextLabel, pending, sta
               <div key={m.id} className={`ait-msg ait-msg--${m.role}`} data-testid={`msg-ai-tutor-${m.id}`}>
                 <span className="ait-sr">{m.role === "student" ? "학생:" : "튜터:"}</span>
                 <p className="ait-bubble">{m.text}</p>
+                {m.role==="tutor"&&m.evidence&&<button type="button" className="ait-evidence-tag"
+                  disabled={comparison.visual?.feedbackKey!==m.evidence.key}
+                  onMouseEnter={()=>emphasizeSquareEvidence(m.evidence!.key,m.evidence!.edgeIndex)}
+                  onFocus={()=>emphasizeSquareEvidence(m.evidence!.key,m.evidence!.edgeIndex)}
+                  onClick={()=>emphasizeSquareEvidence(m.evidence!.key,m.evidence!.edgeIndex)}>
+                  근거: {m.evidence.label}{comparison.visual?.feedbackKey!==m.evidence.key?" · 이전 실행":""}
+                </button>}
                 {m.role === "tutor" && m.source && (
                   <span className="ait-source">{m.unavailable?"GPT 미응답 · 상태 안내":m.source === "openai" ? "AI 생성 힌트" : "기본 안내"}</span>
                 )}

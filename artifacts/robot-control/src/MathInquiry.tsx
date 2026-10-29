@@ -15,7 +15,7 @@ export type Evidence = { action:string; status:"running"|"completed"|"unavailabl
   endedAt?:string; summary?:string; expected?:Record<string,number|string>; detail?:unknown };
 export type ExplanationEntry = { text:string; at:string; runCount:number; phase:"initial"|"revision"; answers:Record<string,string>; assessment:ExplanationAssessment };
 export type InquiryRecord = ReturnType<typeof learningRecordContext> & {
-  id:string; task:string; conditionKey:string; condition:unknown; fields:InquiryField[];
+  taskVersion?:string; id:string; task:string; conditionKey:string; condition:unknown; fields:InquiryField[];
   prediction:Record<string,string>; reason:string; submittedAt:string; previousId?:string;
   attemptKind:"initial"|"revision"|"changed-condition";
   independentPrediction?:boolean;
@@ -159,7 +159,7 @@ export function useMathInquiry(task:string, condition:unknown, fields:InquiryFie
       (r.conditionKey===conditionKey || (!!settings?.id&&(r.condition as {id?:string})?.id===settings.id))&&
       (r.runs.length>0 || !!r.feedbackEvents?.length));
     save({...learningRecordContext(source),id:globalThis.crypto?.randomUUID?.()??`${Date.now()}-${Math.random()}`,
-      task,taskKind,conditionKey,condition:clone(condition),fields:clone(fields),prediction:clone(draft),reason:reason.trim(),
+      task,...(task==="square"?{taskVersion:"v4-paper-merged"}:{}),taskKind,conditionKey,condition:clone(condition),fields:clone(fields),prediction:clone(draft),reason:reason.trim(),
       submittedAt:now(),previousId:previous?.id,attemptKind:!previous?"initial":previous.conditionKey===conditionKey?"revision":"changed-condition",
       independentPrediction:settings?.support ? settings.support==="independent"&&!settings.guidanceBeforePrediction&&!alreadyObserved&&pendingFeedback.current.length===0 : undefined,
       runs:[],reflections:[],feedbackEvents:clone(pendingFeedback.current)});pendingFeedback.current=[];setMessage("");
