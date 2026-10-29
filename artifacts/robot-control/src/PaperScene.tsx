@@ -15,7 +15,8 @@ export function PaperSceneLegend(){
 }
 export function PaperSceneToolbar(){
   const {data}=usePaperScene();if(!data)return null;
-  return <div className="paper-scene-toolbar"><span>{data.frame?"종이 20×20 cm · 1 cm 눈금":"위치 미확인 · 반투명 종이는 배치 예시"}<small>팔은 반투명 표시 · 자세 유지</small></span><button type="button" onClick={requestPaperCamera}>↺ 종이 시점</button></div>;
+  const measured=data.displaySource==="hardware"||data.displaySource==="mock";
+  return <div className="paper-scene-toolbar"><span>{data.frame?"종이 20×20 cm · 1 cm 눈금":"위치 미확인 · 반투명 종이는 배치 예시"}<small>{measured?"원래 색: 현재 보고 위치":"원래 색: 현재 위치 고정 · 회색: DT 예측 이동"}</small></span><button type="button" onClick={requestPaperCamera}>↺ 종이 시점</button></div>;
 }
 export function PaperSceneCaption(){
   const {data}=usePaperScene();if(!data)return null;

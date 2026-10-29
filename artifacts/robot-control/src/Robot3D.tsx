@@ -3265,7 +3265,7 @@ function ThreeDScene({ suctionZoomOpen, onSuctionZoomClose, joints, liveJointsRe
           <shadowMaterial opacity={0.25}/>
         </mesh>
         <Suspense fallback={<ModelLoadingFallback/>}>
-          <PaperRobotAppearance active={!!paper.data}>
+          <PaperRobotAppearance active={!!paper.data} tcpRef={endEffMeshRef}>
           <URDFRobot suctionSourceRef={suctionSourceRef} joints={joints} liveJointsRef={liveJointsRef} onLinkHover={handleHover} linkRefs={linkMeshRefs} jointAnchorRefs={jointAnchorRefs} showL1={annotations?.l1} showL2={annotations?.l2} showBadges={annotations?.endEff} endEffTrackerRef={endEffMeshRef} highlightJoint={highlightJoint} highlightLinks={highlightLinks} l31LeftTarget={debugLeftHole} l31RightTarget={debugRightHole} l21UpperHole={debugUpperHole} l32YOffset={debugL32Y} l31PosOffset={l31PosOffset} l31RotOffset={l31RotOffset} l31UpperHoleTilt={l31UpperHoleTilt} onL31Delta={handleL31Delta} onL31DragStart={handleL31DragStart} onL31DragEnd={handleL31DragEnd} onL31RotChange={setL31RotOffset} onL31LeftTargetChange={(v) => setDebugLeftHole(v)} applyL31RotRef={applyL31RotRef} l31Locked={l31Locked} endEffector={endEffector}/>
           </PaperRobotAppearance>
         </Suspense>
