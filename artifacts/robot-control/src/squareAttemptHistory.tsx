@@ -3,7 +3,7 @@ import { readEvidence,writeEvidence } from "./learningEvidenceStorage";
 import { getLearningUser } from "./learningClient";
 import { squareEvidenceTag,type SquareVisual } from "./squareComparisonVisual";
 import { SquareDiagnosisPanel } from "./SquareDiagnosisPanel";
-import { squareMismatchName } from "./squareMismatchDiagnosis";
+import { squareDiagnosisName } from "./squareMismatchDiagnosis";
 export const SQUARE_ATTEMPT_KEY="physical-ai-square-attempts-v1";
 export type SquareAttempt={
  id:string;task:"square-attempt";recordId:string;runId:string;studentId?:string;visitId?:string;taskVersion:string;
@@ -43,13 +43,13 @@ export function useSquareAttemptHistory(owner:string,taskIndex:number,draft:Atte
  useEffect(()=>{setSelected(null);setRows(readSquareAttempts());},[taskIndex]);
  useEffect(()=>{const f=(event:Event)=>{const e=(event as CustomEvent).detail;if(e?.owner===owner&&!locked)setSelected(e.id||null);};window.addEventListener("square-attempt-review",f);return()=>window.removeEventListener("square-attempt-review",f);},[owner,locked]);
  const items=rows.filter(r=>r.taskIndex===taskIndex),reviewed=items.find(r=>r.id===selected)??null;
- return {items,reviewed,failed,capture,gptQuestion:[...(rows.find(r=>r.id===draft?.id)?.questions.filter(q=>q.source==="openai")??[]),...provided].filter((q,i,a)=>a.findIndex(p=>p.text===q.text&&p.at===q.at)===i).map(q=>q.text).join("\n"),select:(id:string|null)=>{if(!locked)setSelected(id);},meta:{owner,selected:reviewed?.id??"",items:items.map(r=>({id:r.id,label:"시도 "+r.attempt+" · "+squareMismatchName(r.visual.diagnosis.type)}))}};
+ return {items,reviewed,failed,capture,gptQuestion:[...(rows.find(r=>r.id===draft?.id)?.questions.filter(q=>q.source==="openai")??[]),...provided].filter((q,i,a)=>a.findIndex(p=>p.text===q.text&&p.at===q.at)===i).map(q=>q.text).join("\n"),select:(id:string|null)=>{if(!locked)setSelected(id);},meta:{owner,selected:reviewed?.id??"",items:items.map(r=>({id:r.id,label:"시도 "+r.attempt+" · "+squareDiagnosisName(r.visual.diagnosis,r.visual.connectedVerticesOnly)}))}};
 }
 export function SquareAttemptHistory({history,locked}:{history:ReturnType<typeof useSquareAttemptHistory>;locked:boolean}){
  return <section className="square-attempt-history"><h3>시도별 기록 · 읽기 전용 비교</h3>
  {history.failed&&<p role="alert">시도 기록 저장에 실패했습니다. 화면을 닫기 전에 학습 기록을 내려받으세요.</p>}
  <button disabled={locked} onClick={()=>history.select(null)} aria-pressed={!history.reviewed}>현재 시도로 돌아가기</button>
- {history.items.map(r=><button key={r.id} disabled={locked} aria-pressed={history.reviewed?.id===r.id} onClick={()=>history.select(r.id)}>시도 {r.attempt} · {squareMismatchName(r.visual.diagnosis.type)} · {r.feedbackLevel}<small>{r.studentCause||"원인 가설 작성 전"}</small></button>)}
+ {history.items.map(r=><button key={r.id} disabled={locked} aria-pressed={history.reviewed?.id===r.id} onClick={()=>history.select(r.id)}>시도 {r.attempt} · {squareDiagnosisName(r.visual.diagnosis,r.visual.connectedVerticesOnly)} · {r.feedbackLevel}<small>{r.studentCause||"원인 가설 작성 전"}</small></button>)}
  {!history.items.length&&<p>비교를 완료한 새 시도부터 표시합니다. 이전 기록은 기존 내보내기에 보존됩니다.</p>}
  </section>;
 }

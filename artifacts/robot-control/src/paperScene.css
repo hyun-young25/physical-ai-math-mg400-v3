@@ -59,11 +59,11 @@
 .paper-coordinate-view[data-paper-sync] { overflow:visible; }
 .paper-coordinate-view[data-paper-sync]>.paper-scene-map--compact {
   position:sticky; top:0; z-index:24; display:grid;
-  grid-template-columns:minmax(140px,.95fr) minmax(0,1fr); gap:4px 8px;
+  grid-template-columns:280px minmax(0,1fr); gap:4px 8px;
   padding:8px; margin:8px; box-shadow:0 4px 12px #0b2d5c18;
 }
 .paper-scene-map--compact>header { grid-column:1/-1; font-size:12px; }
-.paper-scene-map--compact>svg { grid-column:1; grid-row:2/span 5; height:clamp(150px,23vh,210px); align-self:center; }
+.paper-scene-map--compact>svg { grid-column:1; grid-row:2/span 5; height:auto; aspect-ratio:410/350; align-self:center; }
 .paper-scene-map--compact>:not(header):not(svg) { grid-column:2; margin:0; }
 .paper-scene-map--compact .paper-scene-legend { gap:2px 6px; font-size:10px; }
 .paper-scene-map--compact .paper-selection-summary { padding:0; }
@@ -78,3 +78,20 @@
 .revision-robot-shell:has(.paper-scene-toolbar) { min-height:0; }
 .paper-scene-fallback { position:absolute; inset:45px 8px 8px; overflow:auto; background:#f8fafce8; }
 @media(max-width:700px) { .paper-coordinate-view[data-paper-sync]>.paper-scene-map { margin:10px; } .curriculum-scene:has(.paper-scene-toolbar) { height:640px; min-height:640px; } }
+
+.paper-map-expand { border:1px solid #c4b5fd; border-radius:5px; padding:4px 8px; background:#f5f3ff; color:#5b21b6; cursor:pointer; }
+.paper-scene-map--expanded>svg { max-height:none; }
+/* A narrow pane uses the whole row for the map; explanations stay below it.
+   The expanded map scrolls normally, never over inputs. */
+.paper-coordinate-host { container-type:inline-size; }
+@container(max-width:440px) {
+  .paper-coordinate-view[data-paper-sync]>.paper-scene-map--compact { grid-template-columns:minmax(0,1fr); }
+  .paper-scene-map--compact>svg { width:min(260px,100%); justify-self:center; grid-row:auto; }
+  .paper-scene-map--compact>:not(header):not(svg) { grid-column:1; }
+  .paper-scene-map--compact>.paper-scene-legend,.paper-scene-map--compact>p { display:none; }
+}
+
+.paper-coordinate-view[data-paper-sync] input[data-retry-difference=true] { border:2px solid #dc2626; background:#fff7f7; }
+.pcv-retry-changed { display:inline-block; color:#166534; background:#dcfce7; border-radius:4px; padding:2px 5px; font-size:12px; margin-left:4px; }
+.pcv-retry-note { padding:12px; border:1px solid #c4b5fd; border-radius:8px; background:#f5f3ff; color:#3730a3; margin:12px 0; font-size:13px; }
+.pcv-retry-note p { margin:6px 0; }

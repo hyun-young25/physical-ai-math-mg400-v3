@@ -38,7 +38,7 @@ const fixture=require("./verify-square-flow.cjs").fixture.replace("style:{height
  await predict(0);
  assert.equal(await page.getByTestId("square-diagnosis").getAttribute("data-type"),"match");
  assert.equal(await page.locator(".square-edge-cards article").count(),4);
- assert.equal(await page.locator(".square-type-chips span").count(),9);
+ assert.equal(await page.locator(".square-type-chips span").count(),1);
  assert.equal(await page.locator(".square-decision-section").count(),5);
  await view.getByLabel("차이가 생긴 이유").fill("기준점 O를 더하니 목표와 일치했습니다.");await click("생각 저장");
  await page.getByTestId("paper-diagnosis-visual").screenshot({path:path.join(shots,"07-paper-v4-dt.png")});

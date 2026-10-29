@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { squareMismatchName,type SquareMismatchType } from "./squareMismatchDiagnosis";
+import { squareMismatchName,squareDiagnosisName,type SquareMismatchType } from "./squareMismatchDiagnosis";
 import { SquareDiagnosisVisualSummary,SquareFeedbackProgress } from "./SquareComparisonView";
 import type { SquareDiagnosis, SquareFeedbackPlan, SquareObservedVertex } from "./squareMismatchDiagnosis";
 import "./squareDiagnosis.css";
@@ -58,6 +58,8 @@ export function SquareDiagnosisPanel({ diagnosis, plan, plannedVertices, observe
   connectedOnly?:boolean; toleranceMm?:number; targetVertices?:SquareObservedVertex[]; gptQuestion?:string; children?:ReactNode;
   causeRequired?:boolean; disabled?:boolean; priorSameType?:number; supportMode?:"guided"|"challenge";
 }) {
+  const paperLabel = connectedOnly && diagnosis.label.includes("\n");
+  const reason = paperLabel ? plan?.relationHint : questionReason(diagnosis);
   const edges = diagnosis.evidence.edges ?? [];
   const tol=toleranceMm??(diagnosis.evidence.source==="hardware"?1:0.1);
   const types:SquareMismatchType[]=["unreachable","origin-missing","displacement-as-position","axis-swap","direction","closure","arithmetic","model-real","match"];
@@ -91,7 +93,7 @@ export function SquareDiagnosisPanel({ diagnosis, plan, plannedVertices, observe
       {diagnosis.type==="model-real"&&<p>학생 오류로 단정할 수 없습니다. 장비·좌표계·측정 조건을 먼저 확인하세요.</p>}
     </section>
     <details className="square-diagnosis-details"><summary>판정 종류와 피드백 단계 보기</summary>
-    <section className="square-decision-section"><h3>규칙 기반 판정</h3><div className="square-type-chips">{types.map(t=><span key={t} data-selected={t===diagnosis.type}>{squareMismatchName(t)}</span>)}</div><p>{questionReason(diagnosis)}</p></section>
+    <section className="square-decision-section"><h3>규칙 기반 판정</h3><div className="square-type-chips">{paperLabel?<span data-selected="true">{squareDiagnosisName(diagnosis,true)}</span>:types.map(t=><span key={t} data-selected={t===diagnosis.type}>{squareMismatchName(t)}</span>)}</div><p>{reason}</p></section>
     <section className="square-decision-section"><h3>피드백 단계</h3><SquareFeedbackProgress plan={plan} match={diagnosis.type==="match"} priorSameType={priorSameType} supportMode={supportMode}/>{diagnosis.type==="model-real"&&<p>장비·모형 차이는 학습 오류 반복에 따른 지원 상향에서 제외합니다.</p>}</section>
     </details>
     <details className="square-diagnosis-details">
@@ -104,7 +106,7 @@ export function SquareDiagnosisPanel({ diagnosis, plan, plannedVertices, observe
     </dl>
     <h4>{diagnosis.label}</h4>
     <p className="square-diagnosis-honesty">규칙 기반 비교가 좌표와 변의 차이를 표시합니다. 이 차이만으로 학생의 생각 원인을 확정하지 않습니다. 튜터 질문은 확인된 근거를 살펴보도록 돕습니다.</p>
-    <p className="square-diagnosis-why"><strong>왜 이 질문인가요?</strong> {questionReason(diagnosis)}</p>
+    <p className="square-diagnosis-why"><strong>왜 이 질문인가요?</strong> {reason}</p>
 
       {diagnosis.type !== "match" && edges.length > 0 && diagnosis.type !== "model-real" && <div className="square-diagnosis-table" tabIndex={0} aria-label="변별 과제 조건과 이번 실행 관측">
       <table>

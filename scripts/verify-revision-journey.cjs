@@ -58,7 +58,7 @@ if(require.main===module)(async()=>{
   const reference=view.getByRole('complementary',{name:'수정하며 참고할 첫 시도와 피드백'});
   await reference.waitFor();await reference.getByText('처음 좌표와 예측 근거',{exact:true}).click();assert.match(await reference.innerText(),/200/);
   await reference.getByText('처음 좌표와 예측 근거',{exact:true}).click();
-  await predict(0);
+  await click('02 수학적 구조화');await predict(0);
   assert.equal(await journey.getAttribute('data-result'),'pending');assert.equal(await journey.locator('.revision-result').count(),0);
   assert.equal((await records())[0].predictions[0].robotX,'200');
   await run();

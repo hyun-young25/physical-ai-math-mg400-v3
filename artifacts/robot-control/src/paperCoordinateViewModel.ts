@@ -4,6 +4,7 @@ import type { PaperTrialRecord, PaperReferenceSource, PaperDiagnosis, PaperEvide
 
 export type PaperLessonStage = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export type PaperCoordinateStudyViewState = {
+  retry?: {id:string;attempt:number;baseline:NonNullable<ReturnType<typeof import("./paperRetry").paperRetryInputs>>;fields:string[];focusRequested:boolean;editable:boolean};
   revisionJourney?: import("./revisionJourney").RevisionJourneyData | null;
   rotationAllowed?:boolean;
   pathConcept?:{motion:string;closeX:string;closeY:string};
@@ -59,6 +60,7 @@ export type PaperCoordinateStudyViewState = {
 };
 
 export type PaperCoordinateStudyViewActions = {
+  onResetRetry?: () => void;
   onPathConceptChange:(field:"motion"|"closeX"|"closeY",value:string)=>void;
   onBack: () => void;
   onExport: () => void;

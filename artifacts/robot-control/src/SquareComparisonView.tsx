@@ -1,6 +1,6 @@
 import { useEffect,useId,useRef,useState } from "react";
 import type { SquareDiagnosis,SquareFeedbackPlan,SquareObservedVertex } from "./squareMismatchDiagnosis";
-import { squareMismatchName,LEVEL_LABELS } from "./squareMismatchDiagnosis";
+import { squareMismatchName,squareDiagnosisName,LEVEL_LABELS } from "./squareMismatchDiagnosis";
 import { squareSourceLabel } from "./squareComparisonVisual";
 import { COMPARISON_COLORS as C,fmtSquare,signedSquare,squareExecutionLabel,squareClosureGap,squareReplayPoint,targetFromDiagnosis } from "./squareComparisonVisual";
 import { useSquareVisual } from "./useSquareVisual";
@@ -114,7 +114,7 @@ export function SquareFallbackComparison(){
 export function SquareDiagnosisVisualSummary({diagnosis,observed,target,connectedOnly}:{diagnosis:SquareDiagnosis;observed:SquareObservedVertex[];target?:SquareObservedVertex[];connectedOnly?:boolean}){
   const state=useSquareVisual(),emphasized=!!state.emphasis&&state.visual?.diagnosis.type===diagnosis.type;
   return <div className="square-visual-summary" data-emphasized={emphasized||undefined} data-testid="square-visual-summary">
-    <h4 className="square-type-badge">{diagnosis.type==="match"?"✓ 예측과 실행 일치":"⚠ "+squareMismatchName(diagnosis.type)+(diagnosis.edge?" · "+diagnosis.edge:"")}</h4>
+    <h4 className="square-type-badge">{diagnosis.type==="match"?"✓ 예측과 실행 일치":"⚠ "+squareDiagnosisName(diagnosis,connectedOnly)+(connectedOnly&&diagnosis.label.includes("\n")?"":diagnosis.edge?" · "+diagnosis.edge:"")}</h4>
     <div className="square-visual-comparison">
       <SquareEdgeBars diagnosis={diagnosis}/>
       <SquareComparisonDiagram target={target??targetFromDiagnosis(diagnosis)} observed={observed} diagnosis={diagnosis} connectedOnly={connectedOnly} compact emphasized={emphasized}/>

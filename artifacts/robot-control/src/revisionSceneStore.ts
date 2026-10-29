@@ -4,8 +4,8 @@ import { useSquareVisual } from "./useSquareVisual";
 
 export const REVISION_PHASES = ["첫 시도", "피드백", "답 수정", "재실행 결과"] as const;
 export type RevisionPhase = 0 | 1 | 2 | 3;
-type Snapshot = { owner: string | null; data: RevisionJourneyData | null; phase: RevisionPhase; point: number };
-let state: Snapshot = { owner: null, data: null, phase: 1, point: 0 };
+type Snapshot = { owner: string | null; data: RevisionJourneyData | null; phase: RevisionPhase; point: number; selectionVersion:number };
+let state: Snapshot = { owner: null, data: null, phase: 1, point: 0, selectionVersion:0 };
 const listeners = new Set<() => void>();
 const set = (next: Snapshot) => { state = next; listeners.forEach(fn => fn()); };
 export const revisionSceneSnapshot = () => state;
@@ -19,11 +19,11 @@ export function publishRevisionScene(owner: string, data: RevisionJourneyData | 
   const fresh = owner !== state.owner || data.first.id !== state.data?.first.id;
   const progressed = data.current.id !== state.data?.current.id || data.current.complete !== state.data?.current.complete || data.editing !== state.data?.editing;
   if (!fresh && JSON.stringify(data) === JSON.stringify(state.data)) return;
-  set({ owner, data, phase: fresh || progressed ? defaultPhase(data) : state.phase, point: fresh ? 0 : state.point });
+  set({ owner, data, phase: fresh || progressed ? defaultPhase(data) : state.phase, point: fresh ? 0 : state.point, selectionVersion:state.selectionVersion });
 }
-export function clearRevisionScene(owner: string) { if (state.owner === owner) set({ owner: null, data: null, phase: 1, point: 0 }); }
+export function clearRevisionScene(owner: string) { if (state.owner === owner) set({ owner: null, data: null, phase: 1, point: 0, selectionVersion:state.selectionVersion }); }
 export function selectRevisionPhase(phase: RevisionPhase) { if (state.data) set({ ...state, phase }); }
-export function selectRevisionPoint(point: number) { if (Number.isInteger(point) && point >= 0 && point < 4) set({ ...state, point }); }
+export function selectRevisionPoint(point: number) { if (Number.isInteger(point) && point >= 0 && point < 4) set({ ...state, point, selectionVersion:state.selectionVersion+1 }); }
 export function useActiveRevisionScene() {
   const scene = useRevisionScene(), square = useSquareVisual();
   // Existing history inspection, evidence highlighting and replay retain priority.

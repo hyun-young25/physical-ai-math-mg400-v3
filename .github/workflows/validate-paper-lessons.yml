@@ -32,7 +32,7 @@ jobs:
           pnpm --filter @workspace/api-server run typecheck
       - name: Test diagnosis, evidence and CSV authorization
         run: |
-          node --test artifacts/robot-control/src/paperMergedLesson.test.cjs artifacts/robot-control/src/paperRectangleTask.test.cjs artifacts/robot-control/src/squareMismatchDiagnosis.test.cjs artifacts/robot-control/src/squareComparisonVisual.test.cjs artifacts/api-server/src/lib/squareAttemptCsv.test.cjs artifacts/api-server/src/routes/learningOwner.test.cjs
+          node --test artifacts/robot-control/src/paperRetry.test.cjs artifacts/robot-control/src/paperMergedLesson.test.cjs artifacts/robot-control/src/paperRectangleTask.test.cjs artifacts/robot-control/src/squareMismatchDiagnosis.test.cjs artifacts/robot-control/src/squareComparisonVisual.test.cjs artifacts/api-server/src/lib/squareAttemptCsv.test.cjs artifacts/api-server/src/routes/learningOwner.test.cjs
           node scripts/verify-paper-coordinate.cjs
       - name: Production build
         run: pnpm --filter @workspace/robot-control run build
@@ -45,6 +45,8 @@ jobs:
           node --test artifacts/robot-control/src/paperSceneModel.test.cjs
           timeout 300s node scripts/verify-paper-scene.cjs
           timeout 300s node scripts/verify-paper-readability.cjs
+      - name: Test advanced retry inputs, diagnosis and preserved records
+        run: timeout 180s node scripts/verify-paper-retry.cjs
       - name: Test feedback-to-revision journey and responsive comparison
         run: |
           node --test artifacts/robot-control/src/revisionJourney.test.cjs artifacts/robot-control/src/revisionSceneStore.test.cjs
