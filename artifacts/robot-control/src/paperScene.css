@@ -31,6 +31,15 @@
 .paper-coordinate-view[data-paper-sync] :is(.pcv-stage.is-current,.pcv-point-tag,.pcv-callout,.pcv-button--quiet,.pcv-pill--good) { background:#ede9fe; border-color:#c4b5fd; color:#3730a3; }
 .paper-coordinate-view[data-paper-sync] :is(.pcv-stage,.pcv-eyebrow,.pcv-task-strip small,.pcv-inline-note,.pcv-note,.pcv-empty,.pcv-side-source span,.pcv-side-caution,.pcv-prediction-input>span,.pcv-ink-row legend,.pcv-ink-row label>span,.pcv-observation-item small,.pcv-details,.pcv-evidence-grid li) { color:#475569; }
 .paper-coordinate-view[data-paper-sync] :is(.pcv-activity-kicker,.pcv-stage-index,.pcv-pose-readout span,.pcv-header-meta span,.pcv-field>span,.pcv-target-row span) { color:#475569; }
+.paper-coordinate-view[data-paper-sync] :is(.pcv-lead,.pcv-reference legend,.pcv-prediction legend,.pcv-reference-values label>span,.pcv-run-panel>span:last-child,.pcv-observation-item p,.pcv-observation-item>div strong,.pcv-interpretation-head,.pcv-interpretation>.pcv-details>p) { color:#475569; }
+.paper-coordinate-view[data-paper-sync] :is(.pcv-task-strip>div,.pcv-pose-readout>div,.pcv-run-panel,.pcv-controller-observations,.pcv-observation-item) { background:#f8fafc; border-color:#cbd5e1; }
+.paper-coordinate-view[data-paper-sync] .pcv-task-strip>div { border-left-color:#c4b5fd; }
+.paper-coordinate-view[data-paper-sync] :is(input,select,textarea):disabled { color:#64748b; background:#f1f5f9; }
+.paper-coordinate-view[data-paper-sync] :is(.pcv-pill,.pcv-pill--warn) { color:#475569; background:#f1f5f9; border-color:#cbd5e1; }
+.paper-coordinate-view[data-paper-sync] :is(.pcv-button--quiet,.pcv-button--outline):not(:disabled):hover,.paper-coordinate-view[data-paper-sync] .pcv-stage:hover { background:#ede9fe; }
+.paper-coordinate-view[data-paper-sync] .pcv-alert { color:#b91c1c; background:#fef2f2; border-color:#fecaca; }
+.paper-coordinate-view[data-paper-sync] :is(.pcv-predictions,.pcv-side-caution,.pcv-evidence-rows) { border-color:#cbd5e1; }
+.paper-coordinate-view[data-paper-sync] .pcv-details summary::marker { color:#64748b; }
 .paper-coordinate-view[data-paper-sync] :is(.pcv-callout strong,.pcv-concept-mark,.pcv-concept-block p,.pcv-question,.pcv-feedback,.pcv-alignment>p) { color:#3730a3; }
 .paper-coordinate-view[data-paper-sync] .pcv-button--primary { color:#fff; background:#2563eb; border-color:#2563eb; }
 .paper-coordinate-view[data-paper-sync] .pcv-button--primary:not(:disabled):hover { background:#1d4ed8; }
