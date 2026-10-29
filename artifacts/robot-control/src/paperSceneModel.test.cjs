@@ -26,3 +26,25 @@ test('point selection and camera reset are display-only and clear on leaving the
  const key=store.paperSceneSnapshot().cameraKey;store.requestPaperCamera();assert.equal(store.paperSceneSnapshot().cameraKey,key+1);assert.equal(JSON.stringify(d),before);
  store.clearPaperScene('other');assert.ok(store.paperSceneSnapshot().data);store.clearPaperScene('advanced');assert.equal(store.paperSceneSnapshot().data,null);
 });
+test('a new advanced lesson drops the previous point and scene scroll request',()=>{
+ const d=data();store.publishPaperScene('dt',{...d,level:'advanced-paper-dt'});store.selectPaperPoint('P3','scene');
+ assert.equal(store.paperSceneSnapshot().point,2);
+ store.publishPaperScene('hardware',d);
+ assert.equal(store.paperSceneSnapshot().point,null);assert.equal(store.paperSceneSnapshot().reference,null);
+ assert.equal(store.paperSceneSnapshot().selectionOrigin,'lesson');assert.equal(rev.revisionSceneSnapshot().point,0);
+ store.selectPaperPoint('P4','scene');store.clearPaperScene('hardware');store.publishPaperScene('dt',{...d,level:'advanced-paper-dt'});
+ assert.equal(store.paperSceneSnapshot().point,null);assert.equal(store.paperSceneSnapshot().selectionOrigin,'lesson');
+ store.clearPaperScene('dt');
+});
+test('paper translucency preserves transforms, shared materials and restores normal lessons',()=>{
+ const THREE=require('three'),appearance=load('paperRobotAppearance'),group=new THREE.Group();
+ const material=new THREE.MeshStandardMaterial({color:'white'}),geometry=new THREE.BoxGeometry();
+ const arm=new THREE.Mesh(geometry,material),tool=new THREE.Mesh(geometry,[material,material]),otherScene=new THREE.Mesh(geometry,material);
+ arm.position.set(350,0,60);arm.castShadow=true;arm.receiveShadow=true;group.add(arm,tool);
+ const pose=arm.matrix.clone(),restore=appearance.softenPaperRobot(group);
+ assert.notEqual(arm.material,material);assert.equal(arm.material.opacity,.18);assert.equal(arm.castShadow,false);
+ assert.equal(otherScene.material.opacity,1);assert.equal(material.transparent,false);assert.ok(arm.matrix.equals(pose));assert.deepEqual(arm.position.toArray(),[350,0,60]);
+ assert.equal(tool.material[0],arm.material);
+ restore();assert.equal(arm.material,material);assert.equal(tool.material[0],material);assert.equal(arm.castShadow,true);assert.equal(arm.receiveShadow,true);
+ material.dispose();geometry.dispose();
+});
