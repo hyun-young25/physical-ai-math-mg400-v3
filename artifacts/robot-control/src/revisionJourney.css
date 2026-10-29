@@ -1,5 +1,7 @@
 .revision-journey,.revision-workspace{container-type:inline-size;min-width:0;font-family:inherit}
-.revision-journey{margin:12px 0 18px;padding:16px;border:1px solid #bdcde0;border-radius:14px;background:#f4f8fc;color:#172c46}
+.revision-journey{margin:8px 0 12px;padding:12px;border:1px solid #bdcde0;border-radius:10px;background:#f4f8fc;color:#172c46}
+.revision-scene-link{font-size:11px!important;color:#4e6782}.revision-scene-link button{background:none;border:0;color:#1d4ed8;text-decoration:underline;cursor:pointer;font:inherit}
+.revision-report>summary{padding:8px 0!important}.revision-report[open]>.revision-flow{margin-top:10px}
 .revision-journey *,.revision-workspace *{box-sizing:border-box}
 .revision-journey header{display:flex;align-items:start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
 .revision-journey h3{font-size:17px!important;line-height:1.5;margin:3px 0!important;letter-spacing:-.025em}

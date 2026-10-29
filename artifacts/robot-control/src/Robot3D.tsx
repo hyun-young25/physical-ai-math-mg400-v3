@@ -1,6 +1,8 @@
 import { SquareComparisonOverlay } from "./SquareComparisonOverlay";
+import { RevisionSceneOverlay, RevisionSceneDock } from "./RevisionScene";
 import { SquareComparisonControls,SquareFallbackComparison } from "./SquareComparisonView";
 import { useSquareVisual } from "./useSquareVisual";
+import { useActiveRevisionScene } from "./revisionSceneStore";
 import { MotionComparisonOverlay, MotionComparisonLegend } from "./MotionComparisonOverlay";
 import type { MotionComparisonVisual } from "./motionComparison";
 import { useState, useEffect, useRef, Suspense, useMemo, useCallback, Component } from "react";
@@ -3124,7 +3126,8 @@ function ModelLoadingFallback() {
 
 function ThreeDScene({ suctionZoomOpen, onSuctionZoomClose, joints, liveJointsRef, liveCoordsRef, coords, viewPreset = "free", homeViewKey, onViewFree, annotations, highlightJoint, highlightCoord, highlightLinks, focusTcp, showFloorRect, traceKey, learningVisual, axisLessonVisual, coordinateVisual, motionVisual, kinematicsVisual, coordinateStudyViewKey, shapeStudyViewKey, kinematicsStudyViewKey, compactCoordinateHelp, endEffector = "suction", pickBlockState, onContextLost, onContextRestored }:{ suctionZoomOpen?:boolean; onSuctionZoomClose?:()=>void; joints:Joints; liveJointsRef?: React.MutableRefObject<Joints | null>; liveCoordsRef?: React.MutableRefObject<{x:number;y:number;z:number;r:number}|null>; coords?:{x:number;y:number;z?:number}; viewPreset?:ViewPreset; homeViewKey?:number; onViewFree?:()=>void; annotations?:{l1:boolean;l2:boolean;endEff:boolean;projection?:boolean}; highlightJoint?:"j1"|"j2"|"j3"|"j4"|null; highlightCoord?:"x"|"y"|"z"|"r"|null; highlightLinks?:{l1:boolean;l2:boolean}|null; focusTcp?:{startZ?:number;targetZ?:number}|null; showFloorRect?:boolean; traceKey?:number; learningVisual?:LearningVisualState|null; axisLessonVisual?:AxisLessonVisual|null; coordinateVisual?:CoordinateVisual|null; motionVisual?:MotionComparisonVisual|null; kinematicsVisual?:KinematicsVisual|null; coordinateStudyViewKey?:number; shapeStudyViewKey?:number; kinematicsStudyViewKey?:number; compactCoordinateHelp?:boolean; endEffector?:"pen"|"suction"; pickBlockState?:{ gripActive:boolean; missionDone:boolean }; onContextLost:()=>void; onContextRestored:()=>void }) {
   const comparison=useSquareVisual();
-  const comparisonShown=!!comparison.visual&&comparison.enabled;
+  const revision=useActiveRevisionScene();
+  const comparisonShown=!!comparison.visual&&comparison.enabled||!!revision.data&&!revision.data.running;
 
   const suctionSourceRef = useRef<THREE.Group|null>(null);
   const suctionSlotRef = useRef<HTMLDivElement|null>(null);
@@ -3261,6 +3264,7 @@ function ThreeDScene({ suctionZoomOpen, onSuctionZoomClose, joints, liveJointsRe
           <URDFRobot suctionSourceRef={suctionSourceRef} joints={joints} liveJointsRef={liveJointsRef} onLinkHover={handleHover} linkRefs={linkMeshRefs} jointAnchorRefs={jointAnchorRefs} showL1={annotations?.l1} showL2={annotations?.l2} showBadges={annotations?.endEff} endEffTrackerRef={endEffMeshRef} highlightJoint={highlightJoint} highlightLinks={highlightLinks} l31LeftTarget={debugLeftHole} l31RightTarget={debugRightHole} l21UpperHole={debugUpperHole} l32YOffset={debugL32Y} l31PosOffset={l31PosOffset} l31RotOffset={l31RotOffset} l31UpperHoleTilt={l31UpperHoleTilt} onL31Delta={handleL31Delta} onL31DragStart={handleL31DragStart} onL31DragEnd={handleL31DragEnd} onL31RotChange={setL31RotOffset} onL31LeftTargetChange={(v) => setDebugLeftHole(v)} applyL31RotRef={applyL31RotRef} l31Locked={l31Locked} endEffector={endEffector}/>
         </Suspense>
         <SquareComparisonOverlay/>
+        <RevisionSceneOverlay/>
         {pickBlockState && (
           <PickBlocks gripActive={pickBlockState.gripActive} missionDone={pickBlockState.missionDone}/>
         )}
@@ -3309,7 +3313,7 @@ function ThreeDScene({ suctionZoomOpen, onSuctionZoomClose, joints, liveJointsRe
           />
         </svg>
       )}
-      {showFloorRect && learningVisual && (
+      {showFloorRect && learningVisual && !revision.data && (
         <div style={{position:"absolute",left:18,bottom:18,pointerEvents:"none",minWidth:250,maxWidth:360,padding:"10px 12px",borderRadius:10,background:"rgba(255,255,255,.94)",border:"1px solid #c7d2fe",boxShadow:"0 8px 24px rgba(15,23,42,.14)",fontFamily:"'Pretendard','Apple SD Gothic Neo',sans-serif"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
             <strong style={{fontSize:12,color:"#312e81"}}>수학 판단 → 3D 로봇</strong>
@@ -3475,9 +3479,9 @@ export function RobotScene({ suctionZoomOpen, onSuctionZoomClose, joints, liveJo
     return () => window.clearTimeout(timer);
   }, [contextLost, restartRenderer]);
 
-  if (!webglAvailable) return <div style={{width:"100%",height:"100%",position:"relative"}}><IsoFallback joints={sj}/><SquareFallbackComparison/><SquareComparisonControls/></div>;
+  if (!webglAvailable) return <div className="revision-robot-shell"><div className="revision-robot-canvas"><IsoFallback joints={sj}/><SquareFallbackComparison/><SquareComparisonControls/></div><RevisionSceneDock fallback/></div>;
   return (
-    <div style={{ width:"100%", height:"100%", position:"relative" }}>
+    <div className="revision-robot-shell"><div className="revision-robot-canvas">
       <CanvasErrorBoundary key={rendererKey} joints={sj}>
         <ThreeDScene suctionZoomOpen={suctionZoomOpen} onSuctionZoomClose={onSuctionZoomClose} joints={sj} liveJointsRef={liveJointsRef} liveCoordsRef={liveCoordsRef} coords={coords} viewPreset={viewPreset} homeViewKey={homeViewKey} onViewFree={onViewFree} annotations={annotations} highlightJoint={highlightJoint} highlightCoord={highlightCoord} highlightLinks={highlightLinks} focusTcp={focusTcp} showFloorRect={showFloorRect} traceKey={traceKey} learningVisual={learningVisual} axisLessonVisual={axisLessonVisual} coordinateVisual={coordinateVisual} motionVisual={motionVisual} kinematicsVisual={kinematicsVisual} coordinateStudyViewKey={coordinateStudyViewKey} shapeStudyViewKey={shapeStudyViewKey} kinematicsStudyViewKey={kinematicsStudyViewKey} compactCoordinateHelp={compactCoordinateHelp} endEffector={endEffector} pickBlockState={pickBlockState} onContextLost={handleContextLost} onContextRestored={handleContextRestored}/>
       </CanvasErrorBoundary>
@@ -3498,7 +3502,7 @@ export function RobotScene({ suctionZoomOpen, onSuctionZoomClose, joints, liveJo
           </button>
         </div>
       )}
-    </div>
+    </div><RevisionSceneDock/></div>
   );
 }
 

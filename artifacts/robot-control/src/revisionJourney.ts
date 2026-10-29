@@ -8,7 +8,7 @@ import { paperTaskTargets } from "./paperRectangleTask";
 export type JourneyPoint = { label: string; x: number | null; y: number | null };
 export type JourneyAttempt = {
   id: string; points: JourneyPoint[]; reason: string; model?: string;
-  observed: JourneyPoint[]; target: JourneyPoint[]; source: string;
+  observed: JourneyPoint[]; target: JourneyPoint[]; source: string; coordinateFrame?: string;
   complete: boolean; outcome: string; match: boolean;
   question: string; gptQuestion: string; cause: string;
 };
@@ -16,7 +16,7 @@ export type RevisionJourneyData = {
   first: JourneyAttempt; previous: JourneyAttempt; current: JourneyAttempt;
   referenceFeedback?: JourneyAttempt; draftRevisionReason?: string;
   draft: JourneyPoint[]; draftReason: string; revisionReason: string;
-  revising: boolean; editing: boolean; conditionsChanged: boolean;
+  revising: boolean; editing: boolean; conditionsChanged: boolean; running?: boolean;
 };
 
 const numeric = (s: string | undefined) => s?.trim() && Number.isFinite(Number(s)) ? Number(s) : null;
@@ -52,14 +52,14 @@ export function paperRevisionJourney(active:PaperTrialRecord|null|undefined, rec
     return {id:r.id,points:paperJourneyPoints(r.predictions),reason:r.transform?.explanation??"",model:modelText(r.transform),
       observed:valid?r.run!.observations.map(o=>({label:o.point,x:o.pose.x,y:o.pose.y})):[],
       target:r.frame?paperTaskTargets(r.level,r.targetSet).map(p=>({label:p.name,...frameTransformPoint(r.frame!,p)})):[],
-      source:r.run?.source??"",complete:valid,match:!!diagnosed&&r.diagnosis?.pattern==="match",
+      source:r.run?.source??"",coordinateFrame:JSON.stringify([r.frame?.coordinateSystem,r.frame?.user,r.frame?.tool]),complete:valid,match:!!diagnosed&&r.diagnosis?.pattern==="match",
       outcome:diagnosed?r.diagnosis!.candidate:valid?"실행 완료 · 비교 대기":r.run?"실행 미완료 · 다시 확인":"실행 전",
       question:diagnosed?(snapshot?.visual?.plan?.question??r.diagnosis!.question):"",gptQuestion:gpt(snapshot),cause:r.studentHypothesis??""};
   };
   const first=convert(chain[0]),current=convert(active),previous=convert(chain.at(-2)??active);
   const revising=chain.length>1;
   return {first,previous,current,referenceFeedback:stage===7?current:previous,draft:paperJourneyPoints(draft),draftReason:transform.explanation,
-    revisionReason:chain.at(-2)?.revisionReason??active.revisionReason??"",revising,
+    revisionReason:chain.at(-2)?.revisionReason??active.revisionReason??"",revising,running:active.run?.status==="running",
     editing:stage===7||revising&&stage<=3,conditionsChanged:revising&&(targetChanged(first,current)
       ||chain[0].frame?.coordinateSystem!==active.frame?.coordinateSystem||chain[0].frame?.user!==active.frame?.user||chain[0].frame?.tool!==active.frame?.tool)};
 }
@@ -87,7 +87,7 @@ export function squareRevisionJourney(lesson:ShapeLesson, conditionKey:string, r
   const revising=chain.length>1||!record;
   // While editing, a saved earlier run must not appear as the new execution result.
   return {first,previous,referenceFeedback:stage===7?current:previous,current:record?current:{...current,id:"draft",complete:false,observed:[],match:false,outcome:"재실행 대기"},
-    draft:points(draft),draftReason:reason,revisionReason:previous.cause,revising,
+    draft:points(draft),draftReason:reason,revisionReason:previous.cause,revising,running:active.runs.at(-1)?.status==="running",
     editing:stage===7||revising&&stage<=3,conditionsChanged:false};
 }
 

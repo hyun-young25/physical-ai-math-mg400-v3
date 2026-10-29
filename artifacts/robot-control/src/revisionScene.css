@@ -1,0 +1,28 @@
+.revision-robot-shell{width:100%;height:100%;display:flex;flex-direction:column;min-height:0;overflow:auto;container-type:inline-size}
+.revision-robot-canvas{flex:1 0 280px;min-height:280px;position:relative}
+.revision-robot-shell:not(:has(.revision-scene-dock))>.revision-robot-canvas{flex-basis:0;min-height:0}
+.revision-scene-dock{flex:none;position:relative;padding:12px 16px;background:#fff;border-top:2px solid #ccdae8;color:#1c3552;font-family:inherit;scroll-margin:10px}
+.revision-scene-dock *{box-sizing:border-box}
+.revision-scene-dock header{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.revision-scene-dock header b{font-size:14px}.revision-scene-dock header span{font-size:11px;color:#5d7084}
+.revision-phase-buttons{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:8px 0}
+.revision-phase-buttons button{display:flex;align-items:center;justify-content:center;gap:5px;min-width:0;padding:8px 4px;border:1px solid #cbd5e1;border-radius:7px;background:#f8fafc;color:#40566d;font-family:inherit;font-size:12px;font-weight:600;line-height:1.4;cursor:pointer}
+.revision-phase-buttons button[aria-pressed=true]{background:#183b61;color:#fff;border-color:#183b61}
+.revision-phase-buttons button span{font-size:11px;opacity:.7}
+.revision-point-picker{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin:8px 0}
+.revision-point-picker button{border:1px solid #cbd5e1;border-radius:5px;background:#fff;color:#294967;padding:5px 10px;font-size:12px;cursor:pointer}
+.revision-point-picker button[aria-pressed=true]{background:#e8f1ff;border-color:#2563eb;color:#1d4ed8;font-weight:700}
+.revision-point-picker small{font-size:11px;color:#58718a;margin-left:4px}
+.revision-scene-values{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.revision-scene-values>div{display:flex;flex-direction:column;gap:3px;min-width:0;padding:7px;background:#f8fafc;border-top:3px solid;border-radius:4px}
+.revision-scene-values span,.revision-scene-values small{font-size:11px;line-height:1.4;overflow-wrap:anywhere}.revision-scene-values b{font-size:14px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.revision-scene-values small{color:#62748a}
+.revision-scene-message{font-size:12px;line-height:1.6;margin:9px 0 6px;max-height:80px;overflow:auto;white-space:pre-wrap}
+.revision-scene-message b{color:#1d4f84;margin-right:5px}
+.revision-scene-change{font-size:12px;font-weight:700;color:#1d4f84;margin:8px 0 4px}
+.revision-phase-buttons button:disabled,.revision-point-picker button:disabled{opacity:.55;cursor:default}
+.revision-scene-note{display:block;font-size:10px;line-height:1.5;color:#62748a;margin:3px 0}
+.revision-point-label{transform:translateY(-22px);border:1px solid #91a7c1;background:#fffffff0;color:#334b64;border-radius:5px;padding:3px 8px;cursor:pointer;font:600 12px sans-serif}
+.revision-point-label[aria-pressed=true]{background:#183b61;color:white;border:2px solid white;box-shadow:0 0 0 2px #183b61}
+@container(max-width:430px){.revision-scene-dock{padding:10px}.revision-phase-buttons button{font-size:11px}.revision-phase-buttons button span{display:none}.revision-scene-values b{font-size:12px}}
+/* Keep the robot and the linked feedback together; the surrounding workspace scrolls. */
+@media(max-width:900px){.workspace-layout>.workspace-has-lesson>.curriculum-scene:has(.revision-scene-dock){flex:0 0 640px!important;height:640px!important;min-height:640px}}

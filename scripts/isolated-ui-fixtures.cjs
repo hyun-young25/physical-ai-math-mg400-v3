@@ -53,7 +53,9 @@ chromium.launch=async options=>{
   await context.routeWebSocket("**",ws=>ws.close());
   await route("**/*",async r=>{
    const u=new URL(r.request().url()),p=decodeURIComponent(u.pathname);
-   if(u.hostname==="raw.githack.com"&&p.endsWith(".hdr"))return r.fulfill({body:Buffer.concat([Buffer.from("#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y 1 +X 1\n"),Buffer.from([128,128,128,129])])});
+   // PMREM requires a usable cube size. A 1x1 placeholder can make standard
+   // materials disappear under software WebGL, leaving only robot shadows.
+   if(u.hostname==="raw.githack.com"&&p.endsWith(".hdr"))return r.fulfill({body:Buffer.concat([Buffer.from("#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y 64 +X 128\n"),Buffer.from(Array.from({length:128*64},()=>[128,128,128,129]).flat())])});
    if(!["localhost","127.0.0.1"].includes(u.hostname))return r.abort();
    if(bundles.has(p))return r.fulfill({body:Buffer.from(bundles.get(p)),contentType:p.endsWith(".js")?"text/javascript":p.endsWith(".css")?"text/css":undefined});
    if(p==="/"||p==="/index.html"){

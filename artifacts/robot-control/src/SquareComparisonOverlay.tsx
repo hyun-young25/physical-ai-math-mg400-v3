@@ -4,6 +4,7 @@ import { Html,Line } from "@react-three/drei";
 import * as THREE from "three";
 import { shapeWorldPoint } from "./shapeKinematics";
 import { useSquareVisual } from "./useSquareVisual";
+import { useActiveRevisionScene } from "./revisionSceneStore";
 import { COMPARISON_COLORS as C,fmtSquare,signedSquare,squareExecutionLabel,squareClosureGap,squareReplayPoint } from "./squareComparisonVisual";
 import type { SquareObservedVertex } from "./squareMismatchDiagnosis";
 
@@ -24,6 +25,7 @@ function ErrorArrow({from,to,neutral=false}:{from:SquareObservedVertex;to:Square
   return <group>{neutral?<Line points={[a,b]} color="#94a3b8" dashed dashSize={3} gapSize={3} lineWidth={2}/>:<primitive object={arrow}/>}<Html position={b} center zIndexRange={[12,0]} style={{pointerEvents:"none"}}><span className={"square-3d-label "+(neutral?"square-3d-neutral":"square-3d-error")}>{fmtSquare(distance)} mm</span></Html></group>;
 }
 export function SquareComparisonOverlay(){
+  const revision=useActiveRevisionScene();
   const state=useSquareVisual(),v=state.visual;
   const expectedMarker=useRef<THREE.Group>(null),actualMarker=useRef<THREE.Group>(null),mismatch=useRef<THREE.Group>(null);
   const dimension=useRef<HTMLDivElement>(null);
@@ -42,7 +44,7 @@ export function SquareComparisonOverlay(){
     if(mismatch.current)mismatch.current.visible=diverged;
     if(dimension.current)dimension.current.style.visibility=diverged?"visible":"hidden";
   });
-  if(!v||!state.enabled)return null;
+  if(!v||!state.enabled||revision.data)return null;
   const {diagnosis:d,target,observed}=v,edgeIndex=v.match===true||v.diagnosis.type==="model-real"?undefined:state.emphasis?.edgeIndex??d.edgeIndex;
   const edge=edgeIndex?d.evidence.edges?.[edgeIndex-1]:undefined;
   const a=edgeIndex?observed[edgeIndex-1]:undefined,b=edgeIndex?observed[edgeIndex]:undefined;
