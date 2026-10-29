@@ -16,10 +16,15 @@ const fixture=require('./verify-revision-journey.cjs').fixture
  const React=`);
 
 (async()=>{
- const browser=await chromium.launch({args:['--enable-webgl','--ignore-gpu-blocklist']});
+ // GitHub's Linux runner has no hardware GPU; use the same explicit software
+ // renderer as the existing paper-scene tests instead of driver auto-selection.
+ const browser=await chromium.launch({args:process.platform==='linux'
+  ?['--use-angle=swiftshader','--enable-unsafe-swiftshader']
+  :['--enable-webgl','--ignore-gpu-blocklist']});
  const shots=process.env.DIAG_SHOTS||path.resolve(__dirname,'../diagnosis-qa/robot-preview');fs.mkdirSync(shots,{recursive:true});
  try{
   for(const advanced2 of process.env.PREVIEW_LEVEL==='2'?[true]:[false,true]){
+   console.log(`START advanced ${advanced2?2:1}: current-pose and animated-preview verification`);
    const context=await browser.newContext({viewport:{width:1600,height:900}}),errors=[];
    await context.route('**/api/**',r=>r.fulfill({json:{}}));
    await context.route('**/__robot-preview',r=>r.fulfill({contentType:'text/html',body:fixture}));
@@ -37,7 +42,7 @@ const fixture=require('./verify-revision-journey.cjs').fixture
    assert.equal(idle.sourceVisible,true);assert.equal(idle.fixedVisible,false);
    assert.ok(idle.sourceMaterials.some(m=>m.opacity===1));
    assert.ok(new Set(idle.sourceMaterials.map(m=>m.color)).size>2,'original robot colours remain');
-   await page.screenshot({path:path.join(shots,`advanced${advanced2?2:1}-current.png`)});
+   if(!process.env.CI)await page.screenshot({path:path.join(shots,`advanced${advanced2?2:1}-current.png`),timeout:30000});
    await click('02 수학적 구조화');
    for(const [label,value] of [['원점 X (mm)','180'],['원점 Y (mm)','-60'],['1 cm당 길이 (mm)','10'],['이 관계를 선택한 이유','원점에 종이 이동량을 10배 하여 더합니다.']])await field(label).fill(value);
    if(advanced2){await view.getByLabel('종이 x축이 향하는 방향').selectOption('x+');await field('추가 회전 (°)').fill('0');}
@@ -55,7 +60,7 @@ const fixture=require('./verify-revision-journey.cjs').fixture
    if(recording){await page.screencast.start({path:path.join(shots,'current-and-preview.webm'),size:{width:1600,height:900},quality:90});await page.waitForTimeout(2000);}
    await click('DT에서 확인');await page.getByTestId('paper-preview-label').waitFor();
    await page.waitForTimeout(1800);
-   await page.screenshot({path:path.join(shots,`advanced${advanced2?2:1}-moving.png`)});
+   if(!process.env.CI)await page.screenshot({path:path.join(shots,`advanced${advanced2?2:1}-moving.png`),timeout:30000});
    await page.waitForFunction(()=>JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.endsWith('physical-ai-paper-coordinate-v1')))||'[]').at(-1)?.run?.status==='completed');
    await page.waitForTimeout(400);
    const frames=await page.evaluate(()=>window.__paperFrames),after=await page.evaluate(()=>window.__paperRobot);
@@ -66,9 +71,10 @@ const fixture=require('./verify-revision-journey.cjs').fixture
    assert.ok(after.sourceMaterials.every(m=>m.opacity<=.32));
    assert.ok(after.fixedMaterials.some(m=>m.opacity===1));
    assert.ok(after.sourceMaterials.every(m=>!m.color||m.color==='8b98a6'));
+   console.log(`VERIFIED advanced ${advanced2?2:1}: ${frames.length} motion samples, fixed pose and distinct materials`);
    await click('06 비교·해석');
    await page.getByRole('button',{name:'장면에서 P3 선택',exact:true}).click();
-   await page.screenshot({path:path.join(shots,`advanced${advanced2?2:1}-result.png`)});
+   await page.screenshot({path:path.join(shots,`advanced${advanced2?2:1}-result.png`),timeout:60000});
    if(recording){await page.waitForTimeout(3000);await page.screencast.stop();}
    const records=await page.evaluate(()=>JSON.stringify(localStorage)),moves=await page.evaluate(()=>window.__dt.length);
    await page.getByRole('button',{name:'↺ 종이 시점',exact:true}).click();
@@ -76,7 +82,7 @@ const fixture=require('./verify-revision-journey.cjs').fixture
    await page.getByRole('navigation',{name:'도형 수업 경로',exact:true}).getByRole('button').nth(3).click();
    await page.getByTestId('paper-current-label').waitFor({state:'detached'});
    await page.waitForFunction(()=>window.__paperRobot?.sourceVisible&&!window.__paperRobot.fixedVisible&&window.__paperRobot.sourceMaterials.some(m=>m.opacity===1));
-   await page.screenshot({path:path.join(shots,`advanced${advanced2?2:1}-exit-restored.png`)});
+   if(!process.env.CI)await page.screenshot({path:path.join(shots,`advanced${advanced2?2:1}-exit-restored.png`),timeout:30000});
    assert.deepEqual(errors,[]);
    console.log(`PASS advanced ${advanced2?2:1}: original colours; frozen current pose; ${frames.length} real grey movement frames; original materials on exit; display controls do not write or move.`);
    await context.close();
