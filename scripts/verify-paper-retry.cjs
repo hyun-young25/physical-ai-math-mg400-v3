@@ -4,7 +4,10 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
 const fixture=require('./verify-revision-journey.cjs').fixture;
 const apiCache={};function api(n){if(apiCache[n])return apiCache[n];const out=apiCache[n]={};new Function('exports','require',ts.transpileModule(fs.readFileSync(path.resolve(__dirname,'../artifacts/api-server/src/lib/'+n+'.ts'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText)(out,d=>api(d.replace('./','')));return out;}
 (async()=>{
- const browser=await chromium.launch({args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+ // Existing scene/readability/journey tests cover WebGL. Keep this longer
+ // interaction suite deterministic on CI; opt in to GPU screenshots locally.
+ const webgl=process.env.PAPER_RETRY_WEBGL==='1';
+ const browser=await chromium.launch({args:webgl?['--use-angle=swiftshader','--enable-unsafe-swiftshader']:['--disable-webgl','--disable-gpu']});
  const shots=process.env.DIAG_SHOTS||path.resolve(__dirname,'../../diagnosis-qa');fs.mkdirSync(shots,{recursive:true});
  try{
  for(const rotated of [false,true]){
@@ -17,7 +20,7 @@ const apiCache={};function api(n){if(apiCache[n])return apiCache[n];const out=ap
   const view=page.getByRole('region',{name:'종이 좌표 변환 학습'}),map=view.locator('.paper-scene-map'),click=n=>view.getByRole('button',{name:n,exact:true}).click();
   const records=()=>page.evaluate(()=>JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.endsWith('physical-ai-paper-coordinate-v1')))||'[]'));
   const saved=()=>page.evaluate(()=>JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.endsWith('physical-ai-square-attempts-v1')))||'[]'));
-  const prefix=rotated?'advanced2':'advanced1';
+  const prefix=(webgl?'':'fallback-')+(rotated?'advanced2':'advanced1');
   assert.equal(await map.locator('[aria-pressed=true]').count(),0);
   assert.doesNotMatch(await map.getByRole('status').innerText(),/Y 선택/);
   const ox=rotated?240:180,oy=-60,a=(rotated?30:0)*Math.PI/180;
@@ -75,7 +78,8 @@ const apiCache={};function api(n){if(apiCache[n])return apiCache[n];const out=ap
   assert.match(await page.locator('.square-type-badge').innerText(),/예측과 실행 일치/);
   const final=await records();assert.equal(final[1].diagnosis.pattern,'match');assert.deepEqual(final[0],afterRevision,'first attempt remains byte-for-byte unchanged after correction');
   const dock=page.getByTestId('revision-scene-dock');await dock.getByRole('button',{name:/4.*재실행 결과/}).click();
-  await page.getByRole('button',{name:'장면에서 P3 선택',exact:true}).click();
+  if(webgl)await page.getByRole('button',{name:'장면에서 P3 선택',exact:true}).click();
+  else await map.getByRole('button',{name:'도면에서 P3 선택',exact:true}).click();
   assert.equal(await map.getByRole('button',{name:'도면에서 P3 선택',exact:true}).getAttribute('aria-pressed'),'true');
   assert.match(await dock.innerText(),/목표점[\s\S]*첫 실행[\s\S]*수정 후 실행/);
   assert.equal(await map.locator('[data-paper-series]').count(),3);
