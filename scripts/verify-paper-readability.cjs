@@ -41,6 +41,12 @@ html,body{height:100%;overflow:hidden}.journey-fixture{height:calc(100vh - 30px)
    const input=view.getByLabel(`${name} 예측 로봇 Y · mm`);await input.focus();
    // Focus itself does not promise scroll alignment. Reproduce typing, which does.
    await input.fill(await input.inputValue());
+   // ResizeObserver and the focus layout effect must settle before geometry is sampled.
+   await page.waitForFunction(label=>{
+     const input=document.querySelector(`[aria-label="${label}"]`),map=document.querySelector('.paper-scene-map'),host=document.querySelector('.paper-coordinate-host');
+     const i=input.getBoundingClientRect(),m=map.getBoundingClientRect(),h=host.getBoundingClientRect();
+     return m.y>=h.y-2&&m.bottom<=h.bottom+2&&i.y>=m.bottom-1&&i.bottom<=h.bottom+1;
+   },`${name} 예측 로봇 Y · mm`,{timeout:10000});
    const [m,i,h]=await Promise.all([map.boundingBox(),input.boundingBox(),host.boundingBox()]);
    assert.ok(m.y>=h.y-2&&m.y+m.height<=h.y+h.height+2,'whole compact map stays in lesson pane');
    if(!(i.y>=m.y+m.height-1&&i.y+i.height<=h.y+h.height+1))await page.screenshot({path:path.join(shots,'readability-failure.png')});

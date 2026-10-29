@@ -50,6 +50,19 @@ function StatusPill({ children, tone = "neutral" }: { children: string; tone?: "
   return <span className={`pcv-pill pcv-pill--${tone}`}>{children}</span>;
 }
 
+function revealPaperRow(row: Element) {
+  const outer=row.closest(".paper-coordinate-host"),workspace=row.closest(".pcv-edit-workspace.is-editing");
+  const host=row.closest(".pcv-edit-workspace.is-editing .pcv-edit-content")??outer;
+  if(!host)return;
+  if(outer&&workspace&&host!==outer&&!workspace.querySelector(".paper-scene-map--expanded")) {
+    outer.scrollTo({top:outer.scrollTop+workspace.getBoundingClientRect().top-outer.getBoundingClientRect().top,behavior:"instant"});
+  }
+  const editing=!!document.activeElement&&row.contains(document.activeElement);
+  const visible=host.getBoundingClientRect(),focused=(editing?document.activeElement!:row).getBoundingClientRect();
+  if(focused.top<visible.top+12||focused.bottom>visible.bottom-12)
+    host.scrollTo({top:host.scrollTop+focused.top-visible.top-12,behavior:editing?"instant":"smooth"});
+}
+
 export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStudyViewProps) {
   const id = useId();
   const rectangle=isPaperRectangle(state.level),merged=isMergedPaper(state.level),dtOnly=isPaperDT(state.level),grid=merged?20:10;
@@ -63,8 +76,17 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
   useLayoutEffect(()=>{
     const host=root.current?.closest(".paper-coordinate-host");
     if(!merged||!host)return;
-    const size=()=>root.current?.style.setProperty("--paper-host-height",`${host.clientHeight}px`);
-    size();const observer=new ResizeObserver(size);observer.observe(host);return()=>observer.disconnect();
+    let pending=0;
+    const size=()=>{
+      root.current?.style.setProperty("--paper-host-height",`${host.clientHeight}px`);
+      cancelAnimationFrame(pending);
+      pending=requestAnimationFrame(()=>{
+        const row=document.activeElement?.closest(".pcv-edit-content [data-paper-row]");
+        if(row&&root.current?.contains(row))revealPaperRow(row);
+      });
+    };
+    size();const observer=new ResizeObserver(size);observer.observe(host);
+    return()=>{observer.disconnect();cancelAnimationFrame(pending);};
   },[merged]);
   useLayoutEffect(()=>{
     if(merged) publishPaperScene(id,{level:state.level,stage:state.stage,frame:state.frame,samples:state.samples,targetPoints:state.targetPoints,predictions:state.predictions,revisionJourney:journey,running:state.running,diagnosis:state.diagnosis,run:state.run,displayPose:state.displayPose,displaySource:state.displaySource});
@@ -75,24 +97,15 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
     if(merged) root.current?.closest(".paper-coordinate-host")?.scrollTo({top:0});
     lastSelection.current=scene.selectionVersion;
   },[merged,state.level]);
-  useEffect(()=>{
+  useLayoutEffect(()=>{
     if(lastSelection.current===scene.selectionVersion)return;
     lastSelection.current=scene.selectionVersion;
     if(!merged||scene.owner!==id||scene.data?.level!==state.level||!selected)return;
     const row=root.current?.querySelector(`[data-paper-row="${selected}"]`);
-    const host=row?.closest(".pcv-edit-workspace.is-editing .pcv-edit-content")??root.current?.closest(".paper-coordinate-host");
-    if(!host||!row)return;
-    const pinned=0;
+    if(!row)return;
     const editing=!!document.activeElement&&row.contains(document.activeElement);
     if(scene.selectionOrigin!=="scene"&&!editing)return;
-    const outer=root.current?.closest(".paper-coordinate-host"),workspace=row.closest(".pcv-edit-workspace.is-editing");
-    if(outer&&workspace&&host!==outer){
-      outer.scrollTo({top:outer.scrollTop+workspace.getBoundingClientRect().top-outer.getBoundingClientRect().top,behavior:"instant"});
-    }
-    // Re-read after bringing the non-overlapping workspace into the outer pane.
-    const visible=host.getBoundingClientRect(),focused=row.getBoundingClientRect();
-    if(focused.top<visible.top+pinned+12||focused.bottom>visible.bottom-12)
-      host.scrollTo({top:host.scrollTop+focused.top-visible.top-pinned-12,behavior:editing?"instant":"smooth"});
+    revealPaperRow(row);
   },[merged,id,state.level,scene.owner,scene.selectionVersion,scene.selectionOrigin,selected]);
   const rowProps=(name:string)=>merged?{"data-paper-row":name,"data-paper-selected":selected===name,onFocus:()=>selectPaperPoint(name)}:{};
   const focusedRetry=useRef<string|null>(null);
