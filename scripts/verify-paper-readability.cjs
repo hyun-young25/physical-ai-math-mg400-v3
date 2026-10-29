@@ -43,7 +43,8 @@ html,body{height:100%;overflow:hidden}.journey-fixture{height:calc(100vh - 30px)
    await input.fill(await input.inputValue());
    const [m,i,h]=await Promise.all([map.boundingBox(),input.boundingBox(),host.boundingBox()]);
    assert.ok(m.y>=h.y-2&&m.y+m.height<=h.y+h.height+2,'whole compact map stays in lesson pane');
-   assert.ok(i.y>=m.y+m.height-1&&i.y+i.height<=h.y+h.height+1,'focused input remains below the map and on screen');
+   if(!(i.y>=m.y+m.height-1&&i.y+i.height<=h.y+h.height+1))await page.screenshot({path:path.join(shots,'readability-failure.png')});
+   assert.ok(i.y>=m.y+m.height-1&&i.y+i.height<=h.y+h.height+1,'focused input remains below the map and on screen: '+JSON.stringify({m,i,h}));
   };
   await visibleTogether('P3');await page.screenshot({path:path.join(shots,'20-paper-pinned-input-desktop.png')});
   await page.setViewportSize({width:1280,height:800});await visibleTogether('P4');

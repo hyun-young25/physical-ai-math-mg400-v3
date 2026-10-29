@@ -72,13 +72,15 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
   useEffect(()=>{
     if(lastSelection.current===scene.selectionVersion)return;
     lastSelection.current=scene.selectionVersion;
-    if(!merged||scene.owner!==id||scene.data?.level!==state.level||scene.selectionOrigin!=="scene"||!selected)return;
+    if(!merged||scene.owner!==id||scene.data?.level!==state.level||!selected)return;
     const host=root.current?.closest(".paper-coordinate-host"),row=root.current?.querySelector(`[data-paper-row="${selected}"]`);
     if(!host||!row)return;
     const bounds=host.getBoundingClientRect(),target=row.getBoundingClientRect();
     const pinned=root.current?.querySelector(".paper-scene-map--compact")?.getBoundingClientRect().height??0;
+    const editing=pinned>0&&!!document.activeElement&&row.contains(document.activeElement);
+    if(scene.selectionOrigin!=="scene"&&!editing)return;
     if(target.top<bounds.top+pinned+12||target.bottom>bounds.bottom-12)
-      host.scrollTo({top:host.scrollTop+target.top-bounds.top-pinned-12,behavior:"smooth"});
+      host.scrollTo({top:host.scrollTop+target.top-bounds.top-pinned-12,behavior:editing?"instant":"smooth"});
   },[merged,id,state.level,scene.owner,scene.selectionVersion,scene.selectionOrigin,selected]);
   const rowProps=(name:string)=>merged?{"data-paper-row":name,"data-paper-selected":selected===name,onFocus:()=>selectPaperPoint(name)}:{};
   const displayPose=merged?state.displayPose??state.currentPose:state.currentPose;
