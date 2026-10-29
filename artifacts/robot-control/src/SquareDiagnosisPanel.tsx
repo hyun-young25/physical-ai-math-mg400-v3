@@ -76,7 +76,13 @@ export function SquareDiagnosisPanel({ diagnosis, plan, plannedVertices, observe
       :"이번 실행의 좌표 관측 없음";
   return <section className="square-diagnosis" data-type={diagnosis.type} data-level={plan?.level??"self-regulation"} aria-label="실행 결과와 과제 조건 비교" data-testid="square-diagnosis">
     <p className="square-diagnosis-source">{sourceLabel}</p>
-    <section className="square-decision-section"><h3>① 조건과 관측 비교</h3>
+    <section className="square-decision-section square-question-first"><h3>먼저 이 질문을 보고 다시 생각해 보세요</h3>
+      <p className="square-diagnosis-question"><strong>규칙 기반 기본 질문</strong> {plan?.question??"이번 관계를 다음 과제에서도 확인하려면 무엇을 먼저 점검할까요?"}</p>
+      <p>{diagnosis.label}</p>
+      {plan?.teacherFlag&&<p className="square-diagnosis-teacher"><strong>교사 확인 필요</strong> · 같은 차이가 반복되어 함께 확인할 단계입니다.</p>}
+      {gptQuestion&&<p><strong>GPT가 표현한 질문·설명</strong> {gptQuestion}</p>}
+    </section>
+    <section className="square-decision-section"><h3>어디가 달랐나요? · 조건과 관측 비교</h3>
       <SquareDiagnosisVisualSummary diagnosis={diagnosis} observed={observedVertices??[]} target={targetVertices} connectedOnly={connectedOnly}/>
       <p>판정 허용오차 {fmt(tol)} mm · {toleranceMm?"종이 목표·명령과 보고 위치":diagnosis.evidence.source==="hardware"?"명령과 제어기 보고 위치 · 수학적 변 계산 0.1 mm":"수학적 변 계산"}</p>
       <div className="square-edge-cards">{edges.map((e,i)=>{const want=e.condition.axis==="X"?{dx:e.condition.delta,dy:0}:{dx:0,dy:e.condition.delta};const same=diagnosis.type==="match"||(Math.abs(want.dx-e.executed.dx)<=tol&&Math.abs(want.dy-e.executed.dy)<=tol);
@@ -84,9 +90,10 @@ export function SquareDiagnosisPanel({ diagnosis, plan, plannedVertices, observe
       {measured&&<p>평균 차이 {fmt(measured.meanError)} mm · 최대 차이 {fmt(measured.maxError)} mm · {measured.reference==="student-plan"?"명령":"목표"} 대비</p>}
       {diagnosis.type==="model-real"&&<p>학생 오류로 단정할 수 없습니다. 장비·좌표계·측정 조건을 먼저 확인하세요.</p>}
     </section>
-    <section className="square-decision-section"><h3>② 규칙 기반 판정</h3><div className="square-type-chips">{types.map(t=><span key={t} data-selected={t===diagnosis.type}>{squareMismatchName(t)}</span>)}</div><p>{diagnosis.label}</p><p>{questionReason(diagnosis)}</p></section>
-    <section className="square-decision-section"><h3>③ 피드백 단계</h3><SquareFeedbackProgress plan={plan} match={diagnosis.type==="match"} priorSameType={priorSameType} supportMode={supportMode}/>{diagnosis.type==="model-real"&&<p>장비·모형 차이는 학습 오류 반복에 따른 지원 상향에서 제외합니다.</p>}</section>
-    <section className="square-decision-section"><h3>④ 확인 질문</h3><p className="square-diagnosis-question"><strong>규칙 기반 기본 질문</strong> {plan?.question??"이번 관계를 다음 과제에서도 확인하려면 무엇을 먼저 점검할까요?"}</p>{gptQuestion&&<p><strong>GPT가 표현한 질문·설명</strong> {gptQuestion}</p>}</section>
+    <details className="square-diagnosis-details"><summary>판정 종류와 피드백 단계 보기</summary>
+    <section className="square-decision-section"><h3>규칙 기반 판정</h3><div className="square-type-chips">{types.map(t=><span key={t} data-selected={t===diagnosis.type}>{squareMismatchName(t)}</span>)}</div><p>{questionReason(diagnosis)}</p></section>
+    <section className="square-decision-section"><h3>피드백 단계</h3><SquareFeedbackProgress plan={plan} match={diagnosis.type==="match"} priorSameType={priorSameType} supportMode={supportMode}/>{diagnosis.type==="model-real"&&<p>장비·모형 차이는 학습 오류 반복에 따른 지원 상향에서 제외합니다.</p>}</section>
+    </details>
     <details className="square-diagnosis-details">
       <summary>자세한 근거 보기</summary>
     <dl className="square-diagnosis-summary">
@@ -119,9 +126,9 @@ export function SquareDiagnosisPanel({ diagnosis, plan, plannedVertices, observe
       {plan?.relationHint && <p className="square-diagnosis-hint"><strong>관계 힌트</strong> {plan.relationHint}</p>}
       {plan?.example && <p className="square-diagnosis-example">{plan.example}</p>}
     </details>
-    <section className="square-decision-section"><h3>⑤ 내가 추정한 원인</h3>
+    <section className="square-decision-section"><h3>이 질문을 보고 내가 생각한 원인</h3>
     {onCauseChange ? <label className="square-diagnosis-cause">
-      {causeRequired ? "이 차이를 설명할 수 있다고 생각하는 이유 (예측을 고치기 전에 적어 주세요)" : plan?.level === "self-regulation" ? "다음 과제에서 미리 점검할 방법 (선택)" : "이 차이에 대한 내 설명 (선택)"}
+      {causeRequired ? "위 피드백을 보고, 어떤 계산을 왜 바꾸려고 하나요?" : plan?.level === "self-regulation" ? "다음 과제에서 미리 점검할 방법 (선택)" : "이 차이에 대한 내 설명 (선택)"}
       <textarea aria-label="차이가 생긴 이유" rows={2} maxLength={1000} disabled={disabled} value={cause ?? ""}
         onChange={event => onCauseChange(event.target.value)}
         placeholder={mismatch ? "확인된 차이를 설명할 수 있는 생각을 적으세요. 확실하지 않으면 가설이라고 표시해도 됩니다." : "다음 과제에서 먼저 확인할 관계를 적어 보세요."}/>

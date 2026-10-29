@@ -277,7 +277,7 @@ export function useMathInquiry(task:string, condition:unknown, fields:InquiryFie
     if(task==="square"&&ref.current&&Object.entries(next).some(([key,value])=>value!==ref.current!.prediction[key]))setSquareReviewEdited(true);
     setReviewDraft(next);
   };
-  return {record,draft,setDraft:updateDraft,reason,setReason,reflection,setReflection,message,ready,observed,ai:recordedAi,requestAi,
+  return {conditionKey,record,draft,setDraft:updateDraft,reason,setReason,reflection,setReflection,message,ready,observed,ai:recordedAi,requestAi,
     taskKind,detailedReflection,reflectionRequired:needsReflection,reflectionReady:!needsReflection||!!reflection.trim(),
     judgment,setJudgment,judgmentReady:judgmentComplete(judgment,detailedReflection),observation,setObservation,saveObservation,
     checked,comparisonAvailable,reviewDraft,setReviewDraft:updateReviewDraft,reviewAnswers,openHints,showHint,feedbackEvent,storageFailed,

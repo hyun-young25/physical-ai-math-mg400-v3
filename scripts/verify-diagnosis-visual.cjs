@@ -19,11 +19,13 @@ const html='<!doctype html><html lang="ko"><head><meta charset="utf-8"/><style>b
  const panel=page.getByTestId("square-diagnosis");
  assert.equal(await panel.getAttribute("data-type"),"axis-swap");
  assert.match(await panel.innerText(),/조건[\s\S]*\+Y 200 mm[\s\S]*실행[\s\S]*−Y 100 mm/);
- assert.equal(await panel.locator("details").getAttribute("open"),null);
+ for(const detail of await panel.locator("details").all())assert.equal(await detail.getAttribute("open"),null);
+ assert.equal(await panel.locator(".square-question-first").isVisible(),true);
  try{await page.getByTestId("square-3d-dimension").waitFor();}catch(e){await page.screenshot({path:path.join(shots,"failure.png")});console.error(JSON.stringify({errors,failed,body:await page.locator("body").innerText()}));throw e;}
  assert.match(await page.getByTestId("square-3d-dimension").innerText(),/条件|조건 \+Y 200 mm/);
  await page.screenshot({path:path.join(shots,"01-open-path.png")});
  passed.push("1: open path + edge 4 + signed dimensions; preserved classifier returns axis-swap");
+ await panel.getByText("판정 종류와 피드백 단계 보기",{exact:true}).click();
  await page.getByRole("button",{name:"arithmetic",exact:true}).click();
  assert.equal(await panel.getAttribute("data-type"),"arithmetic");assert.match(await panel.innerText(),/같은 오류 1회째/);
  for(const [button,level,n] of [["repeat2","task",2],["repeat3","process",3],["repeat4","worked",4]]){
