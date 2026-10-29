@@ -3,7 +3,7 @@ import { Html, Line } from "@react-three/drei";
 import { DoubleSide } from "three";
 import { CoordinateStudyCamera } from "./CoordinateStudyCamera";
 import { shapeWorldPoint } from "./shapeKinematics";
-import { PAPER_COLORS as C, paperCorners, paperGrid, paperMismatchPoints, paperPoint, paperSceneSeries, paperSeriesSegments, paperFrameSource, validPaperPoint, type PaperScenePoint } from "./paperSceneModel";
+import { PAPER_COLORS as C, paperCorners, paperGrid, paperMismatchPoints, paperPoint, paperSceneSeries, paperSeriesSegments, paperFrameSource, validPaperPoint, paperSceneRotation, type PaperScenePoint } from "./paperSceneModel";
 import { requestPaperCamera, selectPaperPoint, usePaperScene } from "./paperSceneStore";
 import "./paperScene.css";
 
@@ -34,6 +34,7 @@ export function PaperSceneOverlay(){
   const vertices=new Float32Array([0,1,2,0,2,3].flatMap(i=>position(corners[i])));
   if(!data)return null;
   const series=paperSceneSeries(data,phase),mismatch=paperMismatchPoints(data,series);
+  const rotation=paperSceneRotation(data,series);
   const raised=(p:PaperScenePoint):[number,number,number]=>{const v=position(p);return [v[0],v[1]+1.5,v[2]];};
   const wp=(p:{x:number;y:number})=>raised({...p,z:center.z});
   const selected=(label:string)=>reference?reference===label:point!==null&&`P${point+1}`===label;
@@ -42,6 +43,11 @@ export function PaperSceneOverlay(){
     <mesh renderOrder={5}><bufferGeometry><bufferAttribute attach="attributes-position" args={[vertices,3]}/></bufferGeometry><meshBasicMaterial color="#f8fafc" transparent opacity={frame ? .92 : .25} side={DoubleSide} depthWrite={false}/></mesh>
     {paperGrid(frame).map((line,i)=><Line key={i} points={line.map(raised)} color={i%10===0?"#94a3b8":"#cbd5e1"} lineWidth={i%10===0?1.1:.65} transparent opacity={frame ? .8 : .3}/>)}
     <Line points={[...corners,corners[0]].map(raised)} color={C.reference} lineWidth={2} dashed={!frame}/>
+    {rotation&&<group name="paper-observed-rotation">
+      <Line points={rotation.arc.map(raised)} color="#b45309" lineWidth={4} depthTest={false} renderOrder={220}/>
+      {[rotation.arc[0],rotation.arc.at(-1)!].map((p,i)=><Line key={i} points={[raised(rotation.start),raised(p)]} color="#b45309" lineWidth={2} dashed depthTest={false} renderOrder={220}/>)}
+      <Html position={raised(rotation.label)} zIndexRange={[17,0]}><span className="paper-angle-label" data-testid="paper-rotation-3d">{rotation.relativeAngle.toFixed(1)}°<small>경로 · 종이 x축</small></span></Html>
+    </group>}
     {series.map(s=><group key={s.label}>
       {paperSeriesSegments(s.points).map((segment,i)=><Line key={i} points={segment.map(wp)} color={s.color} lineWidth={s.label==="목표점"?2:3} dashed={s.dashed} dashSize={5} gapSize={4} transparent depthTest={false} renderOrder={200}/>)}
       {s.points.filter(validPaperPoint).map(p=><mesh key={p.label} position={wp(p)} renderOrder={210}><sphereGeometry args={[s.label==="목표점"?3.8:2.7,12,8]}/><meshBasicMaterial color={s.color} transparent depthTest={false}/></mesh>)}
@@ -69,6 +75,7 @@ export function PaperSceneMap({fallback=false,compact=false}:{fallback?:boolean;
   const [expanded,setExpanded]=useState(false);
   const {data,point,reference,phase}=usePaperScene();if(!data)return null;
   const frame=data.frame, corners=paperCorners(frame),series=paperSceneSeries(data,phase),mismatch=paperMismatchPoints(data,series);
+  const rotation=paperSceneRotation(data,series);
   const all=[...corners,...series.flatMap(s=>s.points.filter(validPaperPoint))];
   const minX=Math.min(...all.map(p=>p.x)),maxX=Math.max(...all.map(p=>p.x)),minY=Math.min(...all.map(p=>p.y)),maxY=Math.max(...all.map(p=>p.y));
   const scale=260/Math.max(maxX-minX,maxY-minY,200);
@@ -85,6 +92,7 @@ export function PaperSceneMap({fallback=false,compact=false}:{fallback?:boolean;
         {paperSeriesSegments(s.points).map((segment,i)=><polyline key={i} points={path(segment)} fill="none" stroke={s.color} strokeWidth="2.4" strokeDasharray={s.dashed?"5 4":undefined}/>)}
         {s.points.filter(validPaperPoint).map(p=>{const q=xy(p);return <circle key={p.label} cx={q.x} cy={q.y} r="3.5" fill={s.color}/>;})}
       </g>)}
+      {rotation&&<g data-testid="paper-rotation-map"><polyline points={path(rotation.arc)} fill="none" stroke="#b45309" strokeWidth="3"/><text x={xy(rotation.label).x} y={xy(rotation.label).y} fontSize="18" fill="#92400e" fontWeight="800">{rotation.relativeAngle.toFixed(1)}°</text></g>}
       {data.targetPoints.map(p=>{const q=xy(paperPoint(frame,p.xCm,p.yCm)),bad=mismatch.includes(p.name),active=selectedName===p.name;return <g key={p.name} role="button" tabIndex={0} aria-label={`도면에서 ${p.name} 선택`} aria-pressed={active} onClick={()=>choose(p.name)} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();choose(p.name);}}} className={bad?"paper-mismatch-pulse":""}>
         <rect x={q.x-18} y={q.y-30} width="68" height="50" fill="transparent"/>
         {active&&<circle className="paper-selection-halo" cx={q.x} cy={q.y} r="18" fill="#ede9fe" fillOpacity=".8" stroke="#7c3aed" strokeWidth="3"/>}

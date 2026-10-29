@@ -1,9 +1,12 @@
 import type { PaperCoordinateStudyViewState } from "./paperCoordinateViewModel";
 import { SquareDiagnosisPanel } from "./SquareDiagnosisPanel";
 import { SquareReplayControls } from "./SquareComparisonView";
+import { paperRotationVisual } from "./paperRotationVisual";
 export function PaperDiagnosisVisual({state,cause,onCauseChange,onSaveCause}:{state:PaperCoordinateStudyViewState;cause?:string;onCauseChange?:(s:string)=>void;onSaveCause?:()=>void}){
  const v=state.comparison;if(!v)return null;
+ const rotation=state.level==="advanced-paper-hardware" ? paperRotationVisual(state.frame,state.targetPoints,state.run) : null;
  return <div data-testid="paper-diagnosis-visual"><SquareDiagnosisPanel diagnosis={v.diagnosis} plan={v.plan}
+ differenceSummary={rotation&&<div className="paper-rotation-summary" data-testid="paper-rotation-summary"><strong>{rotation.text}</strong><span>{rotation.scaleText}</span><small>P1→P2 관측 방향과 종이 x축 비교 · 사고 원인을 확정하는 판정은 아닙니다.</small></div>}
  gptQuestion={state.gptQuestion} connectedOnly targetVertices={v.target} observedVertices={v.observed} toleranceMm={v.toleranceMm} priorSameType={v.priorSameType} supportMode={v.supportMode}
  cause={cause??state.studentHypothesis} onCauseChange={onCauseChange} disabled={state.running} causeRequired={v.diagnosis.type!=="match"&&v.diagnosis.type!=="model-real"}>
  {onSaveCause&&<button type="button" className="pcv-button pcv-button--primary" disabled={state.running} onClick={onSaveCause}>생각 저장</button>}

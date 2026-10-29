@@ -1,7 +1,10 @@
 // Real lesson components, isolated storage/HTTP and simulated DT only. No live robot or publication.
 require('./isolated-ui-fixtures.cjs');
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),ts=require('typescript');
-const fixture=require('./verify-revision-journey.cjs').fixture;
+const fixture=require('./verify-revision-journey.cjs').fixture.replace('</head>',`<style>
+html,body{height:100%;overflow:hidden}.journey-fixture{height:calc(100vh - 30px);box-sizing:border-box;overflow:hidden}
+.journey-robot{height:100%;box-sizing:border-box;position:relative;top:0}.curriculum-body{height:100%;min-height:0;overflow:hidden}
+</style></head>`);
 const apiCache={};function api(n){if(apiCache[n])return apiCache[n];const out=apiCache[n]={};new Function('exports','require',ts.transpileModule(fs.readFileSync(path.resolve(__dirname,'../artifacts/api-server/src/lib/'+n+'.ts'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText)(out,d=>api(d.replace('./','')));return out;}
 (async()=>{
  // Existing scene/readability/journey tests cover WebGL. Keep this longer
@@ -11,13 +14,18 @@ const apiCache={};function api(n){if(apiCache[n])return apiCache[n];const out=ap
  const shots=process.env.DIAG_SHOTS||path.resolve(__dirname,'../../diagnosis-qa');fs.mkdirSync(shots,{recursive:true});
  try{
  for(const rotated of [false,true]){
-  const context=await browser.newContext({viewport:{width:1440,height:1080}}),errors=[];
+  const context=await browser.newContext({viewport:{width:1280,height:720}}),errors=[];
   await context.route('**/api/**',r=>r.fulfill({json:{}}));await context.routeWebSocket('**',ws=>ws.close());
   await context.route('**/__paper-retry',r=>r.fulfill({contentType:'text/html',body:fixture}));
   const page=await context.newPage();page.setDefaultTimeout(30000);page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://localhost/__paper-retry');
   await page.getByRole('button',{name:rotated?/종이 위 경로 확인 \(MG400\)/:/종이 기준점 \(DT\)/}).click();
-  const view=page.getByRole('region',{name:'종이 좌표 변환 학습'}),map=view.locator('.paper-scene-map'),click=n=>view.getByRole('button',{name:n,exact:true}).click();
+  const view=page.getByRole('region',{name:'종이 좌표 변환 학습'}),map=view.locator('.paper-scene-map');
+  const click=async n=>{
+   const button=view.getByRole('button',{name:n,exact:true});await button.scrollIntoViewIfNeeded();
+   assert.ok(await button.evaluate(el=>{const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return el===hit||el.contains(hit);}),`${n}: actual pointer target must not be covered by the map`);
+   await button.click();
+  };
   const records=()=>page.evaluate(()=>JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.endsWith('physical-ai-paper-coordinate-v1')))||'[]'));
   const saved=()=>page.evaluate(()=>JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.endsWith('physical-ai-square-attempts-v1')))||'[]'));
   const prefix=(webgl?'':'fallback-')+(rotated?'advanced2':'advanced1');

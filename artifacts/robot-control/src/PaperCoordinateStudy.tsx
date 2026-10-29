@@ -1,4 +1,6 @@
 import { paperRetryInputs, paperRetryFields } from "./paperRetry";
+import { paperBoundary, supervisedPaperBlockers, type PaperRunBlocker } from "./paperExecutionGuards";
+import { recordLearningAction } from "./learningSync";
 import { paperDiagnosisLabel } from "./paperDiagnosisLabel";
 import { useSquareAttemptHistory,SquareAttemptHistory,SquareAttemptReview } from "./squareAttemptHistory";
 import { paperRevisionJourney } from "./revisionJourney";
@@ -84,6 +86,8 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
   const [predictionFeedback, setPredictionFeedback] = useState("");
   const [pageError, setPageError] = useState("");
   const [running, setRunning] = useState(false);
+  // Per-lesson opt-in. Never restored from a student's saved attempt.
+  const [allowMismatchedHardware, setAllowMismatchedHardware] = useState(false);
   const activeRunRef = useRef(false);
   const [focusRetryId, setFocusRetryId] = useState<string | null>(null);
   const [resetRetryId, setResetRetryId] = useState<string | null>(null);
@@ -135,6 +139,9 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     && JSON.stringify(draftTargets) === JSON.stringify(persistedPredictions);
   const run = active?.run ?? null;
   const dtReadyForPhysical = !!active?.dtRunPlanHash && active.dtRunPlanHash === planHash;
+  const mismatchedPrediction = !!frame && persistedPredictions.length===targetPoints.length
+    && comparePaperPredictionToFrame(frame,persistedPredictions).some(e=>e.distance>0.1);
+  const supervisedMismatch = level==="advanced-paper-hardware" && allowMismatchedHardware && mismatchedPrediction;
 
   const saveAll = useCallback((nextRecords: PaperTrialRecord[], message = "학습 근거를 브라우저에 저장했습니다.") => {
     recordsRef.current = nextRecords;
@@ -245,6 +252,8 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
 
   const actions: PaperCoordinateStudyViewActions = {
     onBack,
+    onAllowMismatchedHardware: value => { if(!running && level==="advanced-paper-hardware") setAllowMismatchedHardware(value); },
+    onOpenConnection: () => practice.setPanelOpen(true),
     onResetRetry: () => {
       if (!active || !isMergedPaper(level) || active.run || running) return;
       setResetRetryId(active.id);
@@ -523,9 +532,13 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
 
   async function executeRun(kind: "dt" | "connected") {
     if (running) return;
+    if(isMergedPaper(level)) {
+      const blockers=kind==="dt"?dtBlockers:physicalBlockers;
+      if(blockers.length){setPageError(blockers.map(b=>b.message).join(" · "));return;}
+    }
     if(kind==="connected"&&isPaperDT(level)){setPageError("심화 1은 DT 전용입니다.");return;}
     if(isMergedPaper(level)&&!paperConceptValid(active?.pathConcept)){setPageError("직선 이동 명령과 닫힌 경로의 ΔX·ΔY 합을 먼저 확인하세요.");return;}
-    if(kind==="connected"&&isMergedPaper(level)&&attemptSupport==="guided"&&active?.frame&&comparePaperPredictionToFrame(active.frame,persistedPredictions).some(e=>e.distance>0.1)){setPageError("기초 지원에서는 예측을 목표 좌표와 일치시킨 뒤 실장비에서 확인하세요.");return;}
+    if(kind==="connected"&&isMergedPaper(level)&&attemptSupport==="guided"&&!supervisedMismatch&&active?.frame&&comparePaperPredictionToFrame(active.frame,persistedPredictions).some(e=>e.distance>0.1)){setPageError("기초 지원에서는 예측을 목표 좌표와 일치시킨 뒤 실장비에서 확인하세요.");return;}
     if (active?.run?.source !== "dt" && active?.run) {
       setPageError("연결된 실행 기록은 보존합니다. 수정 이유를 적고 새 시도에서 다시 실행하세요."); return;
     }
@@ -557,6 +570,14 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     const startPose = kind === "dt" ? simStart : liveMeasurement?.pose;
     if (!startPose) { setPageError("실행 전 위치를 확인할 측정값이 없습니다."); return; }
     const safeZ = Math.max(startPose.z, liftHeight);
+    const raisedOnly = new Set<string>();
+    if(kind==="connected" && supervisedMismatch) {
+      const blocked=supervisedPaperBlockers(allowMismatchedHardware,true,dtReadyForPhysical,active.frame,points);
+      if(blocked.length){setPageError(blocked.map(b=>b.message).join(" · "));return;}
+      for(const point of points) if(paperBoundary(active.frame,point.pose).outside) {
+        raisedOnly.add(point.point);point.pose={...point.pose,z:safeZ};
+      }
+    }
     const operations: PracticeOperation[] = [];
     const commands: LessonPose[] = [
       { x: startPose.x, y: startPose.y, z: safeZ, r: O.pose.r },
@@ -646,12 +667,15 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     if (outside.length) { setPageError(outside.map(finding => `${finding.axis.toUpperCase()}=${finding.value} 범위 [${finding.min}, ${finding.max}] 밖`).join(" · ")); return; }
     const planeMismatch = persistedPredictions.some(prediction => {
       const point = points.find(item => item.point === prediction.name)!;
-      return Math.abs(point.pose.z - surfaceZ) > setup.positionTolerance;
+      return !raisedOnly.has(prediction.name) && Math.abs(point.pose.z - surfaceZ) > setup.positionTolerance;
     });
     if (planeMismatch) { setPageError("종이 표면 높이 차이가 허용 범위를 넘습니다. 기준점을 다시 측정하세요."); return; }
     if (!dtReadyForPhysical) { setPageError("현재 계획과 같은 DT 실행을 먼저 완료해야 사람의 최종 실행 확인을 요청할 수 있습니다."); return; }
 
     const runId = crypto.randomUUID();
+    if(supervisedMismatch && active.run?.source==="dt") recordLearningAction("paper-supervised-execution","dt-prerequisite",{
+      paperRecordId:active.id,runId,planHash,dtRun:active.run,
+    },"dt");
     const startSequence = liveMeasurement.seq;
     const runningRecord: PaperRunSnapshot = {
       id: runId, planHash, frameId: active.frame.id, targetSet: active.targetSet, source: liveSource!,
@@ -662,9 +686,12 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     setRunning(true); setPageError("");
     const observed: PaperPoseObservation[] = [];
     try {
-      const results = await practice.runOps(operations, liveSource === "mock"
+      const label = liveSource === "mock"
         ? "모눈종이 좌표 변환 · 모의 브리지 시험 (실제 로봇은 움직이지 않음)"
-        : "모눈종이 좌표 변환 · 저장된 학생 예측 실행 (제어기 TCP 보고 좌표만 측정)", (measurement, index, operation) => {
+        : "모눈종이 좌표 변환 · 저장된 학생 예측 실행 (제어기 TCP 보고 좌표만 측정)";
+      const warning = supervisedMismatch ? "\n예측이 목표와 다릅니다. 로봇이 종이 목표와 다른 곳으로 이동합니다. 비상정지를 확인하고 실행하세요."
+        + (raisedOnly.size ? `\n${[...raisedOnly].join(", ")}: 종이 밖에서는 펜을 내리지 않고 들기 높이에서만 확인합니다.` : "") : "";
+      const results = await practice.runOps(operations, label+warning, (measurement, index, operation) => {
         const pointName = captureIndices.get(index);
         if (!pointName || operation.kind !== "move") return;
         observed.push({
@@ -673,7 +700,21 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
           pose: { ...measurement.pose }, command: { ...operation.target },
           kind: measurement.source === "hardware" ? "controller-tcp" : "mock-bridge",
         });
-      }, undefined);
+      }, supervisedMismatch ? () => {
+        // Existing confirmation/connection recheck completes before onStart.
+        // Use the existing action-event payload, leaving trial/CSV schemas intact.
+        const latest=practiceRef.current.session.getSnapshot(),saved=recordsRef.current.find(r=>r.id===active.id);
+        if(!latest.measurement||!measurementFresh(latest.measurement)||latest.measurement.moving
+          ||latest.source!==liveSource||!saved||saved.planHash!==planHash||saved.dtRunPlanHash!==planHash||saved.frame?.id!==active.frame!.id
+          ||poseDistance(latest.measurement.pose,{...O.pose,z:surfaceZ})>setup.positionTolerance
+          ||Math.abs(latest.measurement.pose.r-O.pose.r)>setup.rotationTolerance)
+          throw new Error("교사 확인 중 시작 위치 또는 예측 조건이 바뀌었습니다. O 위치와 같은 DT 계획을 다시 확인하세요.");
+        recordLearningAction("paper-supervised-execution","teacher-confirmed",{
+          paperRecordId:active.id,runId,planHash,dtRunId:active.run?.id,
+          hardwareRunOfMismatchedPrediction:liveSource==="hardware",
+          teacherConfirmedAt:new Date().toISOString(),raisedOnlyPoints:[...raisedOnly],
+        },liveSource!);
+      } : undefined);
       if (!results) {
         const cancelled = { ...runningRecord, status: "cancelled" as const, endedAt: Date.now(), observations: [] };
         upsert({ ...active, run: cancelled, status: "incomplete", stage: 4 }, "사람이 최종 실행 확인을 취소했습니다. 이동 명령은 전송되지 않았습니다.");
@@ -702,7 +743,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     } finally { setRunning(false); }
   }
 
-  const physicalReason = (() => {
+  const legacyPhysicalReason = (() => {
     if (isPaperDT(level)) return "심화 1은 DT 전용입니다.";
     if(isMergedPaper(level)&&!paperConceptValid(active?.pathConcept))return "직선 이동과 닫힘 개념을 먼저 확인하세요.";
     if(isMergedPaper(level)&&attemptSupport==="guided"&&frame&&comparePaperPredictionToFrame(frame,persistedPredictions).some(e=>e.distance>0.1))return "기초 지원에서는 목표와 일치하는 예측으로 실장비를 확인합니다.";
@@ -725,7 +766,49 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     return "";
   })();
 
+  const previewPoints=persistedPredictions.map(p=>({point:p.name,pose:{x:Number(p.robotX),y:Number(p.robotY),z:surfaceZ??0,r:originPose?.r??0}}));
+  const previewZ=Math.max(currentPoseRead?.z??currentPose.z,liftHeight??0);
+  const previewCommands=previewPoints.flatMap(p=>[{...p.pose,z:previewZ},p.pose]);
+  if(originPose)previewCommands.push({...originPose,z:previewZ});
+  const commonBlockers:PaperRunBlocker[]=[];
+  if(running)commonBlockers.push({message:"실행이 끝날 때까지 기다려 주세요.",target:"dt"});
+  if(run&&run.source!=="dt")commonBlockers.push({message:"연결된 실행 기록은 보존됩니다. 수정 이유를 적고 새 시도를 시작하세요.",target:"prediction"});
+  if(!paperConceptValid(active?.pathConcept))commonBlockers.push({message:"직선 이동 명령과 닫힌 경로의 ΔX·ΔY 합을 확인하세요.",target:"prediction"});
+  if(!frame||!active?.transform||!samePlan||persistedPredictions.length!==targetPoints.length)
+    commonBlockers.push({message:"현재 기준점·변환식·예측을 같은 저장본으로 저장하세요.",target:"prediction"});
+  if(liftHeight===null||!Number.isFinite(liftHeight))commonBlockers.push({message:"펜 들기 높이(Z)를 먼저 입력하세요.",target:"height"});
+  else if(surfaceZ===null||liftHeight<=surfaceZ)commonBlockers.push({message:"펜 들기 Z는 기록한 종이 표면보다 높아야 합니다.",target:"height"});
+  if(previewCommands.some(p=>!Object.values(p).every(Number.isFinite)||!canReach(p)))
+    commonBlockers.push({message:"예측점 또는 펜을 든 이동 지점이 기구학 작업 범위 밖입니다.",target:"prediction"});
+  const dtBlockers=[...commonBlockers];
+  if(hardwareConnected)dtBlockers.push({message:"다른 실장비 연결이 활성화되어 DT 실행이 잠겼습니다.",target:"connection"});
+  const physicalBlockers=[...commonBlockers];
+  if(isPaperDT(level))physicalBlockers.push({message:"심화 1은 DT 전용입니다.",target:"connection"});
+  if(level==="advanced-paper-hardware") physicalBlockers.push(...supervisedPaperBlockers(allowMismatchedHardware,mismatchedPrediction,dtReadyForPhysical,frame,previewPoints));
+  if(!dtReadyForPhysical&&!physicalBlockers.some(b=>b.target==="dt"))physicalBlockers.push({message:"같은 예측을 DT에서 먼저 끝까지 실행하세요.",target:"dt"});
+  if(hardwareConnected||!practice.hardware||practice.snap.connection!=="connected"||!practice.snap.source)
+    physicalBlockers.push({message:"실장비가 연결되지 않았거나 다른 연결이 사용 중입니다. 기존 연결·준비 절차를 완료하세요.",target:"connection"});
+  else {
+    const setup=practice.snap.setup,source=practice.snap.source;
+    if(frame?.source!==source)physicalBlockers.push({message:"현재 연결에서 기록한 O/X/Y 기준점이 필요합니다. 교사 입력은 실장비 기준점으로 사용할 수 없습니다.",target:"connection"});
+    if(!liftRecord||liftRecord.source!==source||liftRecord.ageMsAtCapture===null||liftRecord.ageMsAtCapture>PAPER_SAMPLE_MAX_AGE_MS)
+      physicalBlockers.push({message:"현재 연결에서 확인한 펜 들기 높이를 기록하세요.",target:"height"});
+    const ready=practice.session.readiness(true);
+    if(!setup||ready)physicalBlockers.push({message:ready??"연결·준비·서보 확인을 완료하세요.",target:"connection"});
+    if(setup){
+      if(!frame?.samples.every(s=>s.user===setup.user&&s.tool===setup.tool)||!liftRecord||liftRecord.user!==setup.user||liftRecord.tool!==setup.tool||liftRecord.coordinateSystem!==`User ${setup.user} / Tool ${setup.tool}`)
+        physicalBlockers.push({message:"기준점·높이·실행의 User/Tool 설정이 모두 같아야 합니다.",target:"connection"});
+      if(!currentPoseRead||!originPose||poseDistance(currentPoseRead,{...originPose,z:surfaceZ!})>setup.positionTolerance)
+        physicalBlockers.push({message:"제조사 프로그램에서 O에 펜 끝을 맞춘 뒤 새 현재 위치를 확인하세요.",target:"connection"});
+      if(previewCommands.some(p=>targetProblem(p,setup)))physicalBlockers.push({message:"예측점 또는 펜을 든 이동이 설정한 작업 범위를 벗어났습니다.",target:"prediction"});
+    }
+  }
+  const physicalReason=isMergedPaper(level)?physicalBlockers.map(b=>b.message).join(" · "):legacyPhysicalReason;
+
   const state: PaperCoordinateStudyViewState = {
+    dtBlockers:isMergedPaper(level)?dtBlockers:undefined,
+    physicalBlockers:isMergedPaper(level)?physicalBlockers:undefined,
+    allowMismatchedHardware,
     retry: active && retryInputs && retryParent ? {id:active.id, attempt:retryParent.attempt, baseline:retryInputs,
       fields:paperRetryFields(retryParent), focusRequested:focusRetryId===active.id, editable:!active.run} : undefined,
     rotationAllowed:rotationAllowed&&!isPaperDT(level),pathConcept:active?.pathConcept,
@@ -768,6 +851,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     revisionReason: revisionDraft,
     saveState, saveMessage, running, error: pageError,
   };
+  if(isMergedPaper(level))state.runAvailable=dtBlockers.length===0;
 
   const shownDiagnosis = samePlan&&frame&&run?.status==="completed"
     ?state.diagnosis??diagnosePaperRun(run,frame,planHash,{transform:active?.transform,targets:targetPoints,toleranceMm:active?.diagnosisToleranceMm??practice.setupDraft.positionTolerance,detectOriginMissing:isMergedPaper(level),support:attemptSupport}):null;
