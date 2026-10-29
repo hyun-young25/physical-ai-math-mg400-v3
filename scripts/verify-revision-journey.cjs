@@ -12,7 +12,7 @@ const fixture=require('./verify-square-flow.cjs').fixture
   const context=await browser.newContext({viewport:{width:1440,height:1080}}),errors=[];
   await context.route('**/api/**',r=>r.fulfill({json:{}}));
   await context.route('**/__revision',r=>r.fulfill({contentType:'text/html',body:fixture}));
-  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(15000);
+  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(30000);
   await page.goto('http://localhost/__revision');
   await page.getByRole('button',{name:/종이 기준점 \(DT\)/}).click();
   const view=page.getByRole('region',{name:'종이 좌표 변환 학습'}),journey=page.getByTestId('revision-journey');
@@ -95,7 +95,10 @@ const fixture=require('./verify-square-flow.cjs').fixture
   assert.notEqual(await reference.locator('.revision-question').innerText(),firstQuestion,'the editing reference uses the latest feedback for the next revision');
   await reference.screenshot({path:path.join(shots,'11-revision-reference-mobile.png')});
   await page.setViewportSize({width:1440,height:1080});
-  await view.locator('.revision-workspace').screenshot({path:path.join(shots,'12-revision-editing-desktop.png')});
+  // A viewport capture avoids waiting for sticky regions to settle while the
+  // real 3D canvas renders on the CI software GPU.
+  await reference.evaluate(el=>el.scrollIntoView({block:'start'}));
+  await page.screenshot({path:path.join(shots,'12-revision-editing-desktop.png')});
   await page.getByRole('navigation',{name:'도형 수업 경로',exact:true}).getByRole('button').nth(1).click();
   await dock.waitFor({state:'hidden'});
   await page.getByRole('button',{name:'장면에서 P2 선택'}).waitFor({state:'detached'});
