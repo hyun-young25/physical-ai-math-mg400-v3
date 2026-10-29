@@ -58,15 +58,28 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
   const journey=state.revisionJourney ? {...state.revisionJourney,
     draftRevisionReason:state.stage===7?revisionDraft:undefined} : null;
   const root=useRef<HTMLElement>(null), scene=usePaperScene();
-  const selected=scene.reference??`P${scene.point+1}`;
+  const selected=scene.reference??(scene.point===null?null:`P${scene.point+1}`);
+  const lastSelection=useRef(scene.selectionVersion);
   useLayoutEffect(()=>{
     if(merged) publishPaperScene(id,{level:state.level,stage:state.stage,frame:state.frame,samples:state.samples,targetPoints:state.targetPoints,predictions:state.predictions,revisionJourney:journey,running:state.running,diagnosis:state.diagnosis,run:state.run,displayPose:state.displayPose,displaySource:state.displaySource});
     else clearPaperScene(id);
   });
   useLayoutEffect(()=>()=>clearPaperScene(id),[id]);
+  useLayoutEffect(()=>{
+    if(merged) root.current?.closest(".paper-coordinate-host")?.scrollTo({top:0});
+    lastSelection.current=scene.selectionVersion;
+  },[merged,state.level]);
   useEffect(()=>{
-    if(merged&&scene.selectionOrigin==="scene") root.current?.querySelector(`[data-paper-row="${selected}"]`)?.scrollIntoView({block:"nearest",behavior:"smooth"});
-  },[merged,scene.selectionVersion]);
+    if(lastSelection.current===scene.selectionVersion)return;
+    lastSelection.current=scene.selectionVersion;
+    if(!merged||scene.owner!==id||scene.data?.level!==state.level||scene.selectionOrigin!=="scene"||!selected)return;
+    const host=root.current?.closest(".paper-coordinate-host"),row=root.current?.querySelector(`[data-paper-row="${selected}"]`);
+    if(!host||!row)return;
+    const bounds=host.getBoundingClientRect(),target=row.getBoundingClientRect();
+    const pinned=root.current?.querySelector(".paper-scene-map--compact")?.getBoundingClientRect().height??0;
+    if(target.top<bounds.top+pinned+12||target.bottom>bounds.bottom-12)
+      host.scrollTo({top:host.scrollTop+target.top-bounds.top-pinned-12,behavior:"smooth"});
+  },[merged,id,state.level,scene.owner,scene.selectionVersion,scene.selectionOrigin,selected]);
   const rowProps=(name:string)=>merged?{"data-paper-row":name,"data-paper-selected":selected===name,onFocus:()=>selectPaperPoint(name)}:{};
   const displayPose=merged?state.displayPose??state.currentPose:state.currentPose;
 
@@ -387,7 +400,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
 
       {state.error && state.stage!==4 && <p className="pcv-alert" role="alert">{state.error}</p>}
       <LearningRevisionJourney data={journey}/>
-      {merged&&<PaperSceneMap/>}
+      {merged&&<PaperSceneMap compact={state.stage===3||state.stage===7}/>}
       <RevisionEditingLayout data={journey}>
       <main className="pcv-main">
         <section className="pcv-activity" aria-labelledby={`${id}-activity-heading`}>

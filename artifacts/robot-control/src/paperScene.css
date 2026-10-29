@@ -10,6 +10,7 @@
 .paper-scene-toolbar { position:absolute; z-index:18; top:8px; left:8px; right:8px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; pointer-events:none; font-size:11px; color:#0b2d5c; }
 .paper-scene-toolbar button { margin-left:auto; }
 .paper-scene-toolbar span { padding:6px; background:#fffffff0; border-radius:5px; }
+.paper-scene-toolbar small { display:block; font-size:10px; color:#475569; }
 .paper-scene-toolbar button,.paper-point-picker button { pointer-events:auto; border:1px solid #c7d2fe; border-radius:6px; background:#eef2ff; color:#3730a3; font-size:12px; padding:6px 9px; cursor:pointer; }
 .paper-scene-caption { flex:none; padding:8px 10px; background:#f8fafc; border-top:1px solid #cbd5e1; }
 .paper-scene-caption small { display:block; margin-top:4px; color:#475569; font-size:10px; line-height:1.5; }
@@ -23,6 +24,9 @@
 .paper-unknown small { font-size:10px; }
 .paper-point-picker { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:8px; }
 .paper-point-picker span { font-size:11px; color:#475569; }
+.paper-selection-summary { display:flex; flex-wrap:wrap; gap:4px 8px; align-items:center; padding:6px 0; color:#5b21b6; font-size:12px; }
+.paper-selection-summary strong { padding:3px 7px; border-radius:5px; background:#ede9fe; }
+.paper-selection-summary span { font-size:11px; }
 .paper-mismatch-pulse { animation:paper-evidence-emphasis 1.2s ease-out 1; }
 @keyframes paper-evidence-emphasis { 0%,45% { opacity:.35; } 25%,70%,100% { opacity:1; } }
 @media(prefers-reduced-motion:reduce) { .paper-mismatch-pulse { animation:none; } }
@@ -50,6 +54,27 @@
 .paper-coordinate-view[data-paper-sync] .pcv-target-row button { background:transparent; border:0; color:#0b2d5c; font-weight:750; padding:5px; cursor:pointer; }
 .paper-coordinate-view[data-paper-sync] .pcv-target-layout,.paper-coordinate-view[data-paper-sync] .pcv-observation-layout { display:block; }
 .paper-coordinate-view[data-paper-sync]>.paper-scene-map { margin:12px 18px; }
+/* Only the merged advanced lessons pin the compact map while editing. Keep the
+   host as the sole scrolling ancestor so focused inputs cannot hide the map. */
+.paper-coordinate-view[data-paper-sync] { overflow:visible; }
+.paper-coordinate-view[data-paper-sync]>.paper-scene-map--compact {
+  position:sticky; top:0; z-index:24; display:grid;
+  grid-template-columns:minmax(140px,.95fr) minmax(0,1fr); gap:4px 8px;
+  padding:8px; margin:8px; box-shadow:0 4px 12px #0b2d5c18;
+}
+.paper-scene-map--compact>header { grid-column:1/-1; font-size:12px; }
+.paper-scene-map--compact>svg { grid-column:1; grid-row:2/span 5; height:clamp(150px,23vh,210px); align-self:center; }
+.paper-scene-map--compact>:not(header):not(svg) { grid-column:2; margin:0; }
+.paper-scene-map--compact .paper-scene-legend { gap:2px 6px; font-size:10px; }
+.paper-scene-map--compact .paper-selection-summary { padding:0; }
+.paper-scene-map--compact .paper-point-picker { gap:4px; }
+.paper-scene-map--compact .paper-point-picker button { padding:4px 6px; }
+.paper-scene-map--compact p { font-size:10px; }
+.paper-coordinate-view[data-paper-sync]:has(>.paper-scene-map--compact) [data-paper-row] { scroll-margin-top:290px; scroll-margin-bottom:16px; }
+.paper-coordinate-view[data-paper-sync] [data-paper-selected=true] { outline:2px solid #8b5cf6; outline-offset:1px; }
+.paper-coordinate-view[data-paper-sync] .revision-reference { position:static; }
+.paper-coordinate-view[data-paper-sync] .revision-workspace.is-editing { display:block; }
+.paper-coordinate-view[data-paper-sync] .revision-editor { width:100%; }
 .revision-robot-shell:has(.paper-scene-toolbar) { min-height:0; }
 .paper-scene-fallback { position:absolute; inset:45px 8px 8px; overflow:auto; background:#f8fafce8; }
 @media(max-width:700px) { .paper-coordinate-view[data-paper-sync]>.paper-scene-map { margin:10px; } .curriculum-scene:has(.paper-scene-toolbar) { height:640px; min-height:640px; } }
