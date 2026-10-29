@@ -3,7 +3,9 @@ import { LEARNING_STAGES } from "./learningFramework";
 import { PaperDiagnosisVisual } from "./PaperDiagnosisVisual";
 import { LearningRevisionJourney, RevisionEditingLayout } from "./LearningRevisionJourney";
 import { PAPER_RECTANGLE_TITLES,isPaperRectangle } from "./paperRectangleTask";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, useLayoutEffect, useRef } from "react";
+import { PaperSceneMap } from "./PaperScene";
+import { publishPaperScene, clearPaperScene, selectPaperPoint, usePaperScene } from "./paperSceneStore";
 import type { PaperPointName } from "./paperCoordinateStudy";
 import type { PaperCoordinateStudyViewProps, PaperLessonStage } from "./paperCoordinateViewModel";
 import "./paperCoordinateStudyView.css";
@@ -55,6 +57,18 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
   const [revisionDraft, setRevisionDraft] = useState(state.revisionReason);
   const journey=state.revisionJourney ? {...state.revisionJourney,
     draftRevisionReason:state.stage===7?revisionDraft:undefined} : null;
+  const root=useRef<HTMLElement>(null), scene=usePaperScene();
+  const selected=scene.reference??`P${scene.point+1}`;
+  useLayoutEffect(()=>{
+    if(merged) publishPaperScene(id,{level:state.level,stage:state.stage,frame:state.frame,samples:state.samples,targetPoints:state.targetPoints,predictions:state.predictions,revisionJourney:journey,running:state.running,diagnosis:state.diagnosis,run:state.run,displayPose:state.displayPose,displaySource:state.displaySource});
+    else clearPaperScene(id);
+  });
+  useLayoutEffect(()=>()=>clearPaperScene(id),[id]);
+  useEffect(()=>{
+    if(merged&&scene.selectionOrigin==="scene") root.current?.querySelector(`[data-paper-row="${selected}"]`)?.scrollIntoView({block:"nearest",behavior:"smooth"});
+  },[merged,scene.selectionVersion]);
+  const rowProps=(name:string)=>merged?{"data-paper-row":name,"data-paper-selected":selected===name,onFocus:()=>selectPaperPoint(name)}:{};
+  const displayPose=merged?state.displayPose??state.currentPose:state.currentPose;
 
   useEffect(() => setHypothesisDraft(state.studentHypothesis), [state.studentHypothesis]);
   useEffect(() => setRevisionDraft(state.revisionReason), [state.revisionReason]);
@@ -63,7 +77,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
   const sampleFor = (point: PaperPointName) => state.samples.find(sample => sample.point === point);
   const predictionFor = (name: string) => state.predictions.find(prediction => prediction.name === name);
 
-  const renderPaperGrid = () => (
+  const renderPaperGrid = () => merged ? null : (
     <div className="pcv-grid-wrap" aria-label={grid+"×"+grid+" cm 종이 좌표 격자"}>
       <div className="pcv-grid">
         {state.targetPoints.map(point => (
@@ -99,7 +113,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
   const renderReferenceEntry = (point: PaperPointName) => {
     const sample = sampleFor(point);
     return (
-      <fieldset className="pcv-reference" key={point}>
+      <fieldset className="pcv-reference" key={point} {...rowProps(point)}>
         <legend><span className="pcv-point-tag">{point}</span> 기준점</legend>
         <div className="pcv-reference-values">
           {POSE_FIELDS.map(field => (
@@ -139,9 +153,9 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
       case 1:
         return <>
           <p className="pcv-lead">{merged?"종이 원점에서 시작하는 가로 110 mm, 세로 150 mm (11×15 cm) 직사각형을 예측합니다.":rectangle?"종이 (2, 2) cm에서 시작하는 가로 6 cm, 세로 4 cm 직사각형의 네 꼭짓점을 예측합니다.":"기존 사각형 수업의 좌표 생각을 종이 위의 10×10 cm 격자로 옮겨 봅니다."}</p>
-          {rectangle&&<p className="pcv-callout">{merged?(dtOnly?"주어진 O를 기준으로 로봇 좌표 = O + 종이 안의 이동량 관계를 확인하세요. DT 전용 과제입니다.":"O/X/Y를 기록하고 종이 축을 로봇 축과 나란히 맞추세요. 실장비는 각 꼭짓점에서 펜을 들고 내리는 점 확인 방식입니다. 연속 잉크 선 그리기는 검증하지 않습니다."):state.level==="advanced-paper-quarter"?"종이 x축이 로봇 X축에서 90° 돌아가도록 놓고 O/X/Y를 기록하세요.":"종이를 비스듬히 놓고 O/X/Y를 기록하세요. 종이 방향은 기준점으로 확인합니다."} 기준점을 기록하기 전에는 목표 로봇 좌표가 정해지지 않습니다.</p>}
+          {rectangle&&<p className="pcv-callout">{merged?(dtOnly?"주어진 O를 기준으로 로봇 좌표 = O + 종이 안의 이동량 관계를 확인하세요. DT 전용 과제입니다.":`${state.rotationAllowed?"종이를 회전해 놓을 수 있습니다. 실제 위치와 방향은 O/X/Y를 기록해 확인하세요.":"종이 축을 로봇 축과 나란히 맞춘 뒤 O/X/Y를 기록하세요."} 실장비는 각 꼭짓점에서 펜을 들고 내리는 점 확인 방식입니다. 연속 잉크 선 그리기는 검증하지 않습니다.`):state.level==="advanced-paper-quarter"?"종이 x축이 로봇 X축에서 90° 돌아가도록 놓고 O/X/Y를 기록하세요.":"종이를 비스듬히 놓고 O/X/Y를 기록하세요. 종이 방향은 기준점으로 확인합니다."} 기준점을 기록하기 전에는 목표 로봇 좌표가 정해지지 않습니다.</p>}
           <div className="pcv-task-strip">
-            <div><span className="pcv-eyebrow">종이 격자</span><strong>{grid} × {grid} cm</strong><small>가는 눈금 1 mm · 굵은 눈금 1 cm</small></div>
+            <div><span className="pcv-eyebrow">종이 격자</span><strong>{grid} × {grid} cm</strong><small>{merged?"화면 눈금 1 cm · O→X / O→Y 각 10 cm":"가는 눈금 1 mm · 굵은 눈금 1 cm"}</small></div>
             <div><span className="pcv-eyebrow">현재 목표 묶음</span><strong>{state.targetSet === "initial" ? "첫 목표" : "다시 확인할 목표"}</strong>
               <small>{state.level ? LEVEL_LABELS[state.level] : "수준 미선택"}</small></div>
           </div>
@@ -168,7 +182,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
             <div className="pcv-target-list">
               <h3>종이 위의 목표점</h3>
               {state.targetPoints.length ? state.targetPoints.map(point => (
-                <div className="pcv-target-row" key={point.name}><b>{point.name}</b><span>x {point.xCm} cm</span><span>y {point.yCm} cm</span></div>
+                <div className="pcv-target-row" key={point.name} {...rowProps(point.name)}>{merged?<button type="button" onClick={()=>selectPaperPoint(point.name)}>{point.name}</button>:<b>{point.name}</b>}<span>x {point.xCm} cm</span><span>y {point.yCm} cm</span></div>
               )) : <p className="pcv-empty">목표점이 아직 전달되지 않았습니다.</p>}
             </div>
           </div>
@@ -210,7 +224,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
             <p className="pcv-note">아래는 직접 적는 예측 입력입니다. 목표 로봇 좌표는 자동으로 공개되지 않습니다.</p>
             {state.targetPoints.length ? state.targetPoints.map(point => {
               const prediction = predictionFor(point.name);
-              return <fieldset className="pcv-prediction" key={point.name}>
+              return <fieldset className="pcv-prediction" key={point.name} {...rowProps(point.name)}>
                 <legend><span className="pcv-point-tag">{point.name}</span> 종이 좌표 ({point.xCm}, {point.yCm}) cm</legend>
                 <div className="pcv-prediction-grid">
                   {renderPredictionField(point.name, "robotX", "X · mm", prediction?.robotX ?? "")}
@@ -274,7 +288,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
               <p className="pcv-note">아래는 실행 기록에 담긴 위치 보고와 측정된 종이 좌표계의 환산값입니다. 환산은 잉크 위치 측정이 아닙니다.</p>
               <div className="pcv-observation-list">
                 {state.run.observations.map((observation, index) => (
-                  <article className="pcv-observation-item" key={`${observation.point}-${observation.measuredAt}-${index}`}>
+                  <article className="pcv-observation-item" key={`${observation.point}-${observation.measuredAt}-${index}`} {...rowProps(observation.point)} tabIndex={merged?0:undefined} onClick={merged?()=>selectPaperPoint(observation.point):undefined}>
                     <div><span className="pcv-point-tag">{observation.point}</span><strong>{sourceLabel(observation.source)}</strong></div>
                     <p>TCP · X {numberLabel(observation.pose.x)} mm · Y {numberLabel(observation.pose.y)} mm · Z {numberLabel(observation.pose.z)} mm · R {numberLabel(observation.pose.r)}°</p>
                     {state.convertedReadings.find(reading => reading.point === observation.point && reading.measuredAt === observation.measuredAt)
@@ -292,7 +306,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
               <h3>종이 눈금에서 잉크 위치 읽기</h3>
               {state.targetPoints.map(point => {
                 const reading = state.inkReadings.find(item => item.point === point.name);
-                return <fieldset className="pcv-ink-row" key={point.name}>
+                return <fieldset className="pcv-ink-row" key={point.name} {...rowProps(point.name)}>
                   <legend><span className="pcv-point-tag">{point.name}</span> 눈금에서 읽은 위치</legend>
                   <label><span>x · cm</span><input type="number" step="any" inputMode="decimal" value={reading?.xCm ?? ""}
                     aria-label={`${point.name} 잉크 위치 x cm`} onChange={event => actions.onInkReadingChange(point.name, "xCm", event.target.value)} /></label>
@@ -353,7 +367,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
   };
 
   return (
-    <section className="paper-coordinate-view" aria-label="종이 좌표 변환 학습">
+    <section ref={root} className="paper-coordinate-view" data-paper-sync={merged?"true":undefined} aria-label="종이 좌표 변환 학습">
       {!merged&&<header className="pcv-header">
         <button type="button" className="pcv-back" onClick={actions.onBack} disabled={state.running}>← <span>사각형 수업으로</span></button>
         <div className="pcv-header-title"><span className="pcv-eyebrow">MG400 · {rectangle?"사각형 심화 과제":"좌표 확장 활동"}</span><h1>{rectangle?LEVEL_LABELS[state.level]:"종이 좌표를 로봇 좌표로"}</h1>
@@ -373,6 +387,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
 
       {state.error && state.stage!==4 && <p className="pcv-alert" role="alert">{state.error}</p>}
       <LearningRevisionJourney data={journey}/>
+      {merged&&<PaperSceneMap/>}
       <RevisionEditingLayout data={journey}>
       <main className="pcv-main">
         <section className="pcv-activity" aria-labelledby={`${id}-activity-heading`}>
@@ -383,10 +398,11 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
         <aside className="pcv-side-note" aria-label="현재 좌표 정보">
           <span className="pcv-eyebrow">{state.stage===1||state.stage===4 ? "현재 보고된 위치" : "저장된 관측을 비교합니다"}</span>
           <details open={state.stage===1||state.stage===4}><summary>연결 위치 확인</summary>
-          {state.currentPose ? <div className="pcv-pose-readout">
-            {POSE_FIELDS.map(field => <div key={field.key}><span>{field.label} · {field.unit}</span><strong>{numberLabel(state.currentPose?.[field.key])}</strong></div>)}
+          {displayPose ? <div className="pcv-pose-readout">
+            {POSE_FIELDS.map(field => <div key={field.key}><span>{field.label} · {field.unit}</span><strong>{numberLabel(displayPose?.[field.key])}</strong></div>)}
           </div> : <p>현재 위치 자료가 없습니다.</p>}
-          <div className="pcv-side-source"><span>자료 출처</span><strong>{sourceLabel(state.currentSource)}</strong></div>
+          <div className="pcv-side-source"><span>자료 출처</span><strong>{sourceLabel(merged?state.displaySource??state.currentSource:state.currentSource)}</strong>{merged&&state.currentSource&&<small>수신 {timeLabel(state.currentMeasuredAt)} · seq {state.currentSequence??"—"}</small>}</div>
+          {merged&&!state.currentPose&&<p className="pcv-note">DT 표시 좌표입니다. 실제 기준점 기록에는 연결된 장비의 유효한 위치 보고가 필요합니다.</p>}
           <div className="pcv-side-source"><span>좌표 설정</span><strong>{state.coordinateSystem || "미기록"} · User {state.user} / Tool {state.tool}</strong></div>
           <StatusPill tone={state.coordinatesVerified ? "good" : "warn"}>{state.coordinatesVerified ? "좌표 설정 확인됨" : "좌표 설정 확인 전"}</StatusPill>
           </details>

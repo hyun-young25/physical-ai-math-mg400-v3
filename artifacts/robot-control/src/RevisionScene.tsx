@@ -2,6 +2,8 @@ import { Html, Line } from "@react-three/drei";
 import { shapeWorldPoint } from "./shapeKinematics";
 import { journeySource, type JourneyPoint } from "./revisionJourney";
 import { useSquareVisual } from "./useSquareVisual";
+import { usePaperScene, selectPaperPoint } from "./paperSceneStore";
+import { paperSceneSeries } from "./paperSceneModel";
 import { hasRevisionResult, REVISION_PHASES, revisionSceneSeries, selectRevisionPhase, selectRevisionPoint, useActiveRevisionScene, useRevisionScene, validJourneyPoint, type RevisionPhase } from "./revisionSceneStore";
 import "./revisionScene.css";
 
@@ -40,8 +42,9 @@ export function RevisionSceneOverlay() {
 
 export function RevisionSceneDock({fallback=false}:{fallback?:boolean}) {
   const {data,phase,point} = useActiveRevisionScene();
+  const paper=usePaperScene();
   if (!data) return null;
-  const series=revisionSceneSeries(data,phase), feedback=data.referenceFeedback??data.previous;
+  const series=paper.data?paperSceneSeries(paper.data,phase):revisionSceneSeries(data,phase), feedback=data.referenceFeedback??data.previous;
   const before=series.find(s=>s.label==="첫 실행"||s.label==="수정 전 실행")?.points[point],after=series.at(-1)?.points[point];
   const signed=(n:number)=>(n>0?"+":"")+String(Math.round(n*100)/100);
   const change=(phase===2||phase===3)&&before&&after&&validJourneyPoint(before)&&validJourneyPoint(after)?`P${point+1} · X ${signed(after.x-before.x)} mm, Y ${signed(after.y-before.y)} mm (${phase===2?"수정 전 실행 → 예측":"첫 실행 → 수정 후 실행"})`:null;
@@ -49,7 +52,7 @@ export function RevisionSceneDock({fallback=false}:{fallback?:boolean}) {
   return <section className="revision-scene-dock" id="revision-robot-scene" aria-label="도봇과 함께 보는 생각의 변화" data-testid="revision-scene-dock">
     <header><b>도봇과 함께 비교하기</b><span>{fallback?"3D 미지원 · 아래 좌표로 비교":"로봇 X/Y 평면 투영 · mm"}</span></header>
     <RevisionPhaseButtons/>
-    <div className="revision-point-picker" aria-label="비교할 꼭짓점">{[0,1,2,3].map(i => <button key={i} type="button" disabled={data.running} aria-pressed={point===i} onClick={() => selectRevisionPoint(i)}>P{i+1}</button>)}<small>{data.running?"실행 중 · 로봇의 현재 움직임을 관찰하세요.":"선택한 점을 작업대에서 확인하세요."}</small></div>
+    <div className="revision-point-picker" aria-label="비교할 꼭짓점">{[0,1,2,3].map(i => <button key={i} type="button" disabled={data.running} aria-pressed={point===i} onClick={() => paper.data?selectPaperPoint(`P${i+1}`,"scene"):selectRevisionPoint(i)}>P{i+1}</button>)}<small>{data.running?"실행 중 · 로봇의 현재 움직임을 관찰하세요.":"선택한 점을 작업대에서 확인하세요."}</small></div>
     <div className="revision-scene-values">{series.map(s => <div key={s.label} data-scene-series={s.label} style={{borderTopColor:s.color}}><span style={{color:s.color}}>{s.dashed?"┄":"━"} {s.label}</span><b>{coordinate(s.points[point])}</b><small>{s.source==="과제 조건"||s.source==="예측 · 실행 전"?s.source:journeySource(s.source)}</small></div>)}</div>
     {change&&<p className="revision-scene-change">{change}</p>}
     <p className="revision-scene-message"><b>{phase===1?"확인 질문 · 규칙 기반":phase===2?"바꾼 생각":phase===3?"재실행 결과":"처음 생각"}</b> {message||"입력한 생각과 실행 기록을 이 장면에서 비교합니다."}</p>

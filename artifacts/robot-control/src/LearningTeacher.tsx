@@ -42,7 +42,7 @@ export default function LearningTeacher({ user, onLogout }: { user: LearningUser
   const [metaError, setMetaError] = useState("");
 
   const [taskIndex,setTaskIndex]=useState(""),[taskVersion,setTaskVersion]=useState("");
-  const [rotationAllowed,setRotationAllowed]=useState(()=>localStorage.getItem(PAPER_ROTATION_SETTING)==="true");
+  const [rotationAllowed,setRotationAllowed]=useState(()=>localStorage.getItem(PAPER_ROTATION_SETTING)!=="false");
   const [login, setLogin] = useState("");
   const [chapter, setChapter] = useState("");
   const [from, setFrom] = useState("");
@@ -141,7 +141,7 @@ export default function LearningTeacher({ user, onLogout }: { user: LearningUser
 
         <main style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
           <FeedbackOperatorStatus/>
-          <section className="la-panel"><h3>종이 과제 교사 설정</h3><label><input type="checkbox" checked={rotationAllowed} onChange={e=>{setRotationAllowed(e.target.checked);localStorage.setItem(PAPER_ROTATION_SETTING,String(e.target.checked));}}/> 심화 2 회전 관계 허용 (기본 꺼짐)</label><p className="la-hint">이 브라우저에서 다음에 여는 심화 2부터 적용됩니다. 심화 1은 평행한 축의 기준점 덧셈을 학습합니다.</p></section>
+          <section className="la-panel"><h3>종이 과제 교사 설정</h3><label><input type="checkbox" checked={rotationAllowed} onChange={e=>{setRotationAllowed(e.target.checked);localStorage.setItem(PAPER_ROTATION_SETTING,String(e.target.checked));}}/> 심화 2 회전 관계 허용 (기본 켜짐)</label><p className="la-hint">이 브라우저에서 다음에 여는 심화 2부터 적용됩니다. 실제 종이 방향은 O/X/Y 기록으로 확인합니다. 심화 1은 평행한 축의 기준점 덧셈을 학습합니다.</p></section>
           <section className="la-panel">
             <div className="la-filters">
               <label className="la-field">학생

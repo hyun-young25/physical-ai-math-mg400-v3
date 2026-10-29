@@ -6,7 +6,8 @@ const fixture=require('./verify-square-flow.cjs').fixture
  .replace("const {RobotArm}=", "const {RobotScene}=await import('/src/Robot3D.tsx');const {revisionSceneSnapshot}=await import('/src/revisionSceneStore.ts');window.__revisionScene=revisionSceneSnapshot;const {RobotArm}=")
  .replace("h('main',{style:{height:1000,width:850}},h(RobotArm,{", "h('div',{className:'journey-fixture'},h('div',{className:'journey-robot'},h(RobotScene,{joints:joints.current,coords,endEffector:'pen',shapeStudyViewKey:1})),h('main',{className:'curriculum-body'},h(RobotArm,{")
  .replace("})),h(TutorHost)","}))),h(TutorHost)");
-(async()=>{
+module.exports.fixture=fixture;
+if(require.main===module)(async()=>{
  const browser=await chromium.launch({args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']});
  try{
   const context=await browser.newContext({viewport:{width:1440,height:1080}}),errors=[];
@@ -21,6 +22,9 @@ const fixture=require('./verify-square-flow.cjs').fixture
   const click=name=>view.getByRole('button',{name,exact:true}).click();
   const shots=process.env.DIAG_SHOTS||path.resolve(__dirname,'../../diagnosis-qa');fs.mkdirSync(shots,{recursive:true});
   const records=()=>page.evaluate(()=>JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.endsWith('physical-ai-paper-coordinate-v1')))||'[]'));
+  await page.getByRole('button',{name:'장면에서 P1 선택',exact:true}).waitFor();
+  assert.equal(await view.locator('.paper-scene-map').getAttribute('data-frame')==='unknown',false);
+  assert.equal(await page.locator('.paper-scene-legend').count(),2);
   async function predict(shift){
    await view.getByLabel('원점 X (mm)',{exact:true}).fill('180');await view.getByLabel('원점 Y (mm)',{exact:true}).fill('-60');
    await view.getByLabel('1 cm당 길이 (mm)').fill('10');await view.getByLabel('이 관계를 선택한 이유').fill(shift?'기준점을 20 mm 더해서 예상했습니다.':'피드백을 보고 기준점 180 mm에 종이 이동량만 더했습니다.');
@@ -40,6 +44,9 @@ const fixture=require('./verify-square-flow.cjs').fixture
   assert.equal(await journey.getAttribute('data-result'),'pending');
   assert.match(await journey.innerText(),/첫 시도 → 피드백 → 답 수정 → 재실행 결과/);
   const initial=(await records())[0];assert.notEqual(initial.diagnosis.pattern,'match');
+  assert.ok(await view.locator('.paper-scene-map [stroke="#ef4444"]').count()>0);
+  assert.equal(await page.getByRole('button',{name:'장면에서 P2 선택',exact:true}).evaluate(el=>getComputedStyle(el).borderTopColor),'rgb(239, 68, 68)');
+  await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:path.join(shots,'19-paper-first-mismatch.png')});
   await report();await dock.waitFor();
   const firstQuestion=await journey.locator('.revision-question').innerText();
   const diagnostic=page.getByTestId('square-diagnosis');
@@ -62,6 +69,7 @@ const fixture=require('./verify-square-flow.cjs').fixture
   const final=await records();assert.equal(final[1].parentAttemptId,final[0].id);assert.equal(final[1].diagnosis.pattern,'match');
   assert.deepEqual(final[0].predictions,initial.predictions);assert.equal(final[0].transform.explanation,initial.transform.explanation);
   await page.getByRole('button',{name:'장면에서 P1 선택',exact:true}).waitFor();
+  await dock.getByRole('button',{name:'P1',exact:true}).click();
   assert.match(await dock.innerText(),/첫 실행[\s\S]*200, -60[\s\S]*수정 후 실행[\s\S]*180, -60/);
   const before={records:await records(),moves:await page.evaluate(()=>window.__dt.length)};
   await dock.getByRole('button',{name:'P2',exact:true}).click();

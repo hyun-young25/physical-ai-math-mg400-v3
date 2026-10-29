@@ -19,6 +19,9 @@ export type PaperCoordinateStudyViewState = {
   frame: PaperFrame | null;
   samples: PaperReferenceSample[];
   currentPose: { x: number; y: number; z: number; r: number } | null;
+  /** Readout only. Must never enable recording a measured reference. */
+  displayPose?: { x: number; y: number; z: number; r: number };
+  displaySource?: PaperEvidenceSource;
   currentSource: PaperEvidenceSource | null;
   currentSequence: number | null;
   currentMeasuredAt: number | null;

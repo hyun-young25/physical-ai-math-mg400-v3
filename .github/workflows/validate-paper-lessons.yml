@@ -40,6 +40,10 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: Test merged paper course and read-only history
         run: timeout 180s node scripts/verify-paper-merged.cjs
+      - name: Test synchronized advanced paper scenes
+        run: |
+          node --test artifacts/robot-control/src/paperSceneModel.test.cjs
+          timeout 300s node scripts/verify-paper-scene.cjs
       - name: Test feedback-to-revision journey and responsive comparison
         run: |
           node --test artifacts/robot-control/src/revisionJourney.test.cjs artifacts/robot-control/src/revisionSceneStore.test.cjs

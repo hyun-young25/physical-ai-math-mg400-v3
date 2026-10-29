@@ -1,4 +1,5 @@
 import { foundationMotion, foundationStartProblem, type FoundationMove } from "./foundationMotion";
+import { usePaperScene } from "./paperSceneStore";
 import { ProcessCellLesson } from "./ProcessCellLesson";
 import { ProcessCellScene } from "./ProcessCellScene";
 import type { CellVisual } from "./processCellTypes";
@@ -1126,6 +1127,7 @@ function AppInner() {
   const kinematicsTopicIndex = KINEMATICS_TOPICS.findIndex(topic => topic.id === kinematicsTopic);
   const isShapeLesson = activeNav === "좌표와 로봇 이동" && coordinateTopic === "shapes";
   const isKinematicsLesson = activeNav === "로봇 운동학";
+  const paperScene=usePaperScene();
   const isPickLesson = activeNav === "운동학 종합과제: 픽앤플레이스";
   useVirtualLock(isPickLesson && !!(processVisual?.running || processVisual?.predictionPreview?.playing));
   const [viewPreset, setViewPreset] = useState<ViewPreset>("free");
@@ -2110,7 +2112,7 @@ function AppInner() {
             : <>측정 없음 · 이 화면의 로봇은 가상 DT 초기 자세(실측 아님)</>}
           {hwNotice && <div>{hwNotice}</div>}
         </div>}
-        {(isAxesLesson || isCoordinateLesson || isShapeLesson) && <button type="button"
+        {(isAxesLesson || isCoordinateLesson || isShapeLesson) && !paperScene.data && <button type="button"
           onClick={isShapeLesson ? restoreShapeStudyView : restoreCoordinateStudyView}
           title={isShapeLesson ? "P1·P2와 전체 경로를 보는 시점으로 돌아가기 · 드래그로 자유 회전"
             : `${isAxesLesson ? "2-1" : "2-2"} 사선 상단 시점으로 돌아가기 · 드래그로 자유 회전`}
@@ -2322,7 +2324,7 @@ function AppInner() {
         </div>}
 
         {/* ── Bottom-right coord readout ── */}
-        {!isPickLesson && <div className="absolute right-3 z-10 select-none" style={{ bottom: activeNav === "용어·기호와 기초수학" ? "calc(0.75rem + 34px + 10px)" : "0.75rem" }}>
+        {!isPickLesson && <div className="absolute right-3 z-10 select-none" style={{ top:paperScene.data?52:undefined, bottom:paperScene.data?undefined:activeNav === "용어·기호와 기초수학" ? "calc(0.75rem + 34px + 10px)" : "0.75rem" }}>
           <div style={{
             background: "rgba(255,255,255,0.82)",
             backdropFilter: "blur(8px)",
@@ -2338,9 +2340,10 @@ function AppInner() {
             {([ ["X","x"], ["Y","y"], ["Z","z"], ["R","r"] ] as [string, keyof typeof coords][]).map(([label, key]) => [
               <span key={label+"l"} style={{ color: "#111", fontWeight: 700, fontSize: 14, lineHeight: "1.6" }}>{label}</span>,
               <span key={label+"v"} className="num-mono" style={{ color: "#111", fontWeight: 650, fontSize: 14, lineHeight: "1.6", textAlign: "right" }}>
-                {(coords[key] >= 0 ? "+" : "") + coords[key].toFixed(2)}
+                {((paperScene.data?.displayPose??coords)[key] >= 0 ? "+" : "") + (paperScene.data?.displayPose??coords)[key].toFixed(2)}
               </span>
             ])}
+            {paperScene.data&&<small style={{gridColumn:"1 / -1",color:"#475569"}}>{paperScene.data.displaySource==="hardware"?"실장비 · TCP 보고":paperScene.data.displaySource==="mock"?"모의 · 실측 아님":"DT · 실측 아님"}</small>}
           </div>
         </div>}
         {/* ── Bottom-right annotation toggle (용어·기호와 기초수학 페이지에서만 표시) ── */}

@@ -66,7 +66,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
   const [activeId, setActiveId] = useState<string | null>(() => initialRecord.current?.id ?? null);
   const [stage, setStage] = useState<PaperLessonStage>(() => (initialRecord.current?.stage as PaperLessonStage) ?? 1);
   const [level, setLevel] = useState<PaperCoordinateLevel>(() => initialRecord.current?.level ?? initialLevel ?? "basic");
-  const [rotationAllowed] = useState(()=>localStorage.getItem(PAPER_ROTATION_SETTING)==="true");
+  const [rotationAllowed] = useState(()=>localStorage.getItem(PAPER_ROTATION_SETTING)!=="false");
   const blankTransform=(l:PaperCoordinateLevel)=>({...EMPTY_TRANSFORM,...(isMergedPaper(l)&&(!rotationAllowed||isPaperDT(l))?{axisDirection:"x+" as const,rotationDegrees:"0"}:{})});
   const [transformDraft, setTransformDraft] = useState<PaperStudentTransform>(() => initialRecord.current?.transform ?? blankTransform(level));
   const [manualInputs, setManualInputs] = useState(emptyManualInputs);
@@ -707,6 +707,8 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     records, revalidationScope:active?.revalidation?.scope??null,
     stage, level, targetSet: currentTargetSet, frame, samples, currentPose: currentPoseRead,
     currentSource, currentSequence, currentMeasuredAt,
+    displayPose: currentPoseRead ?? currentPose,
+    displaySource: currentSource ?? "dt",
     manualInputs,
     coordinateSystem: frame?.coordinateSystem ?? currentSystem,
     user: frame?.user ?? currentUser, tool: frame?.tool ?? currentTool,
