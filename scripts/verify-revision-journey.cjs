@@ -94,11 +94,8 @@ const fixture=require('./verify-square-flow.cjs').fixture
   assert.doesNotMatch(await journey.locator('.revision-flow > li').nth(2).innerText(),/다음 수정도/,'a new draft must not rewrite the completed comparison');
   assert.notEqual(await reference.locator('.revision-question').innerText(),firstQuestion,'the editing reference uses the latest feedback for the next revision');
   await reference.screenshot({path:path.join(shots,'11-revision-reference-mobile.png')});
-  await page.setViewportSize({width:1440,height:1080});
-  // A viewport capture avoids waiting for sticky regions to settle while the
-  // real 3D canvas renders on the CI software GPU.
-  await reference.evaluate(el=>el.scrollIntoView({block:'start'}));
-  await page.screenshot({path:path.join(shots,'12-revision-editing-desktop.png')});
+  // Desktop scene, mobile scene and editing reference are already captured.
+  // Avoid a redundant second GPU resize/capture in Linux headless Chromium.
   await page.getByRole('navigation',{name:'도형 수업 경로',exact:true}).getByRole('button').nth(1).click();
   await dock.waitFor({state:'hidden'});
   await page.getByRole('button',{name:'장면에서 P2 선택'}).waitFor({state:'detached'});
