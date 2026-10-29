@@ -34,6 +34,7 @@ const fixture=require('./verify-square-flow.cjs').fixture.replace("style:{height
   assert.equal(await journey.getAttribute('data-result'),'pending');
   assert.match(await journey.innerText(),/첫 시도 → 피드백 → 답 수정 → 재실행 결과/);
   const initial=(await records())[0];assert.notEqual(initial.diagnosis.pattern,'match');
+  const firstQuestion=await journey.locator('.revision-question').innerText();
   const diagnostic=page.getByTestId('square-diagnosis');
   assert.match(await diagnostic.locator('.square-decision-section').first().innerText(),/먼저 이 질문/);
   assert.equal(await diagnostic.getByText('규칙 기반 판정',{exact:true}).isVisible(),false);
@@ -57,6 +58,8 @@ const fixture=require('./verify-square-flow.cjs').fixture.replace("style:{height
   await journey.screenshot({path:path.join(shots,'10-revision-result-mobile.png')});
   await view.getByLabel('차이가 생긴 이유').fill('기준점에 종이 이동량을 더하니 목표와 일치합니다.');await click('생각 저장');
   await click('다음 단계');await view.getByLabel('무엇을 다시 살펴볼까요?').fill('다음 수정도 처음 답과 질문을 참고합니다.');
+  assert.doesNotMatch(await journey.locator('.revision-flow > li').nth(2).innerText(),/다음 수정도/,'a new draft must not rewrite the completed comparison');
+  assert.notEqual(await reference.locator('.revision-question').innerText(),firstQuestion,'the editing reference uses the latest feedback for the next revision');
   await reference.screenshot({path:path.join(shots,'11-revision-reference-mobile.png')});
   await page.setViewportSize({width:1440,height:1080});await page.locator('main.curriculum-body').evaluate(el=>el.style.width='1000px');
   await view.locator('.revision-workspace').screenshot({path:path.join(shots,'12-revision-editing-desktop.png')});

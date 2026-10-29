@@ -126,7 +126,7 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
   const attemptHistory=useSquareAttemptHistory(fieldId,taskIndex,presentation&&record?.taskVersion==="v4-paper-merged"?{id:presentation.key,recordId:record.id,runId:String(record.runs.length),taskVersion:record.taskVersion,taskIndex,supportMode,predictions:record.prediction,predictionReason:record.reason,observed:presentation.observed,studentCause:cause,createdAt:record.runs.at(-1)?.endedAt??record.submittedAt,visual:presentation}:null,locked);
   const journey=isSquare?squareRevisionJourney(lesson,q.conditionKey,record,q.history,attemptHistory.items,
     activeStage===7?{...record?.prediction,...q.reviewDraft}:q.draft,q.reason,activeStage):null;
-  if(journey&&activeStage===7)journey.revisionReason=cause;
+  if(journey&&activeStage===7){journey.draftRevisionReason=cause;journey.editing=diagnosisMismatch;}
   const published=attemptHistory.reviewed?{...attemptHistory.reviewed.visual,stage:6,review:attemptHistory.meta}:presentation?{...presentation,review:attemptHistory.meta}:null;
   const presentationKey=JSON.stringify(published);
   useLayoutEffect(()=>{publishSquareVisual(fieldId,published);},[fieldId,presentationKey]);

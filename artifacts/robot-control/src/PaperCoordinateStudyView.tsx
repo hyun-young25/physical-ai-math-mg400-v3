@@ -54,7 +54,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
   const [hypothesisDraft, setHypothesisDraft] = useState(state.studentHypothesis);
   const [revisionDraft, setRevisionDraft] = useState(state.revisionReason);
   const journey=state.revisionJourney ? {...state.revisionJourney,
-    revisionReason:state.stage===7?revisionDraft:state.revisionJourney.revisionReason} : null;
+    draftRevisionReason:state.stage===7?revisionDraft:undefined} : null;
 
   useEffect(() => setHypothesisDraft(state.studentHypothesis), [state.studentHypothesis]);
   useEffect(() => setRevisionDraft(state.revisionReason), [state.revisionReason]);

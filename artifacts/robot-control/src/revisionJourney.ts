@@ -14,6 +14,7 @@ export type JourneyAttempt = {
 };
 export type RevisionJourneyData = {
   first: JourneyAttempt; previous: JourneyAttempt; current: JourneyAttempt;
+  referenceFeedback?: JourneyAttempt; draftRevisionReason?: string;
   draft: JourneyPoint[]; draftReason: string; revisionReason: string;
   revising: boolean; editing: boolean; conditionsChanged: boolean;
 };
@@ -57,7 +58,7 @@ export function paperRevisionJourney(active:PaperTrialRecord|null|undefined, rec
   };
   const first=convert(chain[0]),current=convert(active),previous=convert(chain.at(-2)??active);
   const revising=chain.length>1;
-  return {first,previous,current,draft:paperJourneyPoints(draft),draftReason:transform.explanation,
+  return {first,previous,current,referenceFeedback:stage===7?current:previous,draft:paperJourneyPoints(draft),draftReason:transform.explanation,
     revisionReason:chain.at(-2)?.revisionReason??active.revisionReason??"",revising,
     editing:stage===7||revising&&stage<=3,conditionsChanged:revising&&(targetChanged(first,current)
       ||chain[0].frame?.coordinateSystem!==active.frame?.coordinateSystem||chain[0].frame?.user!==active.frame?.user||chain[0].frame?.tool!==active.frame?.tool)};
@@ -85,7 +86,7 @@ export function squareRevisionJourney(lesson:ShapeLesson, conditionKey:string, r
   const first=convert(chain[0]),current=convert(active),previous=convert(record?(chain.at(-2)??active):active);
   const revising=chain.length>1||!record;
   // While editing, a saved earlier run must not appear as the new execution result.
-  return {first,previous,current:record?current:{...current,id:"draft",complete:false,observed:[],match:false,outcome:"재실행 대기"},
+  return {first,previous,referenceFeedback:stage===7?current:previous,current:record?current:{...current,id:"draft",complete:false,observed:[],match:false,outcome:"재실행 대기"},
     draft:points(draft),draftReason:reason,revisionReason:previous.cause,revising,
     editing:stage===7||revising&&stage<=3,conditionsChanged:false};
 }

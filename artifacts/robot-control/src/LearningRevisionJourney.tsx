@@ -35,14 +35,16 @@ export function LearningRevisionJourney({data}:{data:RevisionJourneyData|null}) 
   if(!data)return null;
   const {first,previous,current,revising,editing}=data;
   const hasNewResult=revising&&current.id!==first.id&&current.complete;
-  const revisedPoints=editing?data.draft:current.points;
+  const editingNewAnswer=editing&&!hasNewResult;
+  const revisedPoints=editingNewAnswer?data.draft:current.points;
+  const revisionReason=hasNewResult?data.revisionReason:data.draftRevisionReason||data.revisionReason||data.draftReason;
   return <section className="revision-journey" aria-label="첫 시도부터 재실행까지" data-testid="revision-journey" data-result={hasNewResult?"complete":"pending"}>
     <header><div><span className="revision-eyebrow">내 생각과 움직임의 변화</span><h3>첫 시도 → 피드백 → 답 수정 → 재실행 결과</h3></div>
       <span className="revision-status">{hasNewResult?"수정 전후 비교":editing?"피드백을 보며 수정 중":revising?"재실행 결과 대기":"첫 실행 확인"}</span></header>
     <ol className="revision-flow">
       <li><h4><span>1</span> 첫 시도</h4><Thought attempt={first}/><p className="revision-outcome">{first.outcome}</p><small>{journeySource(first.source)}</small></li>
       <li><h4><span>2</span> 받은 피드백</h4>{previous.id!==first.id&&<small>가장 최근 시도에서 받은 질문</small>}<Feedback attempt={previous}/></li>
-      <li data-current={editing||undefined}><h4><span>3</span> 내가 바꾼 답</h4>{revising||editing?<><PointList points={revisedPoints}/><p className="revision-quote">{data.revisionReason||data.draftReason||"어떤 질문을 보고 무엇을 바꿨는지 적어 주세요."}</p><small>{editing?"편집 중 · 예측을 저장한 뒤 실행하세요":"저장된 수정 예측"}</small></>:<p className="revision-empty">피드백을 확인한 뒤, 바꿀 좌표와 이유를 직접 적습니다.</p>}</li>
+      <li data-current={editingNewAnswer||undefined}><h4><span>3</span> 내가 바꾼 답</h4>{revising||editing?<><PointList points={revisedPoints}/><p className="revision-quote">{revisionReason||"어떤 질문을 보고 무엇을 바꿨는지 적어 주세요."}</p><small>{editingNewAnswer?"편집 중 · 예측을 저장한 뒤 실행하세요":"저장된 수정 예측"}</small></>:<p className="revision-empty">피드백을 확인한 뒤, 바꿀 좌표와 이유를 직접 적습니다.</p>}</li>
       <li data-success={hasNewResult&&current.match||undefined}><h4><span>4</span> 재실행 결과</h4>{hasNewResult?<><p className="revision-outcome">{current.outcome}</p><PointList points={current.observed}/><small>{journeySource(current.source)}</small></>:<><strong className="revision-pending">재실행 결과 대기</strong><p className="revision-empty">수정한 답을 저장하고 실행하면 새 도착점이 여기에 표시됩니다.</p></>}</li>
     </ol>
     {hasNewResult&&<div className="revision-result" role="status"><h4>수정 후 움직임은 어떻게 달라졌나요?</h4>
@@ -58,7 +60,7 @@ export function RevisionEditingLayout({data,children}:{data:RevisionJourneyData|
   const show=!!data?.editing;
   return <div className={`revision-workspace${show?" is-editing":""}`}>
     {show&&data&&<aside className="revision-reference" aria-label="수정하며 참고할 첫 시도와 피드백"><h3>처음 생각을 보며 고쳐 보세요</h3>
-      <Thought attempt={data.first}/><hr/><Feedback attempt={data.previous}/>
+      <Thought attempt={data.first}/><hr/>{(data.referenceFeedback??data.previous).id!==data.first.id&&<small>최근 시도에서 받은 질문</small>}<Feedback attempt={data.referenceFeedback??data.previous}/>
       <p className="revision-source">처음 답은 그대로 보존됩니다. 옆 입력란에서 수정하세요.</p></aside>}
     <div className="revision-editor">{children}</div>
   </div>;
