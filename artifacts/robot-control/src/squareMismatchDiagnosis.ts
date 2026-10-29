@@ -296,3 +296,9 @@ export function priorSquareDiagnoses<R extends {id:string; condition:unknown; pr
   }
   return types;
 }
+
+/** Paper snapshots carry their authoritative label on the first line, within the
+ * existing label field. Ordinary square lessons retain their original labels. */
+export function squareDiagnosisName(d: SquareDiagnosis, connectedOnly?: boolean) {
+  return connectedOnly && d.label.includes("\n") ? d.label.split("\n")[0] : squareMismatchName(d.type);
+}

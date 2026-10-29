@@ -1,3 +1,4 @@
+import { PAPER_AXIS_SWAP_CANDIDATE } from "./paperDiagnosisLabel";
 import { omitsOrigin } from "./originMissing";
 import type { LessonPose } from "./curriculum";
 
@@ -325,7 +326,20 @@ export function diagnosePaperRun(run: PaperRunSnapshot, frame: PaperFrame, curre
     const vy=(c.yCm-a.yCm-uy*(tc.xCm-ta.xCm))/(tc.yCm-ta.yCm);
     const sx=Math.hypot(ux,uy),sy=Math.hypot(vx,vy),angle=Math.atan2(uy,ux)*180/Math.PI;
     numeric += `; 종이 축 대비 회전 ${angle.toFixed(1)}°, x/y 배율 ${sx.toFixed(3)}/${sy.toFixed(3)}`;
-    if (predictionEvidence.some(e=>e.distance>tolerance) && options.transform) {
+    // Advanced paper lessons: compare deltas in the measured paper basis. A
+    // tilted edge or a single 20 mm offset is not an exchange of X and Y.
+    const local = run.observations.map(o => frameInversePoint(frame, o.pose)!);
+    const swappedEdge = options.detectOriginMissing && targets.slice(1).some((target, i) => {
+      const dx = (target.xCm - targets[i].xCm) * 10, dy = (target.yCm - targets[i].yCm) * 10;
+      const actualX = (local[i + 1].xCm - local[i].xCm) * 10, actualY = (local[i + 1].yCm - local[i].yCm) * 10;
+      return Math.hypot(dx - dy, dy - dx) > tolerance
+        && Math.hypot(actualX - dy, actualY - dx) <= tolerance;
+    });
+    if (swappedEdge) {
+      pattern = "calculation";
+      candidate = PAPER_AXIS_SWAP_CANDIDATE + "종이 축 기준 이동량의 ΔX와 ΔY가 서로 바뀐 구간이 확인됐습니다. 대입·계산 차이의 한 패턴이며 생각의 원인은 학생 설명으로 확인합니다.";
+      question = "이 구간에서 종이 x와 y 중 어느 좌표가 변하나요? 내 식에 대입한 ΔX와 ΔY를 비교해 볼까요?";
+    } else if (predictionEvidence.some(e=>e.distance>tolerance) && options.transform) {
       pattern="calculation"; candidate="저장한 변환식과 직접 계산한 명령 좌표도 다릅니다. 대입·계산 과정을 확인할 후보입니다.";
       question="내 변환식에 종이 좌표를 대입한 값과 저장한 예측은 같나요? 단위와 부호를 한 항씩 확인해 볼까요?";
     } else if (spread <= tolerance) {

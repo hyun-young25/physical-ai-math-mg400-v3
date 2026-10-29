@@ -83,6 +83,15 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
       host.scrollTo({top:host.scrollTop+target.top-bounds.top-pinned-12,behavior:editing?"instant":"smooth"});
   },[merged,id,state.level,scene.owner,scene.selectionVersion,scene.selectionOrigin,selected]);
   const rowProps=(name:string)=>merged?{"data-paper-row":name,"data-paper-selected":selected===name,onFocus:()=>selectPaperPoint(name)}:{};
+  const focusedRetry=useRef<string|null>(null);
+  useEffect(()=>{
+    if (!merged || state.stage!==3 || !state.retry?.editable || !state.retry.focusRequested || focusedRetry.current===state.retry.id) return;
+    const field=state.retry.fields[0];
+    const input=field&&root.current?.querySelector<HTMLInputElement>(`[data-retry-field="${field}"]`);
+    if(input){focusedRetry.current=state.retry.id;input.focus();}
+  },[merged,state.stage,state.retry?.id]);
+  const changed = (before:string|undefined,after:string) => before!==undefined && after.trim()!=="" && before!==after;
+  const changeMark = (yes:boolean) => yes ? <small className="pcv-retry-changed">수정됨</small> : null;
   const displayPose=merged?state.displayPose??state.currentPose:state.currentPose;
 
   useEffect(() => setHypothesisDraft(state.studentHypothesis), [state.studentHypothesis]);
@@ -156,8 +165,9 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
 
   const renderPredictionField = (point: string, field: "robotX" | "robotY", label: string, value: string) => (
     <label className="pcv-prediction-input" key={field}>
-      <span>{label}</span>
-      <input type="number" step="any" inputMode="decimal" value={value} disabled={state.running}
+      <span>{label} {changeMark(changed(state.retry?.baseline.predictions.find(p=>p.name===point)?.[field],value))}</span>
+      <input data-retry-field={merged?`${point}.${field}`:undefined}
+        data-retry-difference={!!state.retry?.fields.includes(`${point}.${field}`)} type="number" step="any" inputMode="decimal" value={value} disabled={state.running}
         aria-label={`${point} 예측 로봇 ${label}`}
         onChange={event => actions.onPredictionChange(point, field, event.target.value)} />
     </label>
@@ -211,29 +221,36 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
             <p>종이의 원점은 어디인지, 축은 어느 방향인지, 길이 단위와 회전은 어떻게 나타낼지 생각해 보세요.</p>
           </div>
           <div className="pcv-form-grid">
-            <label className="pcv-field"><span>원점 X (mm)</span><input type="number" step="any" inputMode="decimal" value={state.transform.originX}
+            <label className="pcv-field"><span>원점 X (mm){changeMark(changed(state.retry?.baseline.transform.originX,state.transform.originX))}</span><input type="number" step="any" inputMode="decimal" value={state.transform.originX}
               onChange={event => actions.onTransformChange("originX", event.target.value)} /></label>
-            <label className="pcv-field"><span>원점 Y (mm)</span><input type="number" step="any" inputMode="decimal" value={state.transform.originY}
+            <label className="pcv-field"><span>원점 Y (mm){changeMark(changed(state.retry?.baseline.transform.originY,state.transform.originY))}</span><input type="number" step="any" inputMode="decimal" value={state.transform.originY}
               onChange={event => actions.onTransformChange("originY", event.target.value)} /></label>
-            {(!merged||state.rotationAllowed)&&<label className="pcv-field"><span>종이 x축이 향하는 방향</span><select value={state.transform.axisDirection}
+            {(!merged||state.rotationAllowed)&&<label className="pcv-field"><span>종이 x축이 향하는 방향{changeMark(changed(state.retry?.baseline.transform.axisDirection,state.transform.axisDirection))}</span><select value={state.transform.axisDirection}
               onChange={event => actions.onTransformChange("axisDirection", event.target.value)}>
               <option value="">방향 선택</option><option value="x+">로봇 X+</option><option value="y+">로봇 Y+</option>
               <option value="x-">로봇 X−</option><option value="y-">로봇 Y−</option>
             </select></label>}
-            <label className="pcv-field"><span>1 cm당 길이 (mm)</span><input type="number" step="any" inputMode="decimal" value={state.transform.millimetersPerCentimeter}
+            <label className="pcv-field"><span>1 cm당 길이 (mm){changeMark(changed(state.retry?.baseline.transform.millimetersPerCentimeter,state.transform.millimetersPerCentimeter))}</span><input type="number" step="any" inputMode="decimal" value={state.transform.millimetersPerCentimeter}
               onChange={event => actions.onTransformChange("millimetersPerCentimeter", event.target.value)} /></label>
-            {(!merged||state.rotationAllowed)&&<label className="pcv-field"><span>추가 회전 (°)</span><input type="number" step="any" inputMode="decimal" value={state.transform.rotationDegrees}
+            {(!merged||state.rotationAllowed)&&<label className="pcv-field"><span>추가 회전 (°){changeMark(changed(state.retry?.baseline.transform.rotationDegrees,state.transform.rotationDegrees))}</span><input type="number" step="any" inputMode="decimal" value={state.transform.rotationDegrees}
               onChange={event => actions.onTransformChange("rotationDegrees", event.target.value)} /></label>}
           </div>
-          <label className="pcv-field"><span>이 관계를 선택한 이유</span><textarea rows={3} value={state.transform.explanation}
+          <label className="pcv-field"><span>이 관계를 선택한 이유{changeMark(changed(state.retry?.baseline.transform.explanation,state.transform.explanation))}</span><textarea rows={3} value={state.transform.explanation}
             onChange={event => actions.onTransformChange("explanation", event.target.value)} /></label>
           <button type="button" className="pcv-button pcv-button--primary" onClick={actions.onSaveTransform} disabled={state.running}>관계 저장</button>
           {state.transformFeedback && <p className="pcv-feedback" role="status">{state.transformFeedback}</p>}
         </>;
       case 3:
         return <>
+          {state.retry&&<aside className="pcv-retry-note" data-testid="paper-retry-note">
+            <strong>시도 {state.retry.attempt}의 입력에서 이어서 수정</strong>
+            <p>원점 ({state.retry.baseline.transform.originX}, {state.retry.baseline.transform.originY}) mm · 1 cm = {state.retry.baseline.transform.millimetersPerCentimeter} mm</p>
+            <p>빨간 테두리는 직전 관측에서 차이가 확인된 입력입니다. 생각의 원인을 확정하는 표시는 아닙니다.</p>
+            <button type="button" className="pcv-button pcv-button--quiet" onClick={()=>actions.onStageChange(2)}>관계식·이유 확인</button>
+            <button type="button" className="pcv-button pcv-button--quiet" disabled={!state.retry.editable||state.running} onClick={actions.onResetRetry}>처음부터 다시 입력</button>
+          </aside>}
           <p className="pcv-lead">2단계에서 세운 관계를 참고해, 각 종이 목표점의 로봇 좌표를 직접 예측하고 실행 전에 저장합니다.</p>
-          {merged&&<fieldset className="pcv-concept-block"><legend>직선 이동과 닫힘 관계</legend><label>직선 경로 명령 <select aria-label="직선 경로 명령" disabled={!!state.run} value={state.pathConcept?.motion??""} onChange={e=>actions.onPathConceptChange("motion",e.target.value)}><option value="">선택</option><option>MoveJ</option><option>MoveL</option></select></label>{(["closeX","closeY"] as const).map((f,i)=><label key={f}>닫힌 경로의 Δ{i?"Y":"X"} 합 (mm)<input type="number" aria-label={"닫힌 경로 Δ"+(i?"Y":"X")+" 합"} disabled={!!state.run} value={state.pathConcept?.[f]??""} onChange={e=>actions.onPathConceptChange(f,e.target.value)}/></label>)}</fieldset>}
+          {merged&&<fieldset className="pcv-concept-block"><legend>직선 이동과 닫힘 관계</legend><label>직선 경로 명령 {changeMark(changed(state.retry?.baseline.pathConcept?.motion,state.pathConcept?.motion??""))}<select aria-label="직선 경로 명령" disabled={!!state.run} value={state.pathConcept?.motion??""} onChange={e=>actions.onPathConceptChange("motion",e.target.value)}><option value="">선택</option><option>MoveJ</option><option>MoveL</option></select></label>{(["closeX","closeY"] as const).map((f,i)=><label key={f}>닫힌 경로의 Δ{i?"Y":"X"} 합 (mm){changeMark(changed(state.retry?.baseline.pathConcept?.[f],state.pathConcept?.[f]??""))}<input type="number" aria-label={"닫힌 경로 Δ"+(i?"Y":"X")+" 합"} disabled={!!state.run} value={state.pathConcept?.[f]??""} onChange={e=>actions.onPathConceptChange(f,e.target.value)}/></label>)}</fieldset>}
           <div className="pcv-predictions">
             <h3>내 로봇 좌표 예측</h3>
             <p className="pcv-note">아래는 직접 적는 예측 입력입니다. 목표 로봇 좌표는 자동으로 공개되지 않습니다.</p>
@@ -402,7 +419,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
 
       {state.error && state.stage!==4 && <p className="pcv-alert" role="alert">{state.error}</p>}
       <LearningRevisionJourney data={journey}/>
-      {merged&&<PaperSceneMap compact={state.stage===3||state.stage===7}/>}
+      {merged&&<PaperSceneMap key={state.level} compact={state.stage===3||state.stage===7}/>}
       <RevisionEditingLayout data={journey}>
       <main className="pcv-main">
         <section className="pcv-activity" aria-labelledby={`${id}-activity-heading`}>
