@@ -98,6 +98,7 @@ const fixture=require('./verify-square-flow.cjs').fixture
   await view.locator('.revision-workspace').screenshot({path:path.join(shots,'12-revision-editing-desktop.png')});
   await page.getByRole('navigation',{name:'도형 수업 경로',exact:true}).getByRole('button').nth(1).click();
   await dock.waitFor({state:'hidden'});
+  await page.getByRole('button',{name:'장면에서 P2 선택'}).waitFor({state:'detached'});
   assert.equal(await page.getByRole('button',{name:'장면에서 P2 선택'}).count(),0);
   assert.deepEqual(errors,[]);
   console.log('PASS: wrong DT attempt → question first → preserved reference while editing → pending result → corrected run and overlay; original evidence retained; mobile fits.');
