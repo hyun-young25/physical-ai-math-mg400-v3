@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+import { useId, useLayoutEffect, type ReactNode } from "react";
+import { publishRevisionScene, clearRevisionScene } from "./revisionSceneStore";
+import { RevisionPhaseButtons } from "./RevisionScene";
 import { journeySource, type JourneyAttempt, type JourneyPoint, type RevisionJourneyData } from "./revisionJourney";
 import "./revisionJourney.css";
 
@@ -32,6 +34,9 @@ function ResultPlot({first,current}:{first:JourneyAttempt;current:JourneyAttempt
 }
 
 export function LearningRevisionJourney({data}:{data:RevisionJourneyData|null}) {
+  const owner=useId(),key=JSON.stringify(data);
+  useLayoutEffect(()=>{publishRevisionScene(owner,data);},[owner,key]);
+  useLayoutEffect(()=>()=>clearRevisionScene(owner),[owner]);
   if(!data)return null;
   const {first,previous,current,revising,editing}=data;
   const hasNewResult=revising&&current.id!==first.id&&current.complete;
@@ -41,6 +46,9 @@ export function LearningRevisionJourney({data}:{data:RevisionJourneyData|null}) 
   return <section className="revision-journey" aria-label="첫 시도부터 재실행까지" data-testid="revision-journey" data-result={hasNewResult?"complete":"pending"}>
     <header><div><span className="revision-eyebrow">내 생각과 움직임의 변화</span><h3>첫 시도 → 피드백 → 답 수정 → 재실행 결과</h3></div>
       <span className="revision-status">{hasNewResult?"수정 전후 비교":editing?"피드백을 보며 수정 중":revising?"재실행 결과 대기":"첫 실행 확인"}</span></header>
+    <RevisionPhaseButtons/>
+    <p className="revision-scene-link">단계를 선택하면 도봇 작업대의 점과 아래 설명이 함께 바뀝니다. <button type="button" onClick={()=>document.getElementById("revision-robot-scene")?.parentElement?.scrollIntoView({block:"nearest",behavior:"smooth"})}>도봇과 함께 보기</button></p>
+    <details className="revision-report"><summary>좌표·생각 변화 상세 기록</summary>
     <ol className="revision-flow">
       <li><h4><span>1</span> 첫 시도</h4><Thought attempt={first}/><p className="revision-outcome">{first.outcome}</p><small>{journeySource(first.source)}</small></li>
       <li><h4><span>2</span> 받은 피드백</h4>{previous.id!==first.id&&<small>가장 최근 시도에서 받은 질문</small>}<Feedback attempt={previous}/></li>
@@ -53,6 +61,7 @@ export function LearningRevisionJourney({data}:{data:RevisionJourneyData|null}) 
       {first.source!==current.source&&<p className="revision-source">자료 출처가 다릅니다: {journeySource(first.source)} → {journeySource(current.source)}.</p>}
       <p className="revision-source">{current.source==="hardware"?"제어기가 보고한 도착점 비교입니다. 종이 위 잉크 위치 측정은 별도로 확인합니다.":"가상·모의 실행의 비교이며 실물 도달을 입증하지 않습니다."}</p>
     </div>}
+    </details>
   </section>;
 }
 
@@ -60,7 +69,7 @@ export function RevisionEditingLayout({data,children}:{data:RevisionJourneyData|
   const show=!!data?.editing;
   return <div className={`revision-workspace${show?" is-editing":""}`}>
     {show&&data&&<aside className="revision-reference" aria-label="수정하며 참고할 첫 시도와 피드백"><h3>처음 생각을 보며 고쳐 보세요</h3>
-      <Thought attempt={data.first}/><hr/>{(data.referenceFeedback??data.previous).id!==data.first.id&&<small>최근 시도에서 받은 질문</small>}<Feedback attempt={data.referenceFeedback??data.previous}/>
+      <details><summary>처음 좌표와 예측 근거</summary><Thought attempt={data.first}/></details><hr/>{(data.referenceFeedback??data.previous).id!==data.first.id&&<small>최근 시도에서 받은 질문</small>}<Feedback attempt={data.referenceFeedback??data.previous}/>
       <p className="revision-source">처음 답은 그대로 보존됩니다. 옆 입력란에서 수정하세요.</p></aside>}
     <div className="revision-editor">{children}</div>
   </div>;

@@ -4,6 +4,7 @@ import { squareMismatchName,LEVEL_LABELS } from "./squareMismatchDiagnosis";
 import { squareSourceLabel } from "./squareComparisonVisual";
 import { COMPARISON_COLORS as C,fmtSquare,signedSquare,squareExecutionLabel,squareClosureGap,squareReplayPoint,targetFromDiagnosis } from "./squareComparisonVisual";
 import { useSquareVisual } from "./useSquareVisual";
+import { useActiveRevisionScene } from "./revisionSceneStore";
 import { replaySquareComparison,toggleSquareVisual } from "./squareVisualizationStore";
 import "./squareDiagnosis.css";
 
@@ -77,8 +78,9 @@ export function SquareReplayControls(){
   </div>;
 }
 export function SquareComparisonControls(){
+  const revision=useActiveRevisionScene();
   const state=useSquareVisual();
-  if(!state.visual)return null;
+  if(!state.visual||revision.data)return null;
   return <div className="square-scene-controls" data-testid="square-scene-comparison">
     <p className="square-source-badge">{squareSourceLabel(state.visual.diagnosis.evidence.source)}</p>
     <div className="square-comparison-legend"><span style={{color:C.target}}>┄ 목표 경로</span><span style={{color:C.executed}}>━ 실행 경로</span><span style={{color:C.mismatch}}>━ 어긋난 구간</span></div>
@@ -93,6 +95,7 @@ export function SquareObservedDiagram(){
   return <SquareComparisonDiagram target={v.target} observed={v.observed} diagnosis={v.diagnosis} connectedOnly={v.connectedVerticesOnly} matches={v.match} emphasized={!!state.emphasis}/>;
 }
 export function SquareFallbackComparison(){
+  const revision=useActiveRevisionScene();
   const state=useSquareVisual(),v=state.visual;
   const [tick,setTick]=useState(0);
   useEffect(()=>{
@@ -100,7 +103,7 @@ export function SquareFallbackComparison(){
     let frame=0;const update=()=>{setTick(performance.now());frame=requestAnimationFrame(update);};frame=requestAnimationFrame(update);
     return()=>cancelAnimationFrame(frame);
   },[state.replay]);
-  if(!v||!state.enabled)return null;
+  if(!v||!state.enabled||revision.data)return null;
   const t=state.replay?Math.min(1,Math.max(0,tick-state.replay.startedAt)/(4000/state.replay.speed)):0;
   const a=state.replay?squareReplayPoint(v.target,t):null,b=state.replay?squareReplayPoint(v.observed,t):null;
   return <div className="square-fallback-comparison"><p>3D 미지원 · 관측 좌표 비교</p><SquareComparisonDiagram target={v.target} observed={v.observed} diagnosis={v.diagnosis} connectedOnly={v.connectedVerticesOnly} matches={v.match} emphasized={!!state.emphasis} progress={state.replay?t:undefined}/>
