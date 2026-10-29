@@ -1,6 +1,7 @@
 import { isMergedPaper,isPaperDT } from "./paperMergedLesson";
 import { LEARNING_STAGES } from "./learningFramework";
 import { PaperDiagnosisVisual } from "./PaperDiagnosisVisual";
+import { LearningRevisionJourney, RevisionEditingLayout } from "./LearningRevisionJourney";
 import { PAPER_RECTANGLE_TITLES,isPaperRectangle } from "./paperRectangleTask";
 import { useEffect, useId, useState } from "react";
 import type { PaperPointName } from "./paperCoordinateStudy";
@@ -52,6 +53,8 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
   const rectangle=isPaperRectangle(state.level),merged=isMergedPaper(state.level),dtOnly=isPaperDT(state.level),grid=merged?20:10;
   const [hypothesisDraft, setHypothesisDraft] = useState(state.studentHypothesis);
   const [revisionDraft, setRevisionDraft] = useState(state.revisionReason);
+  const journey=state.revisionJourney ? {...state.revisionJourney,
+    revisionReason:state.stage===7?revisionDraft:state.revisionJourney.revisionReason} : null;
 
   useEffect(() => setHypothesisDraft(state.studentHypothesis), [state.studentHypothesis]);
   useEffect(() => setRevisionDraft(state.revisionReason), [state.revisionReason]);
@@ -333,7 +336,8 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
         return <>
           <p className="pcv-lead">비교에서 발견한 점을 바탕으로 설명이나 좌표를 다시 살펴보고, 필요하면 새 조건으로 확인합니다.</p>
           {state.diagnosis && <div className="pcv-interpretation pcv-interpretation--compact"><StatusPill tone="warn">가능한 해석</StatusPill><p>{state.diagnosis.candidate}</p><p className="pcv-note">{state.diagnosis.question}</p></div>}
-          <label className="pcv-field"><span>무엇을 다시 살펴볼까요?</span><textarea rows={4} value={revisionDraft}
+          <label className="pcv-field"><span>어떤 피드백을 보고, 계산의 어느 부분을 바꾸나요?</span><textarea aria-label="무엇을 다시 살펴볼까요?" rows={4} value={revisionDraft}
+            placeholder="받은 질문과 연결해, 바꿀 식·좌표와 그 이유를 적어 주세요."
             onChange={event => setRevisionDraft(event.target.value)} /></label>
           <div className="pcv-button-row pcv-button-row--wrap">
             <button type="button" className="pcv-button pcv-button--primary" onClick={() => actions.onRevise(revisionDraft)} disabled={state.running}>이유와 수정 기록</button>
@@ -368,6 +372,8 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
       </nav></div>
 
       {state.error && state.stage!==4 && <p className="pcv-alert" role="alert">{state.error}</p>}
+      <LearningRevisionJourney data={journey}/>
+      <RevisionEditingLayout data={journey}>
       <main className="pcv-main">
         <section className="pcv-activity" aria-labelledby={`${id}-activity-heading`}>
           <div className="pcv-activity-kicker"><span>지금 하는 일</span><span>단계 {state.stage} / 7</span></div>
@@ -387,6 +393,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
           <p className="pcv-side-caution">TCP 보고 좌표는 제어기가 보고한 위치입니다. 펜 끝이나 종이의 잉크 위치를 뜻하지 않습니다.</p>
         </aside>
       </main>
+      </RevisionEditingLayout>
 
       <div className="pcv-button-row"><button className="pcv-button" disabled={state.running||state.stage===1} onClick={()=>actions.onStageChange((state.stage-1) as PaperLessonStage)}>이전</button><button className="pcv-button pcv-button--primary" disabled={state.running||state.stage===7} onClick={()=>actions.onStageChange((state.stage+1) as PaperLessonStage)}>다음 단계</button></div>
       <details className="pcv-details pcv-records"><summary>시도 연결 기록 · {state.records.length}회</summary>

@@ -1,0 +1,45 @@
+.revision-journey,.revision-workspace{container-type:inline-size;min-width:0;font-family:inherit}
+.revision-journey{margin:12px 0 18px;padding:16px;border:1px solid #bdcde0;border-radius:14px;background:#f4f8fc;color:#172c46}
+.revision-journey *,.revision-workspace *{box-sizing:border-box}
+.revision-journey header{display:flex;align-items:start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.revision-journey h3{font-size:17px!important;line-height:1.5;margin:3px 0!important;letter-spacing:-.025em}
+.revision-eyebrow{font-size:11px;font-weight:700;color:#4d6784}
+.revision-status{font-size:11px;background:white;border:1px solid #cbd5e1;border-radius:16px;padding:5px 10px;white-space:nowrap}
+.revision-flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;list-style:none;margin:0;padding:0}
+.revision-flow>li{min-width:0;padding:13px;border:1px solid #d6e0eb;border-radius:10px;background:#fff;overflow-wrap:anywhere}
+.revision-flow>li[data-current]{border:2px solid #2563eb;background:#eff6ff}
+.revision-flow>li[data-success]{border:2px solid #15803d;background:#f0fdf4}
+.revision-flow h4{display:flex;align-items:center;gap:7px;font-size:13px;margin:0 0 10px;color:#172c46}
+.revision-flow h4>span{display:grid;place-items:center;width:22px;height:22px;flex-shrink:0;background:#e8eef7;color:#294969;border-radius:50%;font-size:11px}
+.revision-journey p,.revision-reference p{font-size:12px;line-height:1.65;margin:8px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.revision-journey small,.revision-reference small,.revision-source{font-size:11px!important;line-height:1.5;color:#586b7d}
+.revision-journey details>summary,.revision-reference details>summary{font-size:11px;cursor:pointer;padding:5px 0;color:#394f72}
+.revision-points{list-style:none!important;margin:8px 0!important;padding:0!important;font-size:12px;font-variant-numeric:tabular-nums}
+.revision-points li{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 10px;border-bottom:1px solid #edf1f5;padding:4px 0}
+.revision-points b{font-weight:600}
+.revision-question{font-weight:650;color:#243f68;border-left:3px solid #6481ba;padding-left:9px}
+.revision-quote{color:#42556a}
+.revision-outcome{font-weight:700;color:#172c46}
+.revision-empty{color:#617489}
+.revision-pending{display:block;font-size:13px;color:#566c84;padding:6px 0}
+.revision-result{margin-top:14px;border-top:1px solid #cbd5e1;padding-top:12px}
+.revision-result h4{margin:0 0 8px;font-size:14px}
+.revision-plot{max-width:520px;margin:10px auto}
+.revision-plot svg{display:block;width:100%;background:white;border:1px solid #d6e0eb;border-radius:10px}
+.revision-plot text{font:11px sans-serif;fill:#64748b}
+.revision-plot figcaption{display:flex;justify-content:center;gap:16px;flex-wrap:wrap;margin:6px;font-size:12px}
+.revision-first-key{color:#c2410c}.revision-current-key{color:#2563eb}
+.revision-plot small{display:block;text-align:center}
+.revision-workspace.is-editing{display:grid;grid-template-columns:minmax(190px,.8fr) minmax(0,1.7fr);gap:16px;align-items:start}
+.revision-reference{position:sticky;top:12px;min-width:0;border:1px solid #cbd5e1;border-left:3px solid #647eab;border-radius:10px;background:#f8fafc;padding:14px;color:#213952}
+.revision-reference h3{font-size:14px!important;line-height:1.5;margin:0 0 8px!important}
+.revision-reference hr{border:0;border-top:1px solid #d6e0eb;margin:14px 0}
+.revision-editor{min-width:0}
+.revision-workspace.is-editing .pcv-main{display:block;padding:0}
+.revision-workspace.is-editing .pcv-side-note{margin-top:16px}
+@container(max-width:720px){.revision-flow{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@container(max-width:480px){.revision-flow{grid-template-columns:minmax(0,1fr)}}
+/* The parent lesson panel, not the full viewport, determines editing width. */
+.paper-coordinate-view,.shape-lesson-steps{container-type:inline-size}
+@container(max-width:620px){.revision-workspace.is-editing{display:flex;flex-direction:column}.revision-reference{position:static;width:100%}.revision-editor{width:100%}}
+@media(prefers-reduced-motion:reduce){.revision-journey *{scroll-behavior:auto}}

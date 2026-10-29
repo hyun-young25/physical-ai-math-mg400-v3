@@ -1,4 +1,5 @@
 import { useSquareAttemptHistory,SquareAttemptHistory,SquareAttemptReview } from "./squareAttemptHistory";
+import { paperRevisionJourney } from "./revisionJourney";
 import { PAPER_TASK_VERSION,isMergedPaper,isPaperDT,givenPaperFrame,PAPER_ROTATION_SETTING,paperConceptValid } from "./paperMergedLesson";
 import { omitsOrigin } from "./originMissing";
 import { paperTaskTargets,isPaperRectangle,paperFeedbackKey,paperRectangleVisual,paperTransformEstimate } from "./paperRectangleTask";
@@ -469,6 +470,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
         targetSet: "revalidation", level: parent.level, parentAttemptId: parent.id,
         frame: parent.frame, referenceSamples: parent.referenceSamples, transform: transformDraft, liftHeight: parent.liftHeight,
       });
+      upsert({...child,stage:2});
       setRevisionDraft(reason.trim());
       setTransformDraft(transformDraft);
       setStage(2);
@@ -759,11 +761,12 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
   state.priorSameType=priorSameType;
   const attemptHistory=useSquareAttemptHistory(visualOwner,isPaperDT(level)?4:5,comparison&&active?.taskVersion===PAPER_TASK_VERSION&&run?{id:active.id+":"+run.id,recordId:active.id,runId:run.id,taskVersion:active.taskVersion,taskIndex:isPaperDT(level)?4:5,supportMode:attemptSupport,predictions:{transform:active.transform,points:active.predictions,pathConcept:active.pathConcept},predictionReason:active.transform?.explanation??"",observed:run.observations,studentCause:active.studentHypothesis??"",createdAt:new Date(run.endedAt??run.startedAt).toISOString(),visual:comparison}:null,running);
   state.gptQuestion=attemptHistory.gptQuestion;
+  state.revisionJourney=paperRevisionJourney(active,records,attemptHistory.items,draftTargets,selectedTransform,stage);
   const published=attemptHistory.reviewed?{...attemptHistory.reviewed.visual,stage:6,review:attemptHistory.meta}:comparison?{...comparison,review:attemptHistory.meta}:null;
   const comparisonKey=JSON.stringify(published);
   useLayoutEffect(()=>{publishSquareVisual(visualOwner,published);},[visualOwner,comparisonKey]);
   useLayoutEffect(()=>()=>clearSquareVisual(visualOwner),[visualOwner]);
   const ai=useLearningAi(context);
   if(attemptHistory.reviewed)return <><SquareAttemptHistory history={attemptHistory} locked={running}/><SquareAttemptReview attempt={attemptHistory.reviewed}/></>;
-  return <><SquareAttemptHistory history={attemptHistory} locked={running}/><LearningAiFeedback ai={ai}/><PaperCoordinateStudyView state={state} actions={actions}/></>;
+  return <><PaperCoordinateStudyView state={state} actions={actions}/><SquareAttemptHistory history={attemptHistory} locked={running}/><LearningAiFeedback ai={ai}/></>;
 }

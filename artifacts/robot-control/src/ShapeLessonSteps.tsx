@@ -1,4 +1,6 @@
 import { useSquareAttemptHistory,SquareAttemptHistory,SquareAttemptReview } from "./squareAttemptHistory";
+import { squareRevisionJourney } from "./revisionJourney";
+import { LearningRevisionJourney, RevisionEditingLayout } from "./LearningRevisionJourney";
 import { getShapeLesson } from "./shapeLearning";
 import { publishSquareVisual,clearSquareVisual } from "./squareVisualizationStore";
 import { squareFeedbackKey } from "./squareComparisonVisual";
@@ -122,6 +124,9 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
       priorSameType:priorTypes.filter(type=>type===diagnosis.type).length,supportMode} : null;
   const taskIndex=Array.from({length:6},(_,i)=>getShapeLesson("사각형",i).id).indexOf(lesson.id);
   const attemptHistory=useSquareAttemptHistory(fieldId,taskIndex,presentation&&record?.taskVersion==="v4-paper-merged"?{id:presentation.key,recordId:record.id,runId:String(record.runs.length),taskVersion:record.taskVersion,taskIndex,supportMode,predictions:record.prediction,predictionReason:record.reason,observed:presentation.observed,studentCause:cause,createdAt:record.runs.at(-1)?.endedAt??record.submittedAt,visual:presentation}:null,locked);
+  const journey=isSquare?squareRevisionJourney(lesson,q.conditionKey,record,q.history,attemptHistory.items,
+    activeStage===7?{...record?.prediction,...q.reviewDraft}:q.draft,q.reason,activeStage):null;
+  if(journey&&activeStage===7)journey.revisionReason=cause;
   const published=attemptHistory.reviewed?{...attemptHistory.reviewed.visual,stage:6,review:attemptHistory.meta}:presentation?{...presentation,review:attemptHistory.meta}:null;
   const presentationKey=JSON.stringify(published);
   useLayoutEffect(()=>{publishSquareVisual(fieldId,published);},[fieldId,presentationKey]);
@@ -260,7 +265,7 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
 
   if(attemptHistory.reviewed)return <div className="shape-lesson-steps"><SquareAttemptHistory history={attemptHistory} locked={locked}/><SquareAttemptReview attempt={attemptHistory.reviewed}/></div>;
   return <div className="shape-lesson-steps" data-shape-stage={activeStage} data-support-mode={supportMode}>
-    {isSquare&&<SquareAttemptHistory history={attemptHistory} locked={locked}/>}
+    <LearningRevisionJourney data={journey}/>
     <p className="shape-step-progress" aria-live="polite">현재 단계 {activeStage}/7 · <strong>{STEP_TITLES[activeStage - 1]}</strong></p>
     <details className="shape-stage-overview">
       <summary>전체 학습 7단계 보기</summary>
@@ -288,6 +293,7 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
         })}
       </ol>
     </details>
+    <RevisionEditingLayout data={journey}>
     <section className="shape-step-active" aria-label={STEP_TITLES[activeStage - 1]}>
       {activeStage === 1 && <>
         <div className="shape-step-fields">{lesson.concept.map(question => renderQuestion(question))}</div>
@@ -426,6 +432,8 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
         {primary}
       </div>
     </section>
+    </RevisionEditingLayout>
+    {isSquare&&<SquareAttemptHistory history={attemptHistory} locked={locked}/>}
     <details className="shape-step-evidence"><summary>학습 기록 · {q.recordCount}회</summary>
       <p className="lesson-note">처음 예측과 근거, 실행, 수정한 판단과 설명을 구분해 보관합니다. 교사 검토가 필요한 설명도 함께 내려받습니다.</p>
       <button type="button" disabled={locked || !q.recordCount} onClick={q.download}>학습 기록 내려받기</button>
