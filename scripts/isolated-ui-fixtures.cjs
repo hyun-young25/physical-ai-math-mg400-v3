@@ -24,7 +24,7 @@ const plugin={name:"local-browser-fixture",setup(b){
 async function bundle(code){
  const id=++serial,prefix="/__isolated_fixture/"+id+"/";
  const result=await esbuild.build({stdin:{contents:code,resolveDir:app,sourcefile:"browser-fixture.tsx",loader:"tsx"},
-  nodePaths:[path.join(app,"node_modules")],conditions:["style","browser","import"],write:false,bundle:true,format:"esm",platform:"browser",outdir:path.join(repo,".isolated-output"),entryNames:"index",
+  nodePaths:[path.join(app,"node_modules"),...(process.env.ISOLATED_NODE_MODULES?.split(path.delimiter).filter(Boolean)??[])],conditions:["style","browser","import"],write:false,bundle:true,format:"esm",platform:"browser",outdir:path.join(repo,".isolated-output"),entryNames:"index",
   jsx:"automatic",define:{"import.meta.env.BASE_URL":'"/"',"import.meta.env.DEV":"false","process.env.NODE_ENV":'"production"'},
   plugins:[plugin],loader:{".png":"file",".jpg":"file",".svg":"file",".glb":"file",".stl":"file",".woff2":"file"},
   publicPath:prefix,logLevel:"silent"});

@@ -46,6 +46,8 @@ jobs:
           node --test artifacts/robot-control/src/paperSceneModel.test.cjs
           timeout 300s node scripts/verify-paper-scene.cjs
           timeout 300s node scripts/verify-paper-readability.cjs
+      - name: Test current robot and animated DT preview
+        run: timeout 360s node scripts/verify-paper-robot-preview.cjs
       - name: Test advanced retry inputs, diagnosis and preserved records
         run: timeout 180s node scripts/verify-paper-retry.cjs
       - name: Test rotation guidance and supervised mock execution
