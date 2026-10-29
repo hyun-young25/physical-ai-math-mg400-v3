@@ -52,10 +52,10 @@ function questionReason(diagnosis:SquareDiagnosis) {
  * Summarizes observed evidence without treating a geometric mismatch as proof of a
  * learner's cognitive cause. The learner's explanation remains a saved hypothesis.
  */
-export function SquareDiagnosisPanel({ diagnosis, plan, plannedVertices, observedVertices:observedVerticesOverride, sourceLabel:sourceLabelOverride, cause, onCauseChange, causeRequired, disabled, priorSameType=0, supportMode="guided", toleranceMm, targetVertices, connectedOnly, gptQuestion, children }: {
+export function SquareDiagnosisPanel({ diagnosis, plan, plannedVertices, observedVertices:observedVerticesOverride, sourceLabel:sourceLabelOverride, cause, onCauseChange, causeRequired, disabled, priorSameType=0, supportMode="guided", toleranceMm, targetVertices, connectedOnly, gptQuestion, children, differenceSummary }: {
   diagnosis:SquareDiagnosis; plan:SquareFeedbackPlan|null; plannedVertices?:SquareObservedVertex[]; cause?:string; onCauseChange?:(text:string)=>void;
   observedVertices?:SquareObservedVertex[]; sourceLabel?:string;
-  connectedOnly?:boolean; toleranceMm?:number; targetVertices?:SquareObservedVertex[]; gptQuestion?:string; children?:ReactNode;
+  connectedOnly?:boolean; toleranceMm?:number; targetVertices?:SquareObservedVertex[]; gptQuestion?:string; children?:ReactNode; differenceSummary?:ReactNode;
   causeRequired?:boolean; disabled?:boolean; priorSameType?:number; supportMode?:"guided"|"challenge";
 }) {
   const paperLabel = connectedOnly && diagnosis.label.includes("\n");
@@ -85,6 +85,7 @@ export function SquareDiagnosisPanel({ diagnosis, plan, plannedVertices, observe
       {gptQuestion&&<p><strong>GPT가 표현한 질문·설명</strong> {gptQuestion}</p>}
     </section>
     <section className="square-decision-section"><h3>어디가 달랐나요? · 조건과 관측 비교</h3>
+      {differenceSummary}
       <SquareDiagnosisVisualSummary diagnosis={diagnosis} observed={observedVertices??[]} target={targetVertices} connectedOnly={connectedOnly}/>
       <p>판정 허용오차 {fmt(tol)} mm · {toleranceMm?"종이 목표·명령과 보고 위치":diagnosis.evidence.source==="hardware"?"명령과 제어기 보고 위치 · 수학적 변 계산 0.1 mm":"수학적 변 계산"}</p>
       <div className="square-edge-cards">{edges.map((e,i)=>{const want=e.condition.axis==="X"?{dx:e.condition.delta,dy:0}:{dx:0,dy:e.condition.delta};const same=diagnosis.type==="match"||(Math.abs(want.dx-e.executed.dx)<=tol&&Math.abs(want.dy-e.executed.dy)<=tol);

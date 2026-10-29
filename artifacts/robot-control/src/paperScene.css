@@ -53,12 +53,16 @@
 .paper-coordinate-view[data-paper-sync] [data-paper-selected=true] { background:#eef2ff; box-shadow:inset 3px 0 #8b5cf6; }
 .paper-coordinate-view[data-paper-sync] .pcv-target-row button { background:transparent; border:0; color:#0b2d5c; font-weight:750; padding:5px; cursor:pointer; }
 .paper-coordinate-view[data-paper-sync] .pcv-target-layout,.paper-coordinate-view[data-paper-sync] .pcv-observation-layout { display:block; }
-.paper-coordinate-view[data-paper-sync]>.paper-scene-map { margin:12px 18px; }
-/* Only the merged advanced lessons pin the compact map while editing. Keep the
-   host as the sole scrolling ancestor so focused inputs cannot hide the map. */
+.paper-coordinate-view[data-paper-sync] .pcv-edit-workspace>.paper-scene-map { margin:12px 18px; }
+/* Map and editor occupy separate rows. The map never overlays form controls. */
 .paper-coordinate-view[data-paper-sync] { overflow:visible; }
-.paper-coordinate-view[data-paper-sync]>.paper-scene-map--compact {
-  position:sticky; top:0; z-index:24; display:grid;
+.pcv-edit-workspace,.pcv-edit-content { display:contents; }
+.paper-coordinate-view[data-paper-sync] .pcv-edit-workspace.is-editing { display:flex; flex-direction:column; height:max(460px,calc(var(--paper-host-height,760px) - 20px)); }
+.paper-coordinate-view[data-paper-sync] .is-editing>.pcv-edit-content { display:block; overflow:auto; min-height:160px; flex:1; scroll-padding:12px; border-top:1px solid #cbd5e1; }
+.paper-coordinate-view[data-paper-sync] .pcv-edit-workspace:has(>.paper-scene-map--expanded) { height:auto; }
+.paper-coordinate-view[data-paper-sync] .pcv-edit-workspace:has(>.paper-scene-map--expanded)>.pcv-edit-content { overflow:visible; }
+.paper-coordinate-view[data-paper-sync] .paper-scene-map--compact {
+  position:relative; flex:none; display:grid;
   grid-template-columns:280px minmax(0,1fr); gap:4px 8px;
   padding:8px; margin:8px; box-shadow:0 4px 12px #0b2d5c18;
 }
@@ -70,14 +74,14 @@
 .paper-scene-map--compact .paper-point-picker { gap:4px; }
 .paper-scene-map--compact .paper-point-picker button { padding:4px 6px; }
 .paper-scene-map--compact p { font-size:10px; }
-.paper-coordinate-view[data-paper-sync]:has(>.paper-scene-map--compact) [data-paper-row] { scroll-margin-top:290px; scroll-margin-bottom:16px; }
+.paper-coordinate-view[data-paper-sync] [data-paper-row] { scroll-margin-block:12px; }
 .paper-coordinate-view[data-paper-sync] [data-paper-selected=true] { outline:2px solid #8b5cf6; outline-offset:1px; }
 .paper-coordinate-view[data-paper-sync] .revision-reference { position:static; }
 .paper-coordinate-view[data-paper-sync] .revision-workspace.is-editing { display:block; }
 .paper-coordinate-view[data-paper-sync] .revision-editor { width:100%; }
 .revision-robot-shell:has(.paper-scene-toolbar) { min-height:0; }
 .paper-scene-fallback { position:absolute; inset:45px 8px 8px; overflow:auto; background:#f8fafce8; }
-@media(max-width:700px) { .paper-coordinate-view[data-paper-sync]>.paper-scene-map { margin:10px; } .curriculum-scene:has(.paper-scene-toolbar) { height:640px; min-height:640px; } }
+@media(max-width:700px) { .paper-coordinate-view[data-paper-sync] .pcv-edit-workspace>.paper-scene-map { margin:10px; } .curriculum-scene:has(.paper-scene-toolbar) { height:640px; min-height:640px; } }
 
 .paper-map-expand { border:1px solid #c4b5fd; border-radius:5px; padding:4px 8px; background:#f5f3ff; color:#5b21b6; cursor:pointer; }
 .paper-scene-map--expanded>svg { max-height:none; }
@@ -85,7 +89,7 @@
    The expanded map scrolls normally, never over inputs. */
 .paper-coordinate-host { container-type:inline-size; }
 @container(max-width:440px) {
-  .paper-coordinate-view[data-paper-sync]>.paper-scene-map--compact { grid-template-columns:minmax(0,1fr); }
+  .paper-coordinate-view[data-paper-sync] .paper-scene-map--compact { grid-template-columns:minmax(0,1fr); }
   .paper-scene-map--compact>svg { width:min(260px,100%); justify-self:center; grid-row:auto; }
   .paper-scene-map--compact>:not(header):not(svg) { grid-column:1; }
   .paper-scene-map--compact>.paper-scene-legend,.paper-scene-map--compact>p { display:none; }
@@ -95,3 +99,15 @@
 .pcv-retry-changed { display:inline-block; color:#166534; background:#dcfce7; border-radius:4px; padding:2px 5px; font-size:12px; margin-left:4px; }
 .pcv-retry-note { padding:12px; border:1px solid #c4b5fd; border-radius:8px; background:#f5f3ff; color:#3730a3; margin:12px 0; font-size:13px; }
 .pcv-retry-note p { margin:6px 0; }
+.paper-rotation-summary { display:grid; gap:6px; border-left:4px solid #d97706; padding:14px; margin-bottom:14px; background:#fffbeb; color:#92400e; }
+.paper-rotation-summary strong { font-size:20px; line-height:1.5; }
+.paper-rotation-summary small { font-size:12px; }
+.paper-angle-label { display:block; background:#fffbeb; color:#92400e; padding:4px 8px; border:2px solid #d97706; border-radius:6px; font-size:16px; font-weight:800; white-space:nowrap; pointer-events:none; }
+.paper-angle-label small { display:block; font-size:10px; }
+.paper-coordinate-view[data-paper-sync] .pcv-run-action { flex:1 1 220px; min-width:0; }
+.pcv-run-blockers { padding-left:20px; font-size:13px; line-height:1.6; color:#9a3412; }
+.pcv-run-blockers li { margin:6px 0; }
+.pcv-run-blockers button { border:0; background:transparent; color:#1d4ed8; padding:0 3px; text-decoration:underline; cursor:pointer; }
+.pcv-teacher-setting { padding:12px; border:1px solid #d97706; border-radius:8px; }
+.pcv-teacher-setting label { display:flex; align-items:center; gap:8px; font-weight:700; }
+.pcv-teacher-setting input { width:auto; }

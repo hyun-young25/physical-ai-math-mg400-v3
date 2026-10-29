@@ -61,6 +61,12 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
   const selected=scene.reference??(scene.point===null?null:`P${scene.point+1}`);
   const lastSelection=useRef(scene.selectionVersion);
   useLayoutEffect(()=>{
+    const host=root.current?.closest(".paper-coordinate-host");
+    if(!merged||!host)return;
+    const size=()=>root.current?.style.setProperty("--paper-host-height",`${host.clientHeight}px`);
+    size();const observer=new ResizeObserver(size);observer.observe(host);return()=>observer.disconnect();
+  },[merged]);
+  useLayoutEffect(()=>{
     if(merged) publishPaperScene(id,{level:state.level,stage:state.stage,frame:state.frame,samples:state.samples,targetPoints:state.targetPoints,predictions:state.predictions,revisionJourney:journey,running:state.running,diagnosis:state.diagnosis,run:state.run,displayPose:state.displayPose,displaySource:state.displaySource});
     else clearPaperScene(id);
   });
@@ -73,14 +79,20 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
     if(lastSelection.current===scene.selectionVersion)return;
     lastSelection.current=scene.selectionVersion;
     if(!merged||scene.owner!==id||scene.data?.level!==state.level||!selected)return;
-    const host=root.current?.closest(".paper-coordinate-host"),row=root.current?.querySelector(`[data-paper-row="${selected}"]`);
+    const row=root.current?.querySelector(`[data-paper-row="${selected}"]`);
+    const host=row?.closest(".pcv-edit-workspace.is-editing .pcv-edit-content")??root.current?.closest(".paper-coordinate-host");
     if(!host||!row)return;
-    const bounds=host.getBoundingClientRect(),target=row.getBoundingClientRect();
-    const pinned=root.current?.querySelector(".paper-scene-map--compact")?.getBoundingClientRect().height??0;
-    const editing=pinned>0&&!!document.activeElement&&row.contains(document.activeElement);
+    const pinned=0;
+    const editing=!!document.activeElement&&row.contains(document.activeElement);
     if(scene.selectionOrigin!=="scene"&&!editing)return;
-    if(target.top<bounds.top+pinned+12||target.bottom>bounds.bottom-12)
-      host.scrollTo({top:host.scrollTop+target.top-bounds.top-pinned-12,behavior:editing?"instant":"smooth"});
+    const outer=root.current?.closest(".paper-coordinate-host"),workspace=row.closest(".pcv-edit-workspace.is-editing");
+    if(outer&&workspace&&host!==outer){
+      outer.scrollTo({top:outer.scrollTop+workspace.getBoundingClientRect().top-outer.getBoundingClientRect().top,behavior:"instant"});
+    }
+    // Re-read after bringing the non-overlapping workspace into the outer pane.
+    const visible=host.getBoundingClientRect(),focused=row.getBoundingClientRect();
+    if(focused.top<visible.top+pinned+12||focused.bottom>visible.bottom-12)
+      host.scrollTo({top:host.scrollTop+focused.top-visible.top-pinned-12,behavior:editing?"instant":"smooth"});
   },[merged,id,state.level,scene.owner,scene.selectionVersion,scene.selectionOrigin,selected]);
   const rowProps=(name:string)=>merged?{"data-paper-row":name,"data-paper-selected":selected===name,onFocus:()=>selectPaperPoint(name)}:{};
   const focusedRetry=useRef<string|null>(null);
@@ -100,6 +112,14 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
   const activeTitle = STAGES.find(stage => stage.id === state.stage)?.title ?? "과제 이해";
   const sampleFor = (point: PaperPointName) => state.samples.find(sample => sample.point === point);
   const predictionFor = (name: string) => state.predictions.find(prediction => prediction.name === name);
+  const resolveBlocker=(target:import("./paperExecutionGuards").PaperRunBlocker["target"])=>{
+    if(target==="connection"){actions.onOpenConnection?.();return;}
+    if(target==="prediction"){actions.onStageChange(3);return;}
+    const el=root.current?.querySelector<HTMLElement>(target==="height"?'[aria-label="펜 들기 높이"]':target==="teacher"?'.pcv-teacher-setting':'.pcv-run-panel');
+    if(el instanceof HTMLDetailsElement)el.open=true;
+    el?.scrollIntoView({block:"center"});el?.focus();
+  };
+  const blockers=(items:typeof state.dtBlockers,label:string)=>items?.length?<ul className="pcv-run-blockers" aria-label={label}>{items.map((b,i)=><li key={i}>{b.message} <button type="button" onClick={()=>resolveBlocker(b.target)}>{({height:"높이 입력으로",prediction:"예측 입력으로",connection:"연결·준비 열기",teacher:"교사 설정으로",dt:"DT 확인으로"})[b.target]}</button></li>)}</ul>:null;
 
   const renderPaperGrid = () => merged ? null : (
     <div className="pcv-grid-wrap" aria-label={grid+"×"+grid+" cm 종이 좌표 격자"}>
@@ -272,17 +292,26 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
       case 4:
         return <>
           <p className="pcv-lead">예측을 저장한 뒤 선택한 환경의 결과를 살펴봅니다.</p>
-          <div className="pcv-run-panel">
+          <div className="pcv-run-panel" tabIndex={-1}>
             <span className="pcv-eyebrow">현재 결과 자료</span>
             <strong>{state.run ? state.run.status === "completed" ? "실행 완료" : state.run.status === "running" ? "실행 중" : state.run.status : "아직 실행 기록 없음"}</strong>
             <span>{sourceLabel(state.run?.source)}</span>
           </div>
           <div className="pcv-button-row pcv-button-row--wrap">
+            <div className="pcv-run-action">
             <button type="button" className="pcv-button pcv-button--primary" onClick={actions.onRunDT}
               disabled={state.running || !state.runAvailable}>{state.running ? "처리 중" : "DT에서 확인"}</button>
-            {!dtOnly&&<button type="button" className="pcv-button pcv-button--outline" onClick={actions.onRunPhysical}
-              disabled={state.running || !state.physicalAvailable}>{state.currentSource === "mock" ? "모의 브리지에서 시험" : "실장비에서 확인"}</button>}
+            {merged&&blockers(state.dtBlockers,"DT 실행 전 확인")}</div>
+            {!dtOnly&&<div className="pcv-run-action"><button type="button" className="pcv-button pcv-button--outline" onClick={actions.onRunPhysical}
+              disabled={state.running || !state.physicalAvailable}>{state.currentSource === "mock" ? "모의 브리지에서 시험" : "실장비에서 확인"}</button>
+              {merged&&blockers(state.physicalBlockers,"실장비 실행 전 확인")}</div>}
           </div>
+          {state.level==="advanced-paper-hardware"&&<details className="pcv-details pcv-teacher-setting" tabIndex={-1}>
+            <summary>교사 감독 설정</summary>
+            <label><input type="checkbox" checked={!!state.allowMismatchedHardware} disabled={state.running} onChange={e=>actions.onAllowMismatchedHardware?.(e.target.checked)}/> 틀린 예측도 실장비로 확인 허용 (교사 감독)</label>
+            <p>기본값은 꺼짐입니다. 교사가 장비 옆에서 감독할 때만 켜세요. 같은 예측의 DT 완료, 작업 범위, 기록된 높이와 기존 실행 확인이 모두 필요합니다.</p>
+            <p>종이 밖 30 mm를 넘는 점은 실행하지 않습니다. 종이 밖의 점은 펜을 든 높이에서만 확인합니다. 교사 확인 시각과 실행 연결 정보는 별도 실행 이력에 남습니다.</p>
+          </details>}
           <section className="pcv-callout pcv-height-check">
             <strong>종이 높이와 펜 이동 높이</strong>
             <p>종이 표면 Z는 기준점 O/X/Y에서 받은 값입니다. 펜 들기 높이는 제조사 프로그램에서 사람이 확인한 뒤 현재 좌표를 기록하세요. 이 화면은 높이 이동 명령을 자동 전송하지 않습니다.</p>
@@ -306,7 +335,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
             </div>
           </details>
           <p className="pcv-note">DT는 가상 자료이며 실측이 아닙니다. 실장비 결과는 컨트롤러 TCP 보고 좌표 보고 위치입니다. 이것만으로 펜 접촉이나 잉크 위치를 확인할 수 없습니다.</p>
-          {!state.physicalAvailable && state.physicalUnavailableReason && <p className="pcv-callout pcv-callout--compact" role="status">{state.physicalUnavailableReason}</p>}
+          {!merged&&!state.physicalAvailable && state.physicalUnavailableReason && <p className="pcv-callout pcv-callout--compact" role="status">{state.physicalUnavailableReason}</p>}
           {state.running && <p className="pcv-feedback" role="status">결과를 기다리는 중입니다.</p>}
           {state.error && <p className="pcv-alert" role="alert">{state.error}</p>}
         </>;
@@ -419,7 +448,9 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
 
       {state.error && state.stage!==4 && <p className="pcv-alert" role="alert">{state.error}</p>}
       <LearningRevisionJourney data={journey}/>
+      <div className={`pcv-edit-workspace${merged&&(state.stage===3||state.stage===7)?" is-editing":""}`}>
       {merged&&<PaperSceneMap key={state.level} compact={state.stage===3||state.stage===7}/>}
+      <div className="pcv-edit-content">
       <RevisionEditingLayout data={journey}>
       <main className="pcv-main">
         <section className="pcv-activity" aria-labelledby={`${id}-activity-heading`}>
@@ -444,6 +475,7 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
       </RevisionEditingLayout>
 
       <div className="pcv-button-row"><button className="pcv-button" disabled={state.running||state.stage===1} onClick={()=>actions.onStageChange((state.stage-1) as PaperLessonStage)}>이전</button><button className="pcv-button pcv-button--primary" disabled={state.running||state.stage===7} onClick={()=>actions.onStageChange((state.stage+1) as PaperLessonStage)}>다음 단계</button></div>
+      </div></div>
       <details className="pcv-details pcv-records"><summary>시도 연결 기록 · {state.records.length}회</summary>
         {state.records.map(r=><article key={r.id}><h3>시도 {r.attempt} · {sourceLabel(r.run?.source??r.dataSource)}</h3><p>{isPaperRectangle(r.level)?"사각형 P1/P2/P3/P4":r.targetSet==="initial"?"첫 목표 A/B/C":"새 목표 D/E/F"} · 이전 시도 {state.records.find(p=>p.id===r.parentAttemptId)?.attempt??"없음"}</p><p>관측 {r.run?.observations.length??0}개 · {r.diagnosis?.candidate??"비교 전"}</p><p>가설: {r.studentHypothesis??"작성 전"} · 수정: {r.revisionReason??"작성 전"}</p><p>{r.revalidation?.scope??"재검증 완료 전"}</p></article>)}
         <button className="pcv-button" onClick={actions.onExport}>연결된 학습 기록 내려받기</button>

@@ -2,6 +2,7 @@ import { frameTransformPoint, type PaperFrame } from "./paperCoordinateStudy";
 import type { PaperCoordinateStudyViewState } from "./paperCoordinateViewModel";
 import type { JourneyPoint } from "./revisionJourney";
 import { revisionSceneSeries, type RevisionPhase, type RevisionSeries } from "./revisionSceneStore";
+import { paperRotationVisual } from "./paperRotationVisual";
 
 export const PAPER_COLORS = { reference: "#64748b", target: "#22a06b", prediction: "#8b5cf6", first: "#f97316", result: "#2563eb", mismatch: "#ef4444" } as const;
 export type PaperSceneData = Pick<PaperCoordinateStudyViewState, "level" | "stage" | "frame" | "samples" | "targetPoints" | "predictions" | "revisionJourney" | "running" | "diagnosis" | "run" | "displayPose" | "displaySource">;
@@ -44,6 +45,11 @@ export function paperMismatchPoints(data: PaperSceneData, series: RevisionSeries
 }
 export function validPaperPoint(p: JourneyPoint): p is JourneyPoint & {x:number;y:number} {
   return p.x!==null && p.y!==null && Number.isFinite(p.x) && Number.isFinite(p.y);
+}
+export function paperSceneRotation(data: PaperSceneData, series: RevisionSeries[]) {
+  if(data.level!=="advanced-paper-hardware" || ![5,6].includes(data.stage) || data.running || data.diagnosis?.status!=="complete") return null;
+  const shown=series.some(s=>!s.dashed&&s.label!=="목표점"&&s.points.length===data.run?.observations.length&&s.points.every(p=>data.run!.observations.some(o=>o.point===p.label&&o.pose.x===p.x&&o.pose.y===p.y)));
+  return shown ? paperRotationVisual(data.frame,data.targetPoints,data.run) : null;
 }
 export function paperSeriesSegments(points: JourneyPoint[]) {
   const pairs=points.slice(1).map((p,i)=>[points[i],p]);
