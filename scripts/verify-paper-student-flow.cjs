@@ -47,7 +47,7 @@ async function main() {
   });
   try {
     const page = await context.newPage();
-    page.setDefaultTimeout(25_000);
+    page.setDefaultTimeout(12_000);
     page.on("pageerror", error => errors.push(error.message));
     page.on("console", message => {
       if (message.type() === "error" && !message.text().includes("temporary development")) errors.push(message.text());
@@ -60,25 +60,27 @@ async function main() {
 
     await page.goto(origin, { waitUntil: "domcontentloaded" });
     await page.getByLabel("학생 아이디").fill(`demo-paper-flow-${Date.now()}`);
-    await page.getByRole("button", { name: "학습 시작", exact: true }).click();
+    await page.getByRole("button", { name: "학습 시작", exact: true }).click({ noWaitAfter: true });
     await page.locator(".learning-student-bar").waitFor();
     assert.deepEqual(entryResponses, [200], "the real student-entry API must succeed");
+    console.log("PASS real student entry");
     // Redact the synthetic test login from evidence screenshots only.
     await page.addStyleTag({ content: ".learning-student-bar > strong { filter: blur(5px); }" });
 
     const introClose = page.getByRole("button", { name: "×", exact: true });
-    if (await introClose.count()) await introClose.first().click();
+    if (await introClose.count()) await introClose.first().click({ noWaitAfter: true });
     const lessonNav = page.getByRole("navigation", { name: "학습 목차" });
     if ((await lessonNav.evaluate(element => element.getBoundingClientRect().x)) < 0) {
-      await page.getByRole("button", { name: "☰", exact: true }).click();
+      await page.getByRole("button", { name: "☰", exact: true }).click({ noWaitAfter: true });
     }
-    await lessonNav.getByRole("button", { name: /2-4.*도형 경로 만들기/ }).click();
+    await lessonNav.getByRole("button", { name: /2-4.*도형 경로 만들기/ }).click({ noWaitAfter: true });
     await page.getByText("2-4. 도형 경로 만들기", { exact: true }).waitFor();
     await page.waitForTimeout(300);
-    await page.getByRole("button", { name: "5. 종이 기준점 (DT)", exact: true }).click();
+    await page.getByRole("button", { name: "5. 종이 기준점 (DT)", exact: true }).click({ noWaitAfter: true });
 
     const view = page.getByRole("region", { name: "종이 좌표 변환 학습" });
     await view.waitFor();
+    console.log("PASS paper task opened through student menu");
     const records = () => page.evaluate(() => {
       const key = Object.keys(localStorage).find(value => value.endsWith("physical-ai-paper-coordinate-v1"));
       return key ? JSON.parse(localStorage.getItem(key) || "[]") : [];
@@ -90,7 +92,7 @@ async function main() {
     const click = async label => {
       const button = view.getByRole("button", { name: label, exact: true });
       await button.scrollIntoViewIfNeeded();
-      await button.click();
+      await button.click({ noWaitAfter: true });
     };
     const stage = async number => {
       await view.getByText(`단계 ${number} / 7`, { exact: false }).waitFor();
@@ -141,6 +143,7 @@ async function main() {
     await previewLabel.waitFor({ timeout: 15_000 });
     assert.match(await previewLabel.innerText(), /파란 고스트 · DT · 실측 아님/);
     await shot("04-blue-ghost-dt.png");
+    console.log("PASS first DT run and blue ghost");
 
     await click("다음 단계");
     await stage(5);
@@ -152,12 +155,13 @@ async function main() {
     assert.match(first.transform.explanation, /이름: 홍길동/);
     assert.match(await page.locator(".square-type-badge").innerText(), /대입·계산 차이 · P3/);
     assert.match(await view.getByTestId("paper-diagnosis-visual").innerText(), /P3/);
+    console.log("PASS first rule-based diagnosis");
 
     async function requestMockAnalysis(expectedCount, expectedText) {
       const analysis = view.getByRole("region", { name: "실행자료 AI 분석" });
       await analysis.scrollIntoViewIfNeeded();
       await analysis.getByLabel("분석 방식").selectOption("gpt");
-      await analysis.getByRole("button", { name: "실행자료를 GPT에 보내 분석", exact: true }).click();
+      await analysis.getByRole("button", { name: "실행자료를 GPT에 보내 분석", exact: true }).click({ noWaitAfter: true });
       const result = analysis.getByTestId("execution-ai-result");
       await result.waitFor();
       assert.match(await result.innerText(), /GPT 분석 미완료/);
@@ -191,15 +195,19 @@ async function main() {
     assert.equal(firstEnvelope.attempts, "[]");
     assert.equal((await records())[0].aiAnalyses.at(-1).provider, "rules");
     await shot("05-mock-feedback.png");
+    console.log("PASS first mocked feedback displayed, saved, and request sanitized");
 
-    await view.getByLabel("차이가 생긴 이유", { exact: true })
-      .fill("학번: QA-12345; P3의 11 cm를 10 mm/cm로 곱한 뒤 원점 180 mm에 더하는 계산을 다시 살펴보겠습니다.");
+    await view.getByRole("textbox", { name: /내가 생각하는 이유/ })
+      .fill("P3의 X 계산에서 11 cm × 10 mm/cm를 110 mm로 계산해 원점 180 mm에 더해야 한다는 점을 다시 확인하겠습니다.");
+    console.log("PASS student hypothesis entered through visible UI");
     await click("생각 저장");
     await click("다음 단계");
+    const longRevisionReason = `이메일: qa-private@example.com; P3의 좌표 계산을 다시 확인합니다. 종이 x좌표 11 cm와 1 cm당 10 mm를 곱해 110 mm를 얻고, 원점 X 180 mm에 더합니다. 따라서 P3의 X 예측을 310 mm에서 290 mm로 수정합니다. ${"이 식의 각 항과 단위를 다시 대입해 확인합니다. ".repeat(18)}`;
     await view.getByLabel("무엇을 다시 살펴볼까요?", { exact: true })
-      .fill("이메일: qa-private@example.com; 식을 다시 대입하고 P3의 X 예측과 수정 이유를 기록합니다.");
+      .fill(longRevisionReason);
     await click("이유와 수정 기록");
     await view.getByTestId("paper-retry-note").waitFor();
+    console.log("PASS revision reason saved and linked retry created");
     let all = await records();
     assert.equal(all.length, 2);
     const parentAfterReason = all[0], child = all[1];
@@ -230,6 +238,7 @@ async function main() {
     await stage(5);
     await click("다음 단계");
     await stage(6);
+    console.log("PASS corrected prediction rerun in DT");
     assert.match(await page.locator(".square-type-badge").innerText(), /예측과 실행 일치/);
     all = await records();
     assert.equal(all[0].id, parentAfterReason.id);
@@ -254,13 +263,15 @@ async function main() {
     const secondBody = JSON.stringify(secondRequest);
     assert.doesNotMatch(secondBody, /qa-private@example\.com|QA-12345/);
     assert.match(secondBody, /이름: \[이름 제외\]/);
+    assert.ok(secondBody.length > 3500, "follow-up history should exercise the long-history path");
     await shot("07-follow-up-history.png");
 
     const comparison = page.getByTestId("revision-scene-dock");
-    await comparison.getByRole("button", { name: /4.*재실행 결과/ }).click();
+    await comparison.getByRole("button", { name: /4.*재실행 결과/ }).click({ noWaitAfter: true });
     await comparison.waitFor();
     assert.match(await comparison.innerText(), /첫 실행/);
     assert.match(await comparison.innerText(), /수정 후 실행/);
+    await shot("08-linked-comparison.png");
     assert.deepEqual(errors, [], "no browser runtime errors");
     assert.deepEqual(networkFailures, [], "no failed browser requests");
     const report = {
