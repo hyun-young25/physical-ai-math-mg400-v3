@@ -57,6 +57,34 @@ test("privacy removes identity fields while preserving student math, coordinates
   assert.match(answers.revisionReason,/1 cm는 10 mm/);
   assert.match(history[0].previouslyDisplayedFeedback[0].text,/원점X\+10×x/);
 });
+test("paper follow-up history stays valid and retains displayed feedback, revision and rerun evidence",()=>{
+  const previous={
+    recordId:"paper-attempt-1",parentAttemptId:null,attempt:1,taskVersion:"paper-v4",level:"advanced-paper-dt",
+    targetSet:"initial",status:"revised",dataSource:"dt",
+    transform:{originX:"180",originY:"-60",axisDirection:"x+",millimetersPerCentimeter:"10",explanation:"처음 풀이의 식"},
+    predictions:[{name:"P3",xCm:6,yCm:7,robotX:"310",robotY:"90"}],
+    studentHypothesis:"P3의 대입값을 다시 살펴봄",revisionReason:"축별 계산을 다시 적어 수정",
+    revalidation:{parentAttemptId:"paper-attempt-1",runId:"dt-run-2",source:"dt",scope:"same-task"},
+    previouslyDisplayedFeedback:[{mode:"gpt",provider:"openai",status:"provided",source:"dt",text:"X 좌표에 어떤 값을 대입했나요?"}],
+    frame:{id:"frame-1",source:"teacher",coordinateSystem:"User 0 / Tool 0",user:0,tool:0,capturedAt:10,samples:[{point:"O",pose:{x:180,y:-60,z:60,r:0}}]},
+    run:{id:"dt-run-2",planHash:"plan-2",source:"dt",status:"completed",startedAt:10,endedAt:12,
+      commands:[{point:"P3",pose:{x:290,y:90,z:60,r:0}}],
+      observations:[{point:"P3",source:"dt",kind:"dt",seq:null,measuredAt:12,pose:{x:290,y:90,z:60,r:0}}]},
+    diagnosis:{method:"rule-based",status:"complete",candidate:"대입·계산 차이",firstMismatch:"P3",question:"어떤 수를 대입했나요?",why:"예측 좌표와 목표 좌표 비교",evidence:[{point:"P3",distance:20}]},
+    unusedDiagnosticPayload:"x".repeat(4200),
+  };
+  const source=JSON.stringify([previous]);
+  assert.ok(source.length>3500,"regression fixture must exceed the former truncation limit");
+  const encoded=feedbackHistoryEnvelope({task:"paper-coordinate",history:source},[],[]);
+  assert.ok(encoded.length<=6000);
+  const envelope=JSON.parse(encoded),attempts=JSON.parse(envelope.attempts);
+  assert.equal(attempts.length,1);
+  assert.equal(attempts[0].previouslyDisplayedFeedback[0].text,"X 좌표에 어떤 값을 대입했나요?");
+  assert.equal(attempts[0].revisionReason,"축별 계산을 다시 적어 수정");
+  assert.equal(attempts[0].run.observations[0].pose.x,290);
+  assert.equal(attempts[0].run.status,"completed");
+  assert.equal(attempts[0].studentHypothesis,"P3의 대입값을 다시 살펴봄");
+});
 test("unsaved answer and explanation edits are current context, not a new verdict or overwritten prediction",()=>{
   const record=structuredClone(original);
   const c=makeFeedbackContext(input({record,reviewDraft:{z:"55"},reasonRevision:"새 기준으로 생각 중",
