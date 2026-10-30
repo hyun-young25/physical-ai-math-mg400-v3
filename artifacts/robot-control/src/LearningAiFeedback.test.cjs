@@ -84,17 +84,17 @@ test("mode switch discards pending GPT reply and isolates trial conversation fro
 });
 test("late reply after an answer, task, or reason change never labels the new answer",async()=>{
   for(const patch of [{answers:"다른 수치"},{condition:'{"id":"another"}'},{reason:"새 풀이"}]) {
-    const h=mount(),pending=h.ai.request("submit");h.render({...initial(),...patch});h.resolve("옛 답안의 응답");await pending;h.render();
+    const h=mount(),pending=h.ai.request("hint");h.render({...initial(),...patch});h.resolve("옛 답안의 응답");await pending;h.render();
     assert.equal(h.ai.feedback,undefined);assert.equal(h.ai.pending,false);
     assert.equal(h.rows.size,0);
   }
 });
 test("unmount discards the request without recording a question or invented delivered hint",async()=>{
-  const h=mount(),pending=h.ai.request("result");h.unmount();h.resolve();await pending;
+  const h=mount(),pending=h.ai.request("hint");h.unmount();h.resolve();await pending;
   assert.equal(h.rows.size,0);
 });
 test("editing an unsaved result review also invalidates a pending reply",async()=>{
-  const h=mount(),pending=h.ai.request("result");
+  const h=mount(),pending=h.ai.request("hint");
   h.render(initial(),"수정 수치·근거 입력 중");h.resolve();await pending;h.render();
   assert.equal(h.ai.feedback,undefined);assert.equal(h.rows.size,0);
 });
