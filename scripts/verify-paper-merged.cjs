@@ -5,8 +5,15 @@ const fixture=require("./verify-square-flow.cjs").fixture.replace("style:{height
  const browser=await chromium.launch({args:["--disable-webgl","--disable-gpu"]});
  try{
  const context=await browser.newContext({viewport:{width:1120,height:980}});
- let writes=0;const errors=[],passed=[];
- await context.route("**/api/**",r=>{if(r.request().method()!=="GET")writes++;return r.fulfill({json:{}});});
+ let writes=0;const errors=[],passed=[],feedbackRequests=[];
+ await context.route("**/api/**",r=>{
+  const request=r.request();if(request.method()!=="GET")writes++;
+  if(new URL(request.url()).pathname.endsWith("/learning/feedback")){
+   feedbackRequests.push(request.postDataJSON());
+   return r.fulfill({json:{provider:"openai",status:"provided",text:"검증용 모의 GPT 문장",createdAt:new Date().toISOString()}});
+  }
+  return r.fulfill({json:{}});
+ });
  await context.route("**/__paper-rectangle",r=>r.fulfill({contentType:"text/html",body:fixture}));
  const page=await context.newPage();page.on("pageerror",e=>errors.push(e.message));page.setDefaultTimeout(15000);
  await page.goto("http://localhost/__paper-rectangle");
@@ -44,21 +51,34 @@ const fixture=require("./verify-square-flow.cjs").fixture.replace("style:{height
  await page.getByTestId("paper-diagnosis-visual").screenshot({path:path.join(shots,"07-paper-v4-dt.png")});
  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.endsWith("physical-ai-square-attempts-v1")))||"[]"));
  assert.equal(saved.length,1);assert.equal(saved[0].taskVersion,"v4-paper-merged");assert.equal(saved[0].taskIndex,4);assert.equal(saved[0].studentCause,"기준점 O를 더하니 목표와 일치했습니다.");assert.equal(saved[0].source,"dt");assert.equal(saved[0].questionSource,"rules");
- // A mocked response is recorded only after it has actually been displayed.
- await page.evaluate(()=>{
-   const attemptKey=Object.keys(localStorage).find(k=>k.endsWith("physical-ai-square-attempts-v1")),a=JSON.parse(localStorage.getItem(attemptKey))[0];
-   const [,condition,answers,execution]=JSON.parse(a.visual.feedbackKey),key=attemptKey.replace("physical-ai-square-attempts-v1","physical-ai-inquiry-feedback-v1");
-   const row={id:"mock-gpt-visible",feedbackStatus:"requested",prediction:{task:"paper-coordinate",condition,answers,execution,judgment:JSON.stringify({candidate:"검증용 판정"})},feedback:{provider:"openai",text:"검증용 모의 GPT 문장",createdAt:new Date().toISOString()}};
-   localStorage.setItem(key,JSON.stringify([row]));window.dispatchEvent(new CustomEvent("learning-evidence-written",{detail:{key:"physical-ai-inquiry-feedback-v1"}}));
+ // Exercise the real analysis button and displayed-result persistence.
+ // Only the HTTP response is mocked; never insert feedback into localStorage.
+ const analysis=view.getByRole("region",{name:"실행자료 AI 분석",exact:true});
+ await analysis.getByLabel("분석 방식").selectOption("gpt");
+ assert.equal(feedbackRequests.length,0,"changing modes alone must not request AI");
+ assert.equal(await analysis.getByTestId("execution-ai-result").count(),0);
+ await analysis.getByRole("button",{name:"실행자료를 GPT에 보내 분석",exact:true}).click();
+ const result=analysis.getByTestId("execution-ai-result");
+ await result.waitFor();await result.scrollIntoViewIfNeeded();
+ await result.getByText("검증용 모의 GPT 문장",{exact:true}).waitFor();
+ assert.equal(feedbackRequests.length,1);
+ const request=feedbackRequests[0],execution=JSON.parse(request.execution)[0],condition=JSON.parse(request.condition);
+ assert.equal(request.task,"paper-coordinate");assert.equal(execution.source,"dt");
+ assert.equal(execution.status,"completed");assert.equal(execution.frameId,condition.frame.id);
+ assert.equal(execution.comparisons.length,4);assert.equal(condition.frame.samples.length,3);
+ await page.waitForFunction(()=>{
+  const key=Object.keys(localStorage).find(k=>k.endsWith("physical-ai-paper-coordinate-v1"));
+  return JSON.parse(localStorage.getItem(key)||"[]")[0]?.aiAnalyses?.some(a=>a.text==="검증용 모의 GPT 문장"&&a.displayedAt);
  });
- assert.equal(await page.getByTestId("square-diagnosis").getByText("검증용 모의 GPT 문장",{exact:true}).count(),0);
- await page.evaluate(()=>{
-   const key=Object.keys(localStorage).find(k=>k.endsWith("physical-ai-inquiry-feedback-v1")),rows=JSON.parse(localStorage.getItem(key));rows[0].feedbackStatus="displayed";
-   localStorage.setItem(key,JSON.stringify(rows));window.dispatchEvent(new CustomEvent("learning-evidence-written",{detail:{key:"physical-ai-inquiry-feedback-v1"}}));
+ const recorded=await page.evaluate(()=>{
+  const key=Object.keys(localStorage).find(k=>k.endsWith("physical-ai-paper-coordinate-v1"));
+  return JSON.parse(localStorage.getItem(key))[0];
  });
- await page.getByTestId("square-diagnosis").getByText(/검증용 모의 GPT 문장/).waitFor();
- await page.waitForFunction(()=>JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.endsWith("physical-ai-square-attempts-v1"))))[0].questionSource==="rules+openai");
- passed.push("late displayed GPT wording updates the same attempt; unshown response is excluded (mocked, no paid API)");
+ const shown=recorded.aiAnalyses.find(a=>a.text==="검증용 모의 GPT 문장");
+ assert.equal(shown.recordId,recorded.id);assert.equal(shown.runId,recorded.run.id);
+ assert.equal(shown.planHash,recorded.run.planHash);assert.equal(shown.source,"dt");
+ assert.equal(shown.provider,"openai");assert.equal(shown.status,"provided");
+ passed.push("real analysis button requests current DT evidence; mocked response is visible in analysis panel and saved against the same attempt/run/plan (no real GPT call)");
  const writesBefore=writes,storedBefore=await page.evaluate(()=>Object.fromEntries(Object.keys(localStorage).filter(k=>k.includes("physical-ai")).map(k=>[k,localStorage.getItem(k)])));
  await page.locator(".square-attempt-history button").filter({hasText:"시도 1"}).click();
  await page.getByTestId("square-attempt-review").waitFor();
