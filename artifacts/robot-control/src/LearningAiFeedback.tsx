@@ -16,6 +16,8 @@ type Trigger=LearningFeedbackInput["trigger"];
 type Activity = ReturnType<typeof learningRecordContext> & {
   id:string;task:string;at:string;prediction:FeedbackContext;feedback?:LearningFeedback;
   feedbackStatus:"requested"|"displayed"|"discarded";trigger:Trigger;question?:string;
+  conversation?:{role:"student"|"tutor";text:string;source?:"openai"|"rules"}[];
+  displayedAt?:string;
   automatic?:boolean;
 };
 export type TutorMessage={id:string;role:"student"|"tutor";text:string;source?:"openai"|"rules";at?:string;automatic?:boolean;unavailable?:boolean;evidence?:SquareEvidenceTag};
@@ -40,7 +42,7 @@ export function useLearningAi(context:FeedbackContext,editVersion="") {
   const active=useRef<{key:string;abort:AbortController;row:Activity}|null>(null);
   const lastQuestion=useRef<{problem:string;text:string}|null>(null);
   const ready=useRef<{key:string;row:Activity}|null>(null);
-  const [state,setState]=useState<{key:string;pending:boolean;feedback?:LearningFeedback;question?:string}>();
+  const [state,setState]=useState<{key:string;pending:boolean;feedback?:LearningFeedback;question?:string;id?:string}>();
   const [storageFailed,setStorageFailed]=useState(false);
   const [,refresh]=useState(0);
   const version=feedbackVersion(context)+editVersion+mode;
@@ -78,19 +80,20 @@ export function useLearningAi(context:FeedbackContext,editVersion="") {
     if(currentMode.current==="trial") {
       const feedback:LearningFeedback={provider:"rules",status:"unconfigured",createdAt:new Date().toISOString(),
         text:trialTutorFeedback({...snapshot,question,conversation})};
-      trialReady.current={key,row:{id:crypto.randomUUID(),prediction:structuredClone(snapshot),question,feedback}};
-      setState({key,pending:false,feedback});
+      const trialRow={id:crypto.randomUUID(),prediction:structuredClone(snapshot),question,feedback};
+      trialReady.current={key,row:trialRow};
+      setState({key,pending:false,feedback,question,id:trialRow.id});
       return;
     }
     const row:Activity={...learningRecordContext("math"),id:crypto.randomUUID(),task:snapshot.task,
       at:new Date().toISOString(),prediction:structuredClone(snapshot),feedbackStatus:"displayed",trigger,
-      ...(question?{question}:{})};
+      ...(question?{question}:{}),conversation:structuredClone(conversation)};
     const input={...snapshot,question,conversation,attempts:Math.min(1000,snapshot.attempts),
       history:JSON.stringify({attempts:snapshot.history.slice(0,3500),
         providedHints:priorMessages.filter(m=>m.role==="tutor").slice(-3).map(m=>m.text),
         recentAnswers:prior.slice(-2).map(x=>({answers:x.prediction.answers,reason:x.prediction.reason}))}).slice(0,6000)};
     const abort=new AbortController();active.current={key,abort,row};
-    setState({key,pending:true,question});
+    setState({key,pending:true,question,id:row.id});
     const timer=setTimeout(()=>abort.abort(),12000);
     let feedback:LearningFeedback;
     let invalidResponse=false;
@@ -119,7 +122,7 @@ export function useLearningAi(context:FeedbackContext,editVersion="") {
     active.current=null;
     if(currentVersion()!==key){setState(undefined);return;}
     ready.current={key,row:{...row,feedback}};
-    setState({key,pending:false,feedback});
+    setState({key,pending:false,feedback,question,id:row.id});
   };
   const history=mode==="trial"?trialHistory.current.filter(row=>feedbackProblemKey(row.prediction)===problemKey):delivered(context);
   const messages=messagesFor(history);
@@ -145,13 +148,16 @@ export function useLearningAi(context:FeedbackContext,editVersion="") {
       const pending=ready.current;
        if(!pending||pending.key!==currentVersion())return autoDisplayed;
       ready.current=null;
-      if(!writeEvidence(KEY,[...rows(),pending.row]))setStorageFailed(true);
+      const displayed={...pending.row,displayedAt:new Date().toISOString()};
+      if(!writeEvidence(KEY,[...rows(),displayed]))setStorageFailed(true);
       refresh(n=>n+1);
       return true;
     },
     ask:(text:string)=>request("hint",current.current,text),
     pending:state?.key===version&&state.pending,
     feedback:state?.key===version?state.feedback:undefined,
+    feedbackQuestion:state?.key===version?state.question:undefined,
+    feedbackId:state?.key===version?state.id:undefined,
     quickActions:[
       {label:"힌트만 주세요",question:"힌트만 주세요",enabled:true},
       {label:"왜 틀렸나요?",question:"왜 틀렸나요?",enabled:incorrect},

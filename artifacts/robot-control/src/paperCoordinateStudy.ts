@@ -92,6 +92,22 @@ export type PaperDiagnosis = {
   supportLevel?: number;
 };
 
+export type PaperAiAnalysisRecord = {
+  id: string;
+  mode: "trial" | "gpt";
+  provider: "rules" | "openai";
+  status: string;
+  failureReason?: string;
+  question: string;
+  text: string;
+  requestedAt: string;
+  displayedAt: string;
+  recordId: string;
+  runId: string;
+  planHash: string;
+  source: PaperEvidenceSource;
+};
+
 export type PaperTrialRecord = {
   id: string;
   task: "paper-coordinate";
@@ -118,6 +134,7 @@ export type PaperTrialRecord = {
   dtRunPlanHash?: string;
   inkReadings?: Array<{ point: string; xCm: number | null; yCm: number | null; recordedAt: number }>;
   diagnosis?: PaperDiagnosis;
+  aiAnalyses?: PaperAiAnalysisRecord[];
   studentHypothesis?: string;
   revisionReason?: string;
   revalidationTarget?: PaperTargetSet | null;

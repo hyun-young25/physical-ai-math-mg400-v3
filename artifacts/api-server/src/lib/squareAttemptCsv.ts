@@ -1,6 +1,6 @@
 import { csvCell } from "./learningCsv";
 type Row=Record<string,any>;
-export const ATTEMPT_HEADERS=["studentId","visitId","taskVersion","taskIndex","supportMode","attempt","predictions","predictionReason","observed","source","diagnosisType","edge","feedbackLevel","teacherFlag","questionSource","questionText","studentCause","meanError","maxError","createdAt","recordId","runId","provenance"];
+export const ATTEMPT_HEADERS=["studentId","visitId","taskVersion","taskIndex","supportMode","attempt","predictions","predictionReason","observed","source","diagnosisType","edge","feedbackLevel","teacherFlag","questionSource","questionText","studentCause","meanError","maxError","createdAt","recordId","runId","provenance","parentAttemptId","revisionReason","aiAnalyses"];
 /** Export recorded facts only. No diagnosis or question is reconstructed for legacy rows. */
 export function attemptRows(event:Row):Row[]{
  const p=event.payload??{},base={studentId:event.account_id,visitId:event.visit_id,recordId:event.record_id};

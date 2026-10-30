@@ -2,9 +2,12 @@ const test=require("node:test"),assert=require("node:assert/strict"),fs=require(
 const cache={};function load(n){if(cache[n])return cache[n];const out=cache[n]={};new Function("exports","require",ts.transpileModule(fs.readFileSync(path.join(__dirname,n+".ts"),"utf8"),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText)(out,d=>load(d.replace("./","")));return out;}
 const c=load("squareAttemptCsv");
 test("new attempts export one recorded row with server-bound identity and no forged student ID",()=>{
- const rows=c.attemptRows({account_id:"real",visit_id:"visit",record_id:"record",payload:{task:"square-attempt",studentId:"forged",taskVersion:"v4-paper-merged",diagnosisType:"match",questionSource:"rules",studentCause:"=HYPERLINK(1)",teacherFlag:false}});
+ const storedAnalysis={provider:"openai",status:"provided",question:"검토 질문",text:"표시된 응답",runId:"run-7"};
+ const rows=c.attemptRows({account_id:"real",visit_id:"visit",record_id:"record",payload:{task:"square-attempt",studentId:"forged",taskVersion:"v4-paper-merged",diagnosisType:"match",questionSource:"rules",studentCause:"=HYPERLINK(1)",teacherFlag:false,parentAttemptId:"previous",revisionReason:"축 방향을 다시 확인",aiAnalyses:[storedAnalysis]}});
  assert.equal(rows.length,1);assert.equal(rows[0].studentId,"real");assert.equal(rows[0].visitId,"visit");assert.match(c.attemptCsvLine(rows[0]),/'=HYPERLINK/);
- assert.equal(c.ATTEMPT_HEADERS.length,23);
+ assert.deepEqual(rows[0].aiAnalyses,[storedAnalysis]);assert.equal(rows[0].parentAttemptId,"previous");
+ assert.equal(rows[0].revisionReason,"축 방향을 다시 확인");assert.match(c.attemptCsvLine(rows[0]),/표시된 응답/);
+ assert.equal(c.ATTEMPT_HEADERS.length,26);
 });
 test("legacy questions and causes are preserved; unknown version, task index and metrics stay blank",()=>{
  const event={record_id:"old",payload:{task:"square",prediction:{x:"20"},reason:"옛 근거",mismatchDiagnoses:[{type:"axis-swap",question:"당시 질문",causeExplanation:"당시 가설",runCount:2}]}};

@@ -44,6 +44,7 @@ test("typing never calls the API and synchronous double request sends only one",
 test("trial responds to real input and follow-up without API or durable learning records",async()=>{
   const h=mount("trial");
   await h.ai.ask("힌트만 주세요");h.render();
+  assert.equal(h.ai.feedbackQuestion,"힌트만 주세요");
   const first=h.ai.messages.at(-1).text;
   assert.equal(h.calls,0);assert.equal(h.ai.feedback.provider,"rules");
   h.ai.acknowledge();h.render();assert.equal(h.rows.size,0);
@@ -56,6 +57,12 @@ test("trial responds to real input and follow-up without API or durable learning
   h.render({...initial(),condition:'{"id":"another"}'});
   assert.equal(h.ai.messages.length,0);
   h.unmount();
+});
+test("square AI conversations are isolated by the actual attempt and run",()=>{
+  const first={...initial(),task:"square",condition:'{"id":"rectangle"}',
+    execution:JSON.stringify([{recordId:"attempt-a",runId:"run-1",planKey:"plan-1"}])};
+  const second={...first,execution:JSON.stringify([{recordId:"attempt-a",runId:"run-2",planKey:"plan-2"}])};
+  assert.notEqual(ctx.feedbackProblemKey(first),ctx.feedbackProblemKey(second));
 });
 test("mode switch discards pending GPT reply and isolates trial conversation from GPT history",async()=>{
   const h=mount(),pending=h.ai.ask("옛 GPT 질문");

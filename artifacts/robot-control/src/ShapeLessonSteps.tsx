@@ -9,6 +9,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } f
 import { parseLessonNumber } from "./curriculum";
 import { compareInquiry, currentInquiryComparison, latestInquiryRuns, type useMathInquiry } from "./MathInquiry";
 import { ExplanationFeedback } from "./ExplanationFeedbackPanel";
+import { ExecutionAiAnalysis } from "./ExecutionAiAnalysis";
 import { shapeLessonAnswerMatches, shapeLessonFeedback, shapeLessonStages, type LessonQuestion, type ShapeLesson } from "./shapeLearning";
 import { assessSquare, squareTutorJudgment } from "./squareLearningFlow";
 import { LearningAiFeedback } from "./LearningAiFeedback";
@@ -123,7 +124,7 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
       observed:diagnosis.evidence.source==="prediction"?[]:diagnosis.evidence.executed?.vertices??[],
       priorSameType:priorTypes.filter(type=>type===diagnosis.type).length,supportMode} : null;
   const taskIndex=Array.from({length:6},(_,i)=>getShapeLesson("사각형",i).id).indexOf(lesson.id);
-  const attemptHistory=useSquareAttemptHistory(fieldId,taskIndex,presentation&&record?.taskVersion==="v4-paper-merged"?{id:presentation.key,recordId:record.id,runId:String(record.runs.length),taskVersion:record.taskVersion,taskIndex,supportMode,predictions:record.prediction,predictionReason:record.reason,observed:presentation.observed,studentCause:cause,createdAt:record.runs.at(-1)?.endedAt??record.submittedAt,visual:presentation}:null,locked);
+  const attemptHistory=useSquareAttemptHistory(fieldId,taskIndex,presentation&&record?.taskVersion==="v4-paper-merged"?{id:presentation.key,recordId:record.id,runId:String(record.runs.length),parentAttemptId:record.previousId,revisionReason:record.explanationReviews?.at(-1)?.text??record.reason,taskVersion:record.taskVersion,taskIndex,supportMode,predictions:record.prediction,predictionReason:record.reason,observed:presentation.observed,studentCause:cause,createdAt:record.runs.at(-1)?.endedAt??record.submittedAt,visual:presentation}:null,locked);
   const journey=isSquare?squareRevisionJourney(lesson,q.conditionKey,record,q.history,attemptHistory.items,
     activeStage===7?{...record?.prediction,...q.reviewDraft}:q.draft,q.reason,activeStage):null;
   if(journey&&activeStage===7){journey.draftRevisionReason=cause;journey.editing=diagnosisMismatch;}
@@ -356,6 +357,14 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
       </>}
       {activeStage === 6 && record && <>
         {diagnosisPanel}
+        {isSquare && <ExecutionAiAnalysis ai={q.ai}
+          scopeKey={`${record.id}:${record.runs.length}:${missionDetail?.planKey ?? "no-plan"}`}
+          attemptLabel={`사각형 ${lesson.id} · 시도 ${record.attemptKind}`}
+          sourceLabel={measurementDetail?.source === "hardware" ? "실장비 · 제어기 보고값 (잉크 관측 아님)"
+            : measurementDetail?.source === "mock" ? "모의 브리지 · 실측 아님"
+              : measurementDetail?.source === "dt" ? "DT · 실측 아님" : "관측 출처 또는 측정 자료 없음"}
+          available={mission?.status === "completed" && latestMeasurement?.status === "completed"
+            && samePlanMeasurement && measurementDetail?.complete === true}/>
         {diagnosis&&<><SquareObservedDiagram/><SquareReplayControls/></>}
         {samePlanMeasurement&&!measurementDetail?.complete&&<p className="shape-step-feedback" role="status">
           {measurementDetail?.source==="mock"?"모의 GetPose 회신":"GetPose 회신"} 좌표 5개가 모두 확인되지 않아 실측 기반 진단은 완료되지 않았습니다. 입력 좌표나 이전 측정값으로 대체하지 않습니다.

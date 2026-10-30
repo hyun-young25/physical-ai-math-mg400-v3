@@ -10,22 +10,42 @@ export type SquareAttempt={
  taskIndex:number;supportMode:"guided"|"challenge";attempt:number;predictions:unknown;predictionReason:string;
  observed:unknown;source:string;diagnosisType:string;edge?:string;feedbackLevel:string;teacherFlag:boolean;
  questionSource:string;questionText:string;questions:{source:string;text:string;at?:string}[];
+ parentAttemptId?:string;revisionReason?:string;
+ aiAnalyses?:unknown[];
  studentCause:string;meanError?:number;maxError?:number;createdAt:string;visual:SquareVisual;
 };
 export type AttemptDraft=Omit<SquareAttempt,"task"|"studentId"|"visitId"|"attempt"|"questions"|"questionSource"|"questionText"|"diagnosisType"|"feedbackLevel"|"teacherFlag"|"source"|"edge"|"meanError"|"maxError">;
 const valid=(x:unknown):x is SquareAttempt=>!!x&&typeof x==="object"&&(x as SquareAttempt).task==="square-attempt";
 export const readSquareAttempts=()=>readEvidence(SQUARE_ATTEMPT_KEY,valid);
-export function displayedQuestions(key:string){
+function sameAttempt(row:any,recordId?:string,runId?:string){
+ if(!recordId||!runId)return true;
+ try {
+  const execution=JSON.parse(row.prediction?.execution??"[]");
+  return Array.isArray(execution)&&execution.some((item:any)=>item.recordId===recordId&&String(item.runId)===String(runId));
+ } catch { return false; }
+}
+export function displayedAnalyses(key:string,recordId?:string,runId?:string){
  const rows=readEvidence<any>("physical-ai-inquiry-feedback-v1",(x):x is any=>!!x&&typeof x==="object");
- return rows.filter(r=>r.feedbackStatus==="displayed"&&r.feedback?.provider==="openai"&&!r.feedback.failureReason&&r.prediction&&squareEvidenceTag(r.prediction)?.key===key)
- .map(r=>({source:"openai",text:String(r.feedback.text),at:r.feedback.createdAt}));
+ return rows.filter(r=>r.feedbackStatus==="displayed"&&r.feedback&&r.prediction&&squareEvidenceTag(r.prediction)?.key===key
+   &&sameAttempt(r,recordId,runId))
+ .map(r=>({provider:r.feedback.provider,status:r.feedback.status,failureReason:r.feedback.failureReason,
+   id:String(r.id),question:String(r.question??""),text:String(r.feedback.text),at:String(r.displayedAt??r.feedback.createdAt),
+   source:(()=>{try{return JSON.parse(r.prediction.execution).at(-1)?.measurement?.source;}catch{return undefined;}})(),
+   requestContext:r.prediction,conversation:r.conversation??[]}));
+}
+export function displayedQuestions(key:string,recordId?:string,runId?:string){
+ return displayedAnalyses(key,recordId,runId).filter(r=>r.provider==="openai"&&!r.failureReason)
+   .map(r=>({source:"openai",text:r.question,at:r.at}));
 }
 export function saveSquareAttempt(draft:AttemptDraft):boolean{
  const rows=readSquareAttempts(),prior=rows.find(r=>r.id===draft.id),u=getLearningUser(),v=draft.visual,d=v.diagnosis;
- const questions=[{source:"rules",text:v.plan?.question??"이번 관계를 다음 과제에서도 확인하려면 무엇을 먼저 점검할까요?"},...(prior?.questions.filter(q=>q.source==="openai")??[]),...displayedQuestions(v.feedbackKey)].filter((q,i,a)=>a.findIndex(p=>p.source===q.source&&p.text===q.text&&("at" in p?p.at:undefined)===("at" in q?q.at:undefined))===i);
+ const questions=[{source:"rules",text:v.plan?.question??"이번 관계를 다음 과제에서도 확인하려면 무엇을 먼저 점검할까요?"},...(prior?.questions.filter(q=>q.source==="openai")??[]),...displayedQuestions(v.feedbackKey,draft.recordId,draft.runId)].filter((q,i,a)=>a.findIndex(p=>p.source===q.source&&p.text===q.text&&("at" in p?p.at:undefined)===("at" in q?q.at:undefined))===i);
+ const aiAnalyses=[...(draft.aiAnalyses??[]),...displayedAnalyses(v.feedbackKey,draft.recordId,draft.runId)]
+   .filter((item:any,index:number,all:any[])=>all.findIndex((other:any)=>other.id===item.id
+     ||(other.question===item.question&&other.text===item.text&&(other.displayedAt??other.at)===(item.displayedAt??item.at)))===index);
  const next:SquareAttempt={...structuredClone(draft),task:"square-attempt",studentId:u?.id,visitId:u?.visitId,
  attempt:prior?.attempt??1+rows.filter(r=>r.taskIndex===draft.taskIndex&&r.taskVersion===draft.taskVersion).length,
- createdAt:prior?.createdAt??draft.createdAt,diagnosisType:d.type,source:d.evidence.source,edge:d.edge,
+ createdAt:prior?.createdAt??draft.createdAt,diagnosisType:d.type,source:d.evidence.source,edge:d.edge,aiAnalyses,
  feedbackLevel:v.plan?.level??"self-regulation",teacherFlag:v.plan?.teacherFlag??false,
  questions,questionSource:questions.map(q=>q.source).filter((x,i,a)=>a.indexOf(x)===i).join("+"),
  questionText:questions.map(q=>q.text).join("\n"),meanError:d.evidence.measured?.meanError,maxError:d.evidence.measured?.maxError};
@@ -36,7 +56,9 @@ export function useSquareAttemptHistory(owner:string,taskIndex:number,draft:Atte
  const [rows,setRows]=useState(readSquareAttempts),[selected,setSelected]=useState<string|null>(null),[failed,setFailed]=useState(false);
  const [,refreshQuestions]=useState(0);
  useEffect(()=>{const changed=(event:Event)=>{if((event as CustomEvent).detail?.key==="physical-ai-inquiry-feedback-v1")refreshQuestions(n=>n+1);};window.addEventListener("learning-evidence-written",changed);return()=>window.removeEventListener("learning-evidence-written",changed);},[]);
- const provided=draft?displayedQuestions(draft.visual.feedbackKey):[],questionKey=JSON.stringify(provided);
+ const provided=draft?displayedQuestions(draft.visual.feedbackKey,draft.recordId,draft.runId):[];
+ const analyses=draft?displayedAnalyses(draft.visual.feedbackKey,draft.recordId,draft.runId):[];
+ const questionKey=JSON.stringify([provided,analyses]);
  const key=JSON.stringify(draft);
  const capture=()=>{if(!draft)return;const ok=saveSquareAttempt(draft);setFailed(!ok);if(ok)setRows(readSquareAttempts());};
  useEffect(()=>{capture();},[key,questionKey]);
@@ -57,5 +79,6 @@ export function SquareAttemptReview({attempt}:{attempt:SquareAttempt}){
  const v=attempt.visual;
  return <section data-testid="square-attempt-review"><h3>시도 {attempt.attempt} · 저장된 결과</h3><p>{attempt.taskVersion} · {attempt.createdAt} · 읽기 전용</p>
  <SquareDiagnosisPanel diagnosis={v.diagnosis} plan={v.plan} targetVertices={v.target} observedVertices={v.observed} toleranceMm={v.toleranceMm} connectedOnly={v.connectedVerticesOnly} priorSameType={v.priorSameType} supportMode={v.supportMode} cause={attempt.studentCause} gptQuestion={attempt.questions.filter(q=>q.source==="openai").map(q=>q.text).join("\n")}/>
- <details><summary>당시 예측·근거·관측 원문</summary><pre>{JSON.stringify({predictions:attempt.predictions,predictionReason:attempt.predictionReason,observed:attempt.observed},null,2)}</pre></details></section>;
+ <details><summary>당시 예측·근거·관측·AI 분석 원문</summary><pre>{JSON.stringify({parentAttemptId:attempt.parentAttemptId,revisionReason:attempt.revisionReason,
+   predictions:attempt.predictions,predictionReason:attempt.predictionReason,observed:attempt.observed,aiAnalyses:attempt.aiAnalyses},null,2)}</pre></details></section>;
 }

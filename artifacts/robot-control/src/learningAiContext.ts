@@ -26,7 +26,19 @@ function problemOnly(v:unknown):unknown {
   return v;
 }
 export function feedbackProblemKey(c:FeedbackContext) {
-  try{return JSON.stringify([c.task,problemOnly(JSON.parse(c.condition))]);}
+  try{
+    const condition=problemOnly(JSON.parse(c.condition));
+    let attemptScope:unknown=null;
+    if(c.task==="paper-coordinate") {
+      const parsed=JSON.parse(c.condition) as {recordId?:string;runId?:string;planHash?:string};
+      attemptScope={recordId:parsed.recordId,runId:parsed.runId,planHash:parsed.planHash};
+    } else if(c.task==="square") {
+      const runs=JSON.parse(c.execution) as Array<{recordId?:string;runId?:string;planKey?:string}>;
+      const latest=runs.at(-1);
+      attemptScope=latest?{recordId:latest.recordId,runId:latest.runId,planKey:latest.planKey}:null;
+    }
+    return JSON.stringify([c.task,condition,attemptScope]);
+  }
   catch{return c.task+c.condition;}
 }
 export function makeFeedbackContext(input:{
@@ -55,8 +67,33 @@ export function makeFeedbackContext(input:{
       explanationReviews:r.explanationReviews?.map(e=>({text:e.text,phase:e.phase})),runs:r.runs.map(run=>({action:run.action,status:run.status,summary:run.summary}))})),6000),
     judgment:json(pendingAnswers||pendingReason?{status:"수정 입력 중 · 이 입력의 정오 미확정"}:
       input.judgment??{status:"기존 판정 전 · 정오 미확정"},2000),
-    execution:json(record?.runs.slice(-4).map(r=>({
-      action:r.action,status:r.status,startedAt:r.startedAt,endedAt:r.endedAt,summary:r.summary,
+    execution:json(task==="square"&&record ? (() => {
+      const mission=record.runs.filter(run=>run.action==="mission").at(-1);
+      const missionDetail=mission?.detail&&typeof mission.detail==="object"?mission.detail as Record<string,unknown>:{};
+      const planKey=typeof missionDetail.planKey==="string"?missionDetail.planKey:null;
+      const measurement=planKey
+        ?record.runs.filter(run=>run.action==="square-measurement"&&run.detail&&typeof run.detail==="object"
+          &&(run.detail as Record<string,unknown>).planKey===planKey).at(-1)
+        :undefined;
+      const measurementDetail=measurement?.detail&&typeof measurement.detail==="object"
+        ?measurement.detail as Record<string,unknown>:{};
+      if(!mission)return [];
+      return [{
+        task:"square",recordId:record.id,runId:String(record.runs.length),planKey,
+        taskStatus:mission.status,taskStartedAt:mission.startedAt,taskEndedAt:mission.endedAt,
+        taskSummary:mission.summary,commandCoordinates:mission.expected??{},
+        commandDetail:missionDetail,
+        measurement:measurement?{
+          status:measurement.status,source:measurementDetail.source??"unknown",
+          complete:measurementDetail.complete===true,startedAt:measurement.startedAt,endedAt:measurement.endedAt,
+          observedVertices:measurementDetail.observedVertices??null,detail:measurementDetail,
+          isPhysicalMeasurement:measurementDetail.source==="hardware"&&measurement.status==="completed"&&measurementDetail.complete===true,
+        }:null,
+        // For a square, missing a matching measurement stays explicit; commands are not observations.
+        measurementStatus:measurement?"same-plan-recorded":"missing",
+      }];
+    })() : record?.runs.slice(-4).map(r=>({
+      action:r.action,id:`${r.action}:${r.startedAt}`,status:r.status,startedAt:r.startedAt,endedAt:r.endedAt,summary:r.summary,
       // 'expected' is mathematical confirmation, NOT sensor data.
       mathematicalConfirmation:r.expected,details:r.detail,
     }))??[],10000),

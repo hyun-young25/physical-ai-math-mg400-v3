@@ -139,6 +139,9 @@ export function useMathInquiry(task:string, condition:unknown, fields:InquiryFie
       &&"status" in judgment&&judgment.status==="incorrect";
     const verdict=judgment;
     aiJudgment.current={conditionKey,answerKey:JSON.stringify([answers,reason]),value:verdict};
+    // The square comparison panel owns the explicit GPT analysis action; grading/submission
+    // must not silently turn into a paid call merely because the global tutor mode is GPT.
+    if(task==="square"&&ai.mode==="gpt")return;
     const snapshot=feedbackContext(task==="square"?null:ref.current,verdict,answers);
     void ai.request("submit",snapshot,"",`${conditionKey}:check:${++aiSubmission.current}`);
     const diagnosed=task==="square"&&!!judgment&&typeof judgment==="object"&&"diagnosis" in judgment;

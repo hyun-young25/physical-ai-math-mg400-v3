@@ -1,6 +1,7 @@
 import type { SquareVisual } from "./squareComparisonVisual";
 import type { paperTransformEstimate } from "./paperRectangleTask";
-import type { PaperTrialRecord, PaperReferenceSource, PaperDiagnosis, PaperEvidenceSource, PaperFrame, PaperGridPoint, PaperPointName, PaperPredictionPoint, PaperReferenceSample, PaperRunSnapshot, PaperStudentTransform, PaperTargetSet, PaperCoordinateLevel } from "./paperCoordinateStudy";
+import type { PaperTrialRecord, PaperReferenceSource, PaperDiagnosis, PaperEvidenceSource, PaperFrame, PaperGridPoint, PaperPointName, PaperPredictionPoint, PaperReferenceSample, PaperRunSnapshot, PaperStudentTransform, PaperTargetSet, PaperCoordinateLevel, PaperAiAnalysisRecord } from "./paperCoordinateStudy";
+import type { LearningAiController } from "./LearningAiFeedback";
 
 export type PaperLessonStage = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export type PaperCoordinateStudyViewState = {
@@ -16,6 +17,9 @@ export type PaperCoordinateStudyViewState = {
   transformEstimate?:ReturnType<typeof paperTransformEstimate>;
   priorSameType?:number;
   records: PaperTrialRecord[];
+  recordId: string | null;
+  attempt: number | null;
+  analysisReady: boolean;
   revalidationScope: string | null;
   stage: PaperLessonStage;
   level: PaperCoordinateLevel;
@@ -86,6 +90,7 @@ export type PaperCoordinateStudyViewActions = {
   onInkReadingChange: (point: string, axis: "xCm" | "yCm", value: string) => void;
   onSaveInkReadings: () => void;
   onSaveHypothesis: (value: string) => void;
+  onAiAnalysisDisplayed: (analysis: PaperAiAnalysisRecord) => void;
   onRevise: (reason: string) => void;
   onChooseNewTarget: () => void;
   onMovePaper: (reason:string) => void;
@@ -94,4 +99,5 @@ export type PaperCoordinateStudyViewActions = {
 export type PaperCoordinateStudyViewProps = {
   state: PaperCoordinateStudyViewState;
   actions: PaperCoordinateStudyViewActions;
+  ai: LearningAiController;
 };

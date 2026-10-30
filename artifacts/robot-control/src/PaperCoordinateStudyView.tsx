@@ -6,6 +6,7 @@ import { PAPER_RECTANGLE_TITLES,isPaperRectangle } from "./paperRectangleTask";
 import { useEffect, useId, useState, useLayoutEffect, useRef } from "react";
 import { PaperSceneMap } from "./PaperScene";
 import { publishPaperScene, clearPaperScene, selectPaperPoint, usePaperScene } from "./paperSceneStore";
+import { ExecutionAiAnalysis } from "./ExecutionAiAnalysis";
 import type { PaperPointName } from "./paperCoordinateStudy";
 import type { PaperCoordinateStudyViewProps, PaperLessonStage } from "./paperCoordinateViewModel";
 import "./paperCoordinateStudyView.css";
@@ -416,6 +417,15 @@ export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStud
               <p>판정 방식: {state.diagnosis.method} · 질문 출처: {state.diagnosis.tutorSource}</p>
             </details>
           </section> : <div className="pcv-empty-card"><strong>비교 자료를 기다리는 중</strong><p>실행 결과와 관찰 기록이 전달되면 이곳에 표시됩니다.</p></div>}
+          <ExecutionAiAnalysis ai={ai} scopeKey={`${state.recordId ?? "none"}:${state.run?.id ?? "none"}:${state.run?.planHash ?? "none"}`}
+            attemptLabel={`종이 좌표 시도 ${state.attempt ?? "—"}`} sourceLabel={sourceLabel(state.run?.source)}
+            available={state.analysisReady} onDisplayed={analysis => {
+              const run = state.run;
+              if (!run || !state.recordId || !state.analysisReady) return;
+              actions.onAiAnalysisDisplayed({
+                ...analysis, recordId: state.recordId, runId: run.id, planHash: run.planHash, source: run.source,
+              });
+            }}/>
           {!state.comparison&&<><label className="pcv-field"><span>내가 생각하는 이유 (원인을 단정하지 않고 후보로)</span><textarea rows={4} value={hypothesisDraft}
             onChange={event => setHypothesisDraft(event.target.value)} /></label>
           <button type="button" className="pcv-button pcv-button--primary" onClick={() => actions.onSaveHypothesis(hypothesisDraft)} disabled={state.running}>생각 저장</button></>}

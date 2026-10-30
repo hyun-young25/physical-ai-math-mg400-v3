@@ -1,12 +1,12 @@
 import { paperRetryInputs, paperRetryFields } from "./paperRetry";
 import { paperBoundary, supervisedPaperBlockers, type PaperRunBlocker } from "./paperExecutionGuards";
 import { recordLearningAction } from "./learningSync";
-import { paperDiagnosisLabel } from "./paperDiagnosisLabel";
 import { useSquareAttemptHistory,SquareAttemptHistory,SquareAttemptReview } from "./squareAttemptHistory";
 import { paperRevisionJourney } from "./revisionJourney";
 import { PAPER_TASK_VERSION,isMergedPaper,isPaperDT,givenPaperFrame,PAPER_ROTATION_SETTING,paperConceptValid } from "./paperMergedLesson";
 import { omitsOrigin } from "./originMissing";
 import { paperTaskTargets,isPaperRectangle,paperFeedbackKey,paperRectangleVisual,paperTransformEstimate } from "./paperRectangleTask";
+import { paperAnalysisReady, paperFeedbackContext } from "./paperAiAnalysis";
 import { publishSquareVisual,clearSquareVisual } from "./squareVisualizationStore";
 import { useCallback, useEffect, useMemo, useRef, useState, useId, useLayoutEffect } from "react";
 import type { LessonPose } from "./curriculum";
@@ -474,6 +474,13 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
       upsert({ ...active, inkReadings: readings, status, stage: 5 }, "학생이 눈금에서 읽은 잉크 좌표를 제어기 관측과 분리해 저장했습니다.");
       setPageError(readings.length < targetPoints.length ? "일부 잉크 좌표가 비어 있습니다. 비어 있는 점은 확인하지 않은 상태로 기록했습니다." : "");
     },
+    onAiAnalysisDisplayed: analysis => {
+      if (!active || !run || !samePlan || run.status !== "completed" || analysis.recordId !== active.id
+        || analysis.runId !== run.id || analysis.planHash !== run.planHash || analysis.source !== run.source) return;
+      const currentAnalyses = active.aiAnalyses ?? [];
+      if (currentAnalyses.some(item => item.id === analysis.id)) return;
+      upsert({ ...active, aiAnalyses: [...currentAnalyses, analysis] }, "화면에 실제 표시된 분석과 같은 시도의 실행 근거를 연결해 저장했습니다.");
+    },
     onSaveHypothesis: value => {
       if (!active) { setPageError("현재 시도를 저장한 뒤 원인 가설을 작성하세요."); return; }
       if (!value.trim()) { setPageError("관측 차이에 대한 학생의 가설을 한 문장 이상 적으세요."); return; }
@@ -812,7 +819,8 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     retry: active && retryInputs && retryParent ? {id:active.id, attempt:retryParent.attempt, baseline:retryInputs,
       fields:paperRetryFields(retryParent), focusRequested:focusRetryId===active.id, editable:!active.run} : undefined,
     rotationAllowed:rotationAllowed&&!isPaperDT(level),pathConcept:active?.pathConcept,
-    records, revalidationScope:active?.revalidation?.scope??null,
+    records, recordId:active?.id??null, attempt:active?.attempt??null, analysisReady:false,
+    revalidationScope:active?.revalidation?.scope??null,
     stage, level, targetSet: currentTargetSet, frame, samples, currentPose: currentPoseRead,
     currentSource, currentSequence, currentMeasuredAt,
     displayPose: currentPoseRead ?? currentPose,
@@ -856,22 +864,30 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
   const shownDiagnosis = samePlan&&frame&&run?.status==="completed"
     ?state.diagnosis??diagnosePaperRun(run,frame,planHash,{transform:active?.transform,targets:targetPoints,toleranceMm:active?.diagnosisToleranceMm??practice.setupDraft.positionTolerance,detectOriginMissing:isMergedPaper(level),support:attemptSupport}):null;
   if (isMergedPaper(level)) state.diagnosis = shownDiagnosis;
-  const context: FeedbackContext = {
-    task:"paper-coordinate",condition:JSON.stringify({targets:targetPoints,units:"종이 cm / 로봇 mm",scope:"출처별 보고 위치와 잉크 읽기를 구분. 규칙 기반 진단은 원인 후보이며 AI는 설명 지원만 함"}),
-    answers:JSON.stringify({transform:transformDraft,predictions:draftTargets}),reason:privateText(hypothesisDraft||transformDraft.explanation).slice(0,1500),
-    initialPrediction:JSON.stringify({transform:active?.transform,predictions:persistedPredictions}),
-    history:JSON.stringify(records.slice(-3).map(r=>({pattern:r.diagnosis?.pattern,hypothesis:privateText(r.studentHypothesis??""),revision:privateText(r.revisionReason??"")}))),
-    judgment:JSON.stringify({status:state.diagnosis?.pattern==="match"?"correct":state.diagnosis?.pattern==="tracking"?"unverified":state.diagnosis?"incorrect":"판정 전",...(isMergedPaper(level)&&state.diagnosis?{pattern:state.diagnosis.pattern,label:paperDiagnosisLabel(state.diagnosis)}:{}),candidate:state.diagnosis?.candidate,question:state.diagnosis?.question,why:state.diagnosis?.why}).slice(0,2000),
-    execution:JSON.stringify(run?[{source:run.source,status:run.status,observations:run.observations,taskEvidence:state.diagnosis?.taskEvidence,inkReadings:active?.inkReadings??[]}]:[]),
-    support:attemptSupport,attempts:Math.min(records.length,1000),
-  };
+  const analysisReady = paperAnalysisReady(active, planHash, shownDiagnosis) && samePlan;
+  state.recordId = active?.id ?? null;
+  state.attempt = active?.attempt ?? null;
+  state.analysisReady = analysisReady;
+  const savedForFeedback = active && shownDiagnosis ? { ...active, diagnosis: shownDiagnosis } : active;
+  let context: FeedbackContext = active
+    ? paperFeedbackContext(savedForFeedback!, records, targetPoints)
+    : {
+      task: "paper-coordinate", condition: JSON.stringify({ targets: targetPoints, units: "종이 cm / 로봇 mm", source: "아직 현재 시도 자료 없음" }),
+      answers: JSON.stringify({ transform: transformDraft, predictions: draftTargets }), reason: privateText(hypothesisDraft || transformDraft.explanation).slice(0, 1500),
+      initialPrediction: "{}", history: "[]", judgment: JSON.stringify({ status: "자료 부족" }), execution: "[]",
+      support: attemptSupport, attempts: 0,
+    };
+  if (active && !analysisReady) {
+    context = { ...context, answers: JSON.stringify({ saved: { transform: active.transform, predictions: active.predictions }, currentDraft: { transform: transformDraft, predictions: draftTargets } }),
+      reason: privateText(hypothesisDraft || transformDraft.explanation).slice(0, 1500) };
+  }
   const priorSameType=records.filter(r=>r.id!==active?.id&&r.level===level&&r.diagnosis?.pattern===shownDiagnosis?.pattern).length;
   const comparison=isPaperRectangle(level)&&shownDiagnosis&&frame&&run&&!running&&(stage===5||stage===6)
     ?paperRectangleVisual(frame,targetPoints,run,shownDiagnosis,stage,paperFeedbackKey(context),priorSameType,attemptSupport,isMergedPaper(level)):null;
   state.comparison=comparison;
   state.transformEstimate=comparison&&frame&&run?paperTransformEstimate(frame,targetPoints,run):null;
   state.priorSameType=priorSameType;
-  const attemptHistory=useSquareAttemptHistory(visualOwner,isPaperDT(level)?4:5,comparison&&active?.taskVersion===PAPER_TASK_VERSION&&run?{id:active.id+":"+run.id,recordId:active.id,runId:run.id,taskVersion:active.taskVersion,taskIndex:isPaperDT(level)?4:5,supportMode:attemptSupport,predictions:{transform:active.transform,points:active.predictions,pathConcept:active.pathConcept},predictionReason:active.transform?.explanation??"",observed:run.observations,studentCause:active.studentHypothesis??"",createdAt:new Date(run.endedAt??run.startedAt).toISOString(),visual:comparison}:null,running);
+  const attemptHistory=useSquareAttemptHistory(visualOwner,isPaperDT(level)?4:5,comparison&&active?.taskVersion===PAPER_TASK_VERSION&&run?{id:active.id+":"+run.id,recordId:active.id,runId:run.id,parentAttemptId:active.parentAttemptId??undefined,taskVersion:active.taskVersion,taskIndex:isPaperDT(level)?4:5,supportMode:attemptSupport,predictions:{transform:active.transform,points:active.predictions,pathConcept:active.pathConcept},predictionReason:active.transform?.explanation??"",observed:run.observations,studentCause:active.studentHypothesis??"",revisionReason:active.revisionReason??"",aiAnalyses:active.aiAnalyses??[],createdAt:new Date(run.endedAt??run.startedAt).toISOString(),visual:comparison}:null,running);
   state.gptQuestion=attemptHistory.gptQuestion;
   state.revisionJourney=paperRevisionJourney(active,records,attemptHistory.items,draftTargets,selectedTransform,stage);
   const published=attemptHistory.reviewed?{...attemptHistory.reviewed.visual,stage:6,review:attemptHistory.meta}:comparison?{...comparison,review:attemptHistory.meta}:null;
@@ -880,5 +896,5 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
   useLayoutEffect(()=>()=>clearSquareVisual(visualOwner),[visualOwner]);
   const ai=useLearningAi(context);
   if(attemptHistory.reviewed)return <><SquareAttemptHistory history={attemptHistory} locked={running}/><SquareAttemptReview attempt={attemptHistory.reviewed}/></>;
-  return <><PaperCoordinateStudyView state={state} actions={actions}/><SquareAttemptHistory history={attemptHistory} locked={running}/><LearningAiFeedback ai={ai}/></>;
+  return <><PaperCoordinateStudyView state={state} actions={actions} ai={ai}/><SquareAttemptHistory history={attemptHistory} locked={running}/><LearningAiFeedback ai={ai}/></>;
 }
