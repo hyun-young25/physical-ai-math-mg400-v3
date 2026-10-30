@@ -94,7 +94,9 @@ const apiCache={};function api(n){if(apiCache[n])return apiCache[n];const out=ap
   await page.locator('.journey-robot').screenshot({path:path.join(shots,`${prefix}-rerun-robot.png`)});
   await map.screenshot({path:path.join(shots,`${prefix}-rerun-map.png`)});
   const attempts=await saved(),csv=api('squareAttemptCsv'),rows=attempts.flatMap(payload=>csv.attemptRows({account_id:'isolated-test',visit_id:'test',record_id:payload.recordId,payload}));
-  assert.equal(rows.length,2);assert.equal(csv.ATTEMPT_HEADERS.length,23);assert.notEqual(rows[0].runId,rows[1].runId);
+  assert.equal(rows.length,2);assert.equal(csv.ATTEMPT_HEADERS.length,26);
+  assert.deepEqual(csv.ATTEMPT_HEADERS.slice(-4),['provenance','parentAttemptId','revisionReason','aiAnalyses']);
+  assert.notEqual(rows[0].runId,rows[1].runId);
   assert.deepEqual(rows[0].predictions.points,first.predictions);assert.equal(rows[1].predictions.points[2].robotX,String(values[2][0]));
   fs.writeFileSync(path.join(shots,`${prefix}-attempts.csv`),csv.ATTEMPT_HEADERS.join(',')+'\r\n'+rows.map(csv.attemptCsvLine).join(''));
   await view.getByLabel('차이가 생긴 이유').fill('수정한 예측으로 목표와 일치했습니다.');await click('생각 저장');await click('다음 단계');await view.getByLabel('무엇을 다시 살펴볼까요?').fill('빈 입력으로도 확인합니다.');await click('이유와 수정 기록');
@@ -105,7 +107,7 @@ const apiCache={};function api(n){if(apiCache[n])return apiCache[n];const out=ap
   await page.getByRole('button',{name:rotated?/종이 위 경로 확인 \(MG400\)/:/종이 기준점 \(DT\)/}).click();
   assert.equal(await map.locator('[aria-pressed=true]').count(),0);
   await page.screenshot({path:path.join(shots,`${prefix}-entry-no-selection.png`)});
-  assert.deepEqual(errors,[]);console.log(`PASS ${prefix}: single diagnosis, carry/focus/edit, immutable first run, linked 3D/2D result, separate 23-column CSV rows, reset, no initial selection, larger map.`);
+   assert.deepEqual(errors,[]);console.log(`PASS ${prefix}: single diagnosis, carry/focus/edit, immutable first run, linked 3D/2D result, separate 26-column CSV rows, reset, no initial selection, larger map.`);
   await context.close();
  }
  }finally{await browser.close();}
