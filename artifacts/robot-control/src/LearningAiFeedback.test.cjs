@@ -2,6 +2,7 @@ const test=require("node:test"),assert=require("node:assert/strict"),fs=require(
 function load(file,deps={}){const e={};new Function("exports","require",ts.transpileModule(fs.readFileSync(__dirname+"/"+file,"utf8"),{
   compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX},
 }).outputText)(e,n=>{assert.ok(n in deps,n);return deps[n];});return e;}
+const availability=load("feedbackAvailability.ts");
 const ctx=load("learningAiContext.ts");
 const tutorFollowUp=load("tutorFollowUp.ts",{"./learningAiContext":ctx});
 const trial=load("trialTutorFeedback.ts",{"./learningAiContext":ctx,"./tutorFollowUp":tutorFollowUp});
@@ -24,8 +25,9 @@ function mount(startMode="gpt") {
     "./squareComparisonVisual":{squareEvidenceTag:()=>undefined},
     "./tutorMode":{useTutorMode:()=>mode},
     "./trialTutorFeedback":trial,
-    "./useSubmissionFeedback":()=>({submit(){},providedMessages:()=>[],messages:[],storageFailed:false,
-      unread:false,preview:undefined,acknowledge:()=>false}),
+    "./useSubmissionFeedback":{useSubmissionFeedback:()=>({submit(){},providedMessages:()=>[],messages:[],storageFailed:false,
+      unread:false,preview:undefined,acknowledge:()=>false})},
+    "./feedbackAvailability":availability,
     "./tutorRegistry":{registerTutor:()=>()=>{}},
     "./learningClient":{getLearningUser:()=>({visitId:"test-visit"})},
     "./learningFramework":{learningRecordContext:()=>({source:"math"})},
