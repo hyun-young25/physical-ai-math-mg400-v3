@@ -44,7 +44,12 @@ const launch=chromium.launch.bind(chromium);
 chromium.launch=async options=>{
  // Honour the caller first, then support installed browsers outside Replit.
  if(!fs.existsSync(options.executablePath||"")){
-  const installed=["C:/Program Files/Google/Chrome/Application/chrome.exe","C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"].find(p=>fs.existsSync(p));
+  const installed=[
+   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+   "/repl/tools/bin/chromium",
+   "C:/Program Files/Google/Chrome/Application/chrome.exe",
+   "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+  ].find(p=>p&&fs.existsSync(p));
   if(installed)options={...options,executablePath:installed};else {options={...options};delete options.executablePath;}
  }
  const browser=await launch(options),newContext=browser.newContext.bind(browser);
