@@ -92,7 +92,10 @@ const apiCache={};function api(n){if(apiCache[n])return apiCache[n];const out=ap
    assert.equal(firstAnswers.savedStudentTransform.axisDirection,'x+');
    assert.equal(firstAnswers.savedStudentTransform.millimetersPerCentimeter,'10');
    assert.match(firstAnswers.savedStudentTransform.explanation,/X=원점X\+10×종이x/);
-   assert.doesNotMatch(JSON.stringify(firstRequest),/홍길동|이름:/);
+    const firstRequestText=JSON.stringify(firstRequest);
+    assert.doesNotMatch(firstRequestText,/홍길동/,'the original identifying value must not reach the analysis request');
+    assert.match(firstRequestText,/이름: \[이름 제외\]/,'privacy redaction must retain the mathematical explanation field');
+    assert.match(firstRequestText,/X=원점X\+10×종이x/,'the sanitized request must retain the student transformation');
    assert.equal(JSON.parse(firstRequest.history).attempts,'[]','first attempt must state that no prior attempt feedback exists');
   assert.match((await saved())[0].visual.diagnosis.label,/^대입·계산 차이 · P3/);
   await page.getByTestId('paper-diagnosis-visual').screenshot({path:path.join(shots,`${prefix}-diagnosis.png`)});
@@ -119,7 +122,9 @@ const apiCache={};function api(n){if(apiCache[n])return apiCache[n];const out=ap
    await click('예측 저장');await click('다음 단계');await run();await click('다음 단계');
   assert.match(await page.locator('.square-type-badge').innerText(),/예측과 실행 일치/);
    const retryRequest=await requestPaperAnalysis(2);
-   const retryHistory=JSON.parse(JSON.parse(retryRequest.history).attempts);
+   const retryHistoryEnvelope=JSON.parse(retryRequest.history);
+   console.log('retry history envelope',JSON.stringify({keys:Object.keys(retryHistoryEnvelope),attemptsType:typeof retryHistoryEnvelope.attempts,attemptsLength:retryHistoryEnvelope.attempts?.length,attemptsPreview:retryHistoryEnvelope.attempts?.slice(0,240)}));
+   const retryHistory=JSON.parse(retryHistoryEnvelope.attempts||'[]');
    assert.equal(retryHistory.length,1);
    assert.equal(retryHistory[0].recordId,first.id);
    assert.equal(retryHistory[0].previouslyDisplayedFeedback[0].text,mockReply);

@@ -9,14 +9,21 @@ import "./paperScene.css";
 
 const references=[{name:"O",x:0,y:0},{name:"X",x:10,y:0},{name:"Y",x:0,y:10}];
 export function PaperSceneLegend(){
-  return <div className="paper-scene-legend" aria-label="종이와 도봇 공통 범례">{[
-    ["O·X·Y 기준점",C.reference],["목표점",C.target],["예측 (점선)",C.prediction],["첫 실행",C.first],["재실행",C.result],["불일치 근거",C.mismatch],
-  ].map(([label,color])=><span key={label}><i style={{borderColor:color,borderTopStyle:color===C.prediction?"dashed":"solid"}}/>{label}</span>)}</div>;
+  const entries=[
+    {label:"O·X·Y 기준점",color:C.reference},
+    {label:"목표점 · P표식",color:C.target},
+    {label:"학생 예측 · 점선",color:C.prediction,dashed:true},
+    {label:"첫 실행 · 1",color:C.first},
+    {label:"재실행 · 2",color:C.result},
+    {label:"불일치 근거",color:C.mismatch},
+    {label:"DT 고스트 로봇 · 실측 아님",color:C.robotPreview,outline:C.robotOutline,robot:true},
+  ];
+  return <div className="paper-scene-legend" aria-label="종이와 도봇 공통 범례">{entries.map(entry=><span key={entry.label}><i className={entry.robot?"paper-legend-robot":undefined} style={entry.robot?{borderColor:entry.outline,backgroundColor:entry.color}:{borderColor:entry.color,borderTopStyle:entry.dashed?"dashed":"solid"}}/>{entry.label}</span>)}</div>;
 }
 export function PaperSceneToolbar(){
   const {data}=usePaperScene();if(!data)return null;
   const measured=data.displaySource==="hardware"||data.displaySource==="mock";
-  return <div className="paper-scene-toolbar"><span>{data.frame?"종이 20×20 cm · 1 cm 눈금":"위치 미확인 · 반투명 종이는 배치 예시"}<small>{measured?"원래 색: 현재 보고 위치":"원래 색: 현재 위치 고정 · 회색: DT 예측 이동"}</small></span><button type="button" onClick={requestPaperCamera}>↺ 종이 시점</button></div>;
+  return <div className="paper-scene-toolbar"><span>{data.frame?"종이 20×20 cm · 1 cm 눈금":"위치 미확인 · 반투명 종이는 배치 예시"}<small>{measured?"원래 색: 현재 보고 위치":"원래 색: 현재 위치 고정 · 파란 고스트: DT 예측 이동 · 실측 아님"}</small></span><button type="button" onClick={requestPaperCamera}>↺ 종이 시점</button></div>;
 }
 export function PaperSceneCaption(){
   const {data}=usePaperScene();if(!data)return null;

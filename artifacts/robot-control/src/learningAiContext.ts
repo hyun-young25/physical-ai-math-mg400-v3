@@ -48,6 +48,56 @@ export function sanitizeFeedbackContext(context:FeedbackContext):FeedbackContext
   if(context.conversation)safe.conversation=context.conversation.map(turn=>({...turn,text:privateText(turn.text).slice(0,1000)}));
   return safe;
 }
+
+const paperHistoryKeys=[
+  "recordId","parentAttemptId","attempt","taskVersion","level","targetSet","status","dataSource",
+  "transform","predictions","studentHypothesis","revisionReason","revalidation","previouslyDisplayedFeedback",
+] as const;
+const pickKeys=(value:unknown,keys:readonly string[])=>{
+  if(!value||typeof value!=="object"||Array.isArray(value))return value;
+  const row=value as Record<string,unknown>;
+  return Object.fromEntries(keys.filter(key=>row[key]!==undefined).map(key=>[key,row[key]]));
+};
+function compactPaperHistoryAttempt(value:unknown) {
+  if(!value||typeof value!=="object"||Array.isArray(value))return value;
+  const row=value as Record<string,unknown>;
+  const frame=row.frame&&typeof row.frame==="object"?row.frame as Record<string,unknown>:null;
+  const run=row.run&&typeof row.run==="object"?row.run as Record<string,unknown>:null;
+  const diagnosis=row.diagnosis&&typeof row.diagnosis==="object"?row.diagnosis as Record<string,unknown>:null;
+  return {
+    ...pickKeys(row,paperHistoryKeys),
+    ...(frame?{frame:{...pickKeys(frame,["id","source","coordinateSystem","user","tool","capturedAt","samples"])}}:{}),
+    ...(run?{run:{...pickKeys(run,["id","planHash","source","status","startedAt","endedAt","commands","observations"])}}:{}),
+    ...(diagnosis?{diagnosis:{...pickKeys(diagnosis,["method","status","candidate","evidence","predictionEvidence","taskEvidence","firstMismatch","question","why"])}}:{}),
+  };
+}
+
+/** Build a parseable follow-up envelope without cutting serialized JSON mid-value. */
+export function feedbackHistoryEnvelope(context:Pick<FeedbackContext,"task"|"history">,providedHints:string[],recentAnswers:unknown[]) {
+  let attempts:unknown;
+  try{attempts=JSON.parse(context.history);}catch{attempts=[];}
+  if(context.task==="paper-coordinate"&&Array.isArray(attempts))
+    attempts=attempts.slice(-1).map(compactPaperHistoryAttempt);
+  let hints=providedHints.slice(-3),answers=recentAnswers.slice(-2);
+  const build=()=>JSON.stringify({attempts:JSON.stringify(attempts),providedHints:hints,recentAnswers:answers});
+  let result=build();
+  while(result.length>6000&&hints.length){hints=hints.slice(1);result=build();}
+  while(result.length>6000&&answers.length){answers=answers.slice(1);result=build();}
+  // Paper history already contains the direct parent's displayed feedback and
+  // revision. If metadata still exceeds the API contract, preserve that record
+  // and its run while dropping duplicated outer summaries rather than truncating JSON.
+  if(result.length>6000&&context.task==="paper-coordinate"&&Array.isArray(attempts)){
+    attempts=attempts.map(value=>{
+      if(!value||typeof value!=="object"||Array.isArray(value))return value;
+      const row=value as Record<string,unknown>;
+      const diagnosis=row.diagnosis&&typeof row.diagnosis==="object"?row.diagnosis as Record<string,unknown>:null;
+      return diagnosis?{...row,diagnosis:pickKeys(diagnosis,["method","status","candidate","firstMismatch","question","why"])}:row;
+    });
+    result=build();
+  }
+  if(result.length>6000)throw new Error("Feedback history exceeds the API limit.");
+  return result;
+}
 function problemOnly(v:unknown):unknown {
   if(Array.isArray(v))return v.map(problemOnly);
   if(v&&typeof v==="object")return Object.fromEntries(Object.entries(v)

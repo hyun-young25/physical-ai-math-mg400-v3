@@ -1,21 +1,35 @@
-import type { Color, Material, Mesh, Object3D } from "three";
+import { EdgesGeometry, LineBasicMaterial, LineSegments, type Color, type Material, type Mesh, type Object3D } from "three";
 
 /** Instance-local display treatment. Never changes geometry, transforms or shared materials. */
 export function softenPaperRobot(root: Object3D) {
   const copies = new Map<Material, Material>();
   const tracked = new Map<Mesh, { original: Material | Material[]; shown: Material | Material[]; castShadow: boolean; receiveShadow: boolean }>();
+  const outlines = new Map<Mesh, LineSegments>();
   const soften = (original: Material) => {
     let copy = copies.get(original);
     if (!copy) {
       copy = original.clone();
       copy.transparent = true;
-      copy.opacity = Math.min(original.opacity, 0.32);
-      (copy as Material & { color?: Color }).color?.set("#8b98a6");
+      copy.opacity = Math.min(original.opacity, 0.42);
+      (copy as Material & { color?: Color }).color?.set("#bfdbfe");
+      (copy as Material & { emissive?: Color }).emissive?.set("#1e40af");
       (copy as Material & { vertexColors?: boolean }).vertexColors = false;
       copy.depthWrite = false;
       copies.set(original, copy);
     }
     return copy;
+  };
+  const outline = (mesh: Mesh) => {
+    if (outlines.has(mesh)) return;
+    const edges = new LineSegments(
+      new EdgesGeometry(mesh.geometry, 30),
+      new LineBasicMaterial({ color: "#3b82f6", transparent: true, opacity: 0.78, depthWrite: false }),
+    );
+    edges.name = "paper-dt-ghost-outline";
+    edges.renderOrder = mesh.renderOrder + 1;
+    edges.raycast = () => {};
+    mesh.add(edges);
+    outlines.set(mesh, edges);
   };
   const refresh = () => {
     const used = new Set<Material>();
@@ -30,6 +44,7 @@ export function softenPaperRobot(root: Object3D) {
       originals.forEach(material => used.add(material));
       record.shown = Array.isArray(record.original) ? originals.map(soften) : soften(record.original);
       mesh.material = record.shown; mesh.castShadow = false; mesh.receiveShadow = false;
+      outline(mesh);
     });
     copies.forEach((copy,original) => { if (!used.has(original)) { copy.dispose(); copies.delete(original); } });
   };
@@ -39,13 +54,19 @@ export function softenPaperRobot(root: Object3D) {
       if (mesh.material === record.shown) mesh.material = record.original;
       mesh.castShadow = record.castShadow; mesh.receiveShadow = record.receiveShadow;
     });
+    outlines.forEach((edges, mesh) => {
+      mesh.remove(edges);
+      edges.geometry.dispose();
+      (edges.material as Material).dispose();
+    });
+    outlines.clear();
     copies.forEach(material => material.dispose());
   }, { refresh });
 }
 
 /** A display-only snapshot. Geometry is shared; transforms and materials are not.
  * Keep the last current pose before DT starts, then freeze it while the existing
- * animated model becomes the grey preview. No joint, TCP or execution state is set.
+ * animated model becomes the blue preview. No joint, TCP or execution state is set.
  */
 export function createPaperRobotPreview(source: Object3D) {
   const current = source.clone(true);

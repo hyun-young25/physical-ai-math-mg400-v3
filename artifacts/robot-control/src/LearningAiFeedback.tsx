@@ -4,7 +4,7 @@ import type { LearningFeedback, LearningFeedbackInput } from "@workspace/api-cli
 import { getLearningUser } from "./learningClient";
 import { learningRecordContext } from "./learningFramework";
 import { readEvidence, writeEvidence } from "./learningEvidenceStorage";
-import { feedbackProblemKey, feedbackVersion, hasFeedbackExecution, privateText, sanitizeFeedbackContext, type FeedbackContext } from "./learningAiContext";
+import { feedbackHistoryEnvelope, feedbackProblemKey, feedbackVersion, hasFeedbackExecution, privateText, sanitizeFeedbackContext, type FeedbackContext } from "./learningAiContext";
 import { updateTutor, unregisterTutor } from "./tutorRegistry";
 import { useTutorMode } from "./tutorMode";
 import { trialTutorFeedback } from "./trialTutorFeedback";
@@ -91,9 +91,9 @@ export function useLearningAi(context:FeedbackContext,editVersion="") {
       at:new Date().toISOString(),prediction:structuredClone(safeSnapshot),feedbackStatus:"displayed",trigger,
       ...(question?{question}:{}),conversation:structuredClone(conversation)};
     const input={...safeSnapshot,question,conversation,attempts:Math.min(1000,safeSnapshot.attempts),
-      history:JSON.stringify({attempts:safeSnapshot.history.slice(0,3500),
-        providedHints:priorMessages.filter(m=>m.role==="tutor").slice(-3).map(m=>m.text),
-        recentAnswers:prior.slice(-2).map(x=>({answers:x.prediction.answers,reason:x.prediction.reason}))}).slice(0,6000)};
+      history:feedbackHistoryEnvelope(safeSnapshot,
+        priorMessages.filter(m=>m.role==="tutor").slice(-3).map(m=>m.text),
+        prior.slice(-2).map(x=>({answers:x.prediction.answers,reason:x.prediction.reason})))};
     const abort=new AbortController();active.current={key,abort,row};
     setState({key,pending:true,question,id:row.id});
     const timer=setTimeout(()=>abort.abort(),12000);

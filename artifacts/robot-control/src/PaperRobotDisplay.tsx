@@ -51,7 +51,7 @@ export function PaperRobotAppearance({ active, children, tcpRef }: { active: boo
       {labels.current && <Html zIndexRange={[19,0]} style={{pointerEvents:"none"}}><span className="paper-robot-label paper-robot-label--current" data-testid="paper-current-label">현재 위치 · 고정<small>DT 기준 · 실측 아님</small></span></Html>}
     </group>
     <group ref={previewLabel} visible={labels.preview}>
-      {labels.preview && <Html zIndexRange={[20,0]} style={{pointerEvents:"none"}}><span className="paper-robot-label paper-robot-label--preview" data-testid="paper-preview-label">{data?.running ? "예측 이동 중" : "예측 이동 위치"}<small>회색 모델 · DT</small></span></Html>}
+      {labels.preview && <Html zIndexRange={[20,0]} style={{pointerEvents:"none"}}><span className="paper-robot-label paper-robot-label--preview" data-testid="paper-preview-label">{data?.running ? "예측 이동 중" : "예측 이동 위치"}<small>파란 고스트 · DT · 실측 아님</small></span></Html>}
     </group>
   </group>;
 }
