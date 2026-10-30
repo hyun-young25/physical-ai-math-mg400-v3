@@ -59,7 +59,7 @@ const apiCache={};function api(n){if(apiCache[n])return apiCache[n];const out=ap
   assert.doesNotMatch(await page.getByTestId('paper-diagnosis-visual').innerText(),/축·길이 뒤바뀜/);
   assert.match(await page.getByTestId('paper-diagnosis-visual').innerText(),/내 변환식에 종이 좌표/);
   const first=(await records())[0];
-  const judgment=await page.evaluate(()=>JSON.parse(window.__tutor().context.judgment));assert.equal(judgment.pattern,'calculation');assert.equal(judgment.label,'대입·계산 차이 · P3');assert.equal(judgment.candidate,first.diagnosis.candidate);
+  const judgment=await page.evaluate(()=>JSON.parse(window.__tutor().context.judgment));assert.equal(first.diagnosis.pattern,'calculation');assert.equal(judgment.method,'rule-based');assert.equal(judgment.status,'complete');assert.equal(judgment.firstMismatch,first.diagnosis.firstMismatch);assert.equal(judgment.candidate,first.diagnosis.candidate);assert.deepEqual(judgment.predictionEvidence,first.diagnosis.predictionEvidence);
   assert.match((await saved())[0].visual.diagnosis.label,/^대입·계산 차이 · P3/);
   await page.getByTestId('paper-diagnosis-visual').screenshot({path:path.join(shots,`${prefix}-diagnosis.png`)});
   await view.getByLabel('차이가 생긴 이유').fill('P3의 X 대입값을 다시 확인했습니다.');await click('생각 저장');await click('다음 단계');
