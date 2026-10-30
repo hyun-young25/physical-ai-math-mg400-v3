@@ -42,9 +42,29 @@ test('paper translucency preserves transforms, shared materials and restores nor
  const arm=new THREE.Mesh(geometry,material),tool=new THREE.Mesh(geometry,[material,material]),otherScene=new THREE.Mesh(geometry,material);
  arm.position.set(350,0,60);arm.castShadow=true;arm.receiveShadow=true;group.add(arm,tool);
  const pose=arm.matrix.clone(),restore=appearance.softenPaperRobot(group);
- assert.notEqual(arm.material,material);assert.equal(arm.material.opacity,.18);assert.equal(arm.castShadow,false);
+ assert.notEqual(arm.material,material);assert.equal(arm.material.opacity,.32);assert.equal(arm.castShadow,false);
  assert.equal(otherScene.material.opacity,1);assert.equal(material.transparent,false);assert.ok(arm.matrix.equals(pose));assert.deepEqual(arm.position.toArray(),[350,0,60]);
  assert.equal(tool.material[0],arm.material);
  restore();assert.equal(arm.material,material);assert.equal(tool.material[0],material);assert.equal(arm.castShadow,true);assert.equal(arm.receiveShadow,true);
  material.dispose();geometry.dispose();
+});
+test('DT preview freezes the last current pose in original colours and changes only the animated copy',()=>{
+ const THREE=require('three'),appearance=load('paperRobotAppearance'),source=new THREE.Group();
+ const material=new THREE.MeshStandardMaterial({color:'#202020'}),geometry=new THREE.BoxGeometry();
+ const arm=new THREE.Mesh(geometry,material);arm.position.set(350,0,60);source.add(arm);
+ const preview=appearance.createPaperRobotPreview(source),fixed=preview.current.children[0];
+ preview.syncCurrent();assert.equal(preview.current.visible,false);assert.notEqual(fixed.material,material);
+ arm.position.x=340;preview.syncCurrent();assert.equal(fixed.position.x,340);
+ // First animation frame must not move the frozen reference to the new preview pose.
+ arm.position.x=310;preview.showPreview(true);preview.syncCurrent();
+ assert.equal(fixed.position.x,340);assert.equal(arm.position.x,310);assert.equal(fixed.material.opacity,1);
+ assert.equal(fixed.material.color.getHexString(),'202020');assert.equal(arm.material.color.getHexString(),'8b98a6');
+ assert.equal(arm.material.opacity,.32);assert.equal(preview.current.visible,true);assert.equal(source.visible,true);
+ assert.equal(fixed.geometry,geometry);assert.equal(material.opacity,1);
+ preview.showPreview(false);assert.equal(source.visible,false);assert.equal(preview.current.visible,true);
+ arm.position.x=290;preview.showPreview(true);assert.equal(fixed.position.x,340);
+ const replacement=new THREE.MeshStandardMaterial({color:'blue'});arm.material=replacement;preview.showPreview(true);
+ assert.equal(arm.material.opacity,.32);assert.equal(fixed.material.color.getHexString(),'202020');
+ preview.dispose();assert.equal(source.visible,true);assert.equal(arm.material,replacement);assert.equal(arm.position.x,290);
+ material.dispose();replacement.dispose();geometry.dispose();
 });
