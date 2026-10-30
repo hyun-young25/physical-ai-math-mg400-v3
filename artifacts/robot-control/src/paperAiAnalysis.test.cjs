@@ -67,7 +67,7 @@ test("AI context includes current frame, saved model, source, run and only paren
   assert.equal(execution.comparisons[0].commandVsReportedMm.dx,2);
   assert.equal(history.length,1);
   assert.equal(history[0].recordId,"attempt-old");
-  assert.equal(history[0].revisionReason,"이전 시도에서 원점 좌표를 검토함");
+  assert.equal(history[0].revisionReason,"원점 좌표를 식에 다시 반영");
   assert.equal(history[0].studentHypothesis,"첫 실행은 원점을 더하지 않은 것 같음");
   assert.equal(history[0].previouslyDisplayedFeedback.length,1);
   assert.equal(history[0].previouslyDisplayedFeedback[0].text,"시험용 대체 안내: 원점 좌표를 확인해 보세요.");
@@ -84,4 +84,8 @@ test("first attempt has no previous feedback and a different paper assignment ca
   const child={...current,parentAttemptId:otherAssignment.id};
   const changed=moduleExports.paperFeedbackContext(child,[otherAssignment,child],targets);
   assert.deepEqual(JSON.parse(changed.history),[]);
+  const otherVersion={...previous,id:"other-version",taskVersion:"v3-paper"};
+  const versionChild={...current,parentAttemptId:otherVersion.id,taskVersion:"v4-paper-merged"};
+  const versionChanged=moduleExports.paperFeedbackContext(versionChild,[otherVersion,versionChild],targets);
+  assert.deepEqual(JSON.parse(versionChanged.history),[]);
 });

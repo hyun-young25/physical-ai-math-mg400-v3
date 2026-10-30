@@ -5,6 +5,7 @@ const fixture=require('./verify-revision-journey.cjs').fixture.replace('</head>'
 html,body{height:100%;overflow:hidden}.journey-fixture{height:calc(100vh - 30px);box-sizing:border-box;overflow:hidden}
 .journey-robot{height:100%;box-sizing:border-box;position:relative;top:0}.curriculum-body{height:100%;min-height:0;overflow:hidden}
 </style></head>`);
+const previewBase=process.env.PAPER_RETRY_BASE_URL||'http://127.0.0.1:5000';
 const apiCache={};function api(n){if(apiCache[n])return apiCache[n];const out=apiCache[n]={};new Function('exports','require',ts.transpileModule(fs.readFileSync(path.resolve(__dirname,'../artifacts/api-server/src/lib/'+n+'.ts'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText)(out,d=>api(d.replace('./','')));return out;}
 (async()=>{
  // Existing scene/readability/journey tests cover WebGL. Keep this longer
@@ -25,7 +26,7 @@ const apiCache={};function api(n){if(apiCache[n])return apiCache[n];const out=ap
    });await context.routeWebSocket('**',ws=>ws.close());
   await context.route('**/__paper-retry',r=>r.fulfill({contentType:'text/html',body:fixture}));
   const page=await context.newPage();page.setDefaultTimeout(30000);page.on('pageerror',e=>errors.push(e.message));
-  await page.goto('http://localhost/__paper-retry');
+  await page.goto(new URL('/__paper-retry',previewBase).toString());
   await page.getByRole('button',{name:rotated?/종이 위 경로 확인 \(MG400\)/:/종이 기준점 \(DT\)/}).click();
   const view=page.getByRole('region',{name:'종이 좌표 변환 학습'}),map=view.locator('.paper-scene-map');
   const click=async n=>{

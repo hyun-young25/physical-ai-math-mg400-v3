@@ -173,9 +173,9 @@ test("actual model request redacts identifiers but retains paper math and displa
   assert.match(answers.savedStudentTransform.explanation,/X=원점X\+10×종이x/);
   assert.match(answers.studentHypothesis,/축 방향을 다시 검토함/);
   assert.match(answers.revisionReason,/1 cm는 10 mm/);
-  assert.match(history.attempts,/시험용 대체 안내/);
-  assert.match(history.attempts,/원점 좌표를 식에 다시 반영/);
-  assert.match(history.attempts,/source\\?["']?:?["']?dt|source/);
+  assert.equal(history[0].previouslyDisplayedFeedback[0].text,"시험용 대체 안내: 원점X+10×x를 확인하세요.");
+  assert.equal(history[0].revisionReason,"원점 좌표를 식에 다시 반영");
+  assert.equal(history[0].run.source,"dt");
 });
 test("public budget bounds concurrency, IP, visit and global calls; releases are idempotent",()=>{
   let time=100;const budget=createFeedbackBudget(()=>time),releases=[];

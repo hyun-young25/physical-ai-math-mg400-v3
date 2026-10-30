@@ -69,6 +69,16 @@ test("typing the same ID creates a fresh cache namespace, not access to that ID'
   f.setUser({...A,visitId:B.visitId});const fresh=f.load();await f.init(fresh);
   assert.equal(fresh.getEvidenceItem(KEY),null);
 });
+test("paper attempts and displayed feedback stay within the active learner visit",async()=>{
+  const f=fixture(),paperKey="physical-ai-paper-coordinate-v1",a=f.load();await f.init(a);
+  const history=[{id:"TEST-paper-attempt",task:"paper-coordinate",studentHypothesis:"축을 다시 확인",
+    aiAnalyses:[{provider:"rules",text:"확인 질문",displayedAt:"2026-10-30T00:00:00.000Z"}]}];
+  a.setEvidenceItem(paperKey,JSON.stringify(history));
+  f.setUser(B);const b=f.load();await f.init(b);
+  assert.equal(b.getEvidenceItem(paperKey),null,"another learner visit must not inherit paper feedback");
+  f.setUser(A);const sameVisit=f.load();await f.init(sameVisit);
+  assert.deepEqual(JSON.parse(sameVisit.getEvidenceItem(paperKey)),history,"same learner visit retains linked paper attempts");
+});
 test("unchanged and savedAt-only snapshots do not create fictitious activities; corrupted outbox is preserved",async()=>{
   const f=fixture(),s=f.load();await f.init(s);s.setEvidenceItem(KEY,evidence(40));s.setEvidenceItem(KEY,evidence(40));
   assert.equal(s.getLearningSaveState().pending,1);await s.flushLearningQueue();

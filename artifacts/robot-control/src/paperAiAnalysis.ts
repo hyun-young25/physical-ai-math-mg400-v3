@@ -21,7 +21,7 @@ export function linkedPaperAttempts(current: PaperTrialRecord, records: PaperTri
     && chain.length < 6 && !seen.has(item.id)) {
     seen.add(item.id);
     chain.unshift(item);
-    const parent=item.parentAttemptId ? byId.get(item.parentAttemptId) : undefined;
+    const parent: PaperTrialRecord | undefined=item.parentAttemptId ? byId.get(item.parentAttemptId) : undefined;
     item=parent && parent.task===current.task && parent.taskVersion===current.taskVersion && parent.level===current.level
       ? parent : undefined;
   }
@@ -115,9 +115,6 @@ function linkedSummary(record: PaperTrialRecord) {
       question: record.diagnosis.question,
       why: record.diagnosis.why,
     } : null,
-    studentHypothesis: record.studentHypothesis,
-    revisionReason: record.revisionReason,
-    revalidation: record.revalidation,
   };
 }
 
