@@ -53,9 +53,7 @@ const paperHistoryKeys=[
   "recordId","parentAttemptId","attempt","taskVersion","level","targetSet","status","dataSource",
   "transform","predictions","studentHypothesis","revisionReason","revalidation","previouslyDisplayedFeedback",
 ] as const;
-const pickKeys=(value:unknown,keys:readonly string[])=>{
-  if(!value||typeof value!=="object"||Array.isArray(value))return value;
-  const row=value as Record<string,unknown>;
+const pickKeys=(row:Record<string,unknown>,keys:readonly string[]):Record<string,unknown>=>{
   return Object.fromEntries(keys.filter(key=>row[key]!==undefined).map(key=>[key,row[key]]));
 };
 function compactPaperHistoryAttempt(value:unknown) {
