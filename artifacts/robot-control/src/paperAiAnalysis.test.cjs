@@ -20,7 +20,18 @@ const current={id:"attempt-current",task:"paper-coordinate",version:1,attempt:2,
   status:"diagnosed",dataSource:"hardware",createdAt:"t1",updatedAt:"t2",frame,referenceSamples:frame.samples,
   transform:{originX:"0",originY:"0",axisDirection:"x+",millimetersPerCentimeter:"10",rotationDegrees:"0",explanation:"학생 변환식"},predictions:[],
   planHash:"plan-current",run,studentHypothesis:"원점이 어긋난 것 같아요."};
-const previous={...current,id:"attempt-old",attempt:1,parentAttemptId:null,run:{...run,id:"run-old",planHash:"plan-old"},revisionReason:"이전 시도에서 원점 좌표를 검토함"};
+const previous={...current,id:"attempt-old",attempt:1,parentAttemptId:null,run:{...run,id:"run-old",planHash:"plan-old"},
+  studentHypothesis:"첫 실행은 원점을 더하지 않은 것 같음",revisionReason:"원점 좌표를 식에 다시 반영",
+  revalidation:{parentAttemptId:"attempt-old",runId:"run-retry",source:"mock",checkedAt:50,scope:"모의 브리지 재검증"},
+  aiAnalyses:[
+    {id:"displayed-analysis",mode:"gpt",provider:"rules",status:"limited",question:"원점 항을 어떻게 확인했나요?",
+      text:"시험용 대체 안내: 원점 좌표를 확인해 보세요.",requestedAt:"t2",displayedAt:"t3",
+      recordId:"attempt-old",runId:"run-old",planHash:"plan-old",source:"mock"},
+    {id:"unshown-analysis",mode:"gpt",provider:"openai",status:"provided",question:"미표시",
+      text:"저장하면 안 되는 답",requestedAt:"t2",recordId:"attempt-old",runId:"run-old",planHash:"plan-old",source:"mock"},
+    {id:"stale-analysis",mode:"gpt",provider:"openai",status:"provided",question:"낡은 계획",
+      text:"다른 계획의 답",requestedAt:"t2",displayedAt:"t3",recordId:"attempt-old",runId:"old-run",planHash:"old-plan",source:"mock"},
+  ]};
 const unrelated={...previous,id:"other-task",task:"foundation",parentAttemptId:null};
 
 test("analysis is only ready for a complete diagnosis bound to the current plan and frame",()=>{
@@ -57,5 +68,20 @@ test("AI context includes current frame, saved model, source, run and only paren
   assert.equal(history.length,1);
   assert.equal(history[0].recordId,"attempt-old");
   assert.equal(history[0].revisionReason,"이전 시도에서 원점 좌표를 검토함");
+  assert.equal(history[0].studentHypothesis,"첫 실행은 원점을 더하지 않은 것 같음");
+  assert.equal(history[0].previouslyDisplayedFeedback.length,1);
+  assert.equal(history[0].previouslyDisplayedFeedback[0].text,"시험용 대체 안내: 원점 좌표를 확인해 보세요.");
+  assert.equal(history[0].run.status,"completed");
+  assert.equal(history[0].revalidation.runId,"run-retry");
   assert(!context.history.includes("other-task"));
+});
+
+test("first attempt has no previous feedback and a different paper assignment cannot enter the linked chain",()=>{
+  const first={...current,id:"first-attempt",attempt:1,parentAttemptId:null,aiAnalyses:[]};
+  const firstContext=moduleExports.paperFeedbackContext(first,[unrelated,previous,first],targets);
+  assert.deepEqual(JSON.parse(firstContext.history),[]);
+  const otherAssignment={...previous,id:"other-assignment",level:"advanced-paper-hardware"};
+  const child={...current,parentAttemptId:otherAssignment.id};
+  const changed=moduleExports.paperFeedbackContext(child,[otherAssignment,child],targets);
+  assert.deepEqual(JSON.parse(changed.history),[]);
 });

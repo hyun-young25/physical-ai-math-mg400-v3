@@ -2,22 +2,52 @@ import type { LearningFeedbackInput } from "@workspace/api-client-react";
 import type { InquiryField, InquiryRecord } from "./MathInquiry";
 
 export type FeedbackContext = Omit<LearningFeedbackInput,"visitId"|"trigger">;
-// Strict selection excludes account IDs, names, network addresses and raw packets.
-const excluded = /name|login|email|phone|contact|account|student|visit|token|secret|password|session|ip$|url|host|socket|raw|packet/i;
+// Remove identity fields without dropping math fields such as studentHypothesis,
+// savedStudentTransform, or a point's name ("A", "P1").
+const privateKeys = new Set([
+  "name", "fullname", "firstname", "lastname", "displayname", "studentname", "learnername",
+  "login", "email", "phone", "contact", "studentid", "studentnumber", "studentno",
+  "learnerid", "account", "accountid", "accountname", "visitid", "token", "secret",
+  "password", "session", "ip", "ipaddress", "url", "host", "socket", "raw", "packet",
+]);
+function isPrivateKey(key:string, value:unknown, parent:unknown) {
+  const normalized=key.replace(/[_\-\s]/g,"").toLowerCase();
+  if(normalized==="name") {
+    if(typeof value==="string"&&/^(?:[A-Z]|P\d+|O|X|Y|[A-F])$/.test(value))return false;
+    if(parent&&typeof parent==="object"&&["x","y","xCm","yCm","robotX","robotY","pose","point"].some(k=>k in parent))return false;
+    return true;
+  }
+  return privateKeys.has(normalized);
+}
 export function privateText(s:string) {
   return s.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,"[이메일 제외]")
     .replace(/(?:\+82[- ]?)?0\d{1,2}[- ]?\d{3,4}[- ]?\d{4}/g,"[연락처 제외]")
-    .replace(/(?:제\s*이름은|이름\s*[:=]|성명\s*[:=])\s*[가-힣A-Za-z ]{2,20}/g,"[이름 제외]");
+    .replace(/(?:학번|학생\s*(?:번호|ID)|학생ID|학습자\s*ID|아이디|로그인)\s*[:=：]?\s*[A-Za-z0-9_-]{2,}/gi,"[식별정보 제외]")
+    .replace(/((?:제\s*이름은|(?:학생\s*)?이름\s*[:=：]|성명\s*[:=：])\s*)([가-힣]{2,4}|[A-Za-z][A-Za-z'-]{1,30}(?:\s+[A-Za-z][A-Za-z'-]{1,30})?)(?=$|[\s,.;!?，。])/g,"$1[이름 제외]")
+    .replace(/((?:제\s*이름은|(?:학생\s*)?이름\s*[:=：]|성명\s*[:=：])\s*)([가-힣]{2,4})(?=(?:은|는|이|가|의|이고|이며|을|를|와|과))/g,"$1[이름 제외]");
 }
-function clean(v:unknown,depth=0):unknown {
+function clean(v:unknown,depth=0,parent:unknown=null):unknown {
   if(depth>7)return "[상세 생략]";
   if(typeof v==="string")return privateText(v).slice(0,1500);
   if(v===null||typeof v==="number"||typeof v==="boolean")return v;
-  if(Array.isArray(v))return v.slice(-12).map(x=>clean(x,depth+1));
-  if(v&&typeof v==="object")return Object.fromEntries(Object.entries(v).filter(([k])=>!excluded.test(k)).slice(0,40).map(([k,x])=>[k,clean(x,depth+1)]));
+  if(Array.isArray(v))return v.slice(-12).map(x=>clean(x,depth+1,v));
+  if(v&&typeof v==="object")return Object.fromEntries(Object.entries(v).filter(([k,x])=>!isPrivateKey(k,x,v)).slice(0,40).map(([k,x])=>[k,clean(x,depth+1,v)]));
   return undefined;
 }
 const json=(value:unknown,max:number)=>JSON.stringify(clean(value)??null).slice(0,max);
+const jsonFields=["condition","answers","initialPrediction","history","judgment","execution"] as const;
+/** Final client-side privacy boundary for both trial and explicitly requested GPT feedback. */
+export function sanitizeFeedbackContext(context:FeedbackContext):FeedbackContext {
+  const safe={...context} as FeedbackContext & {question?:string;conversation?:{role:"student"|"tutor";text:string;source?:"openai"|"rules"}[]};
+  for(const field of jsonFields) {
+    try { safe[field]=JSON.stringify(clean(JSON.parse(context[field]))); }
+    catch { safe[field]=privateText(context[field]).slice(0,1500); }
+  }
+  safe.reason=privateText(context.reason).slice(0,1500);
+  if(context.question!==undefined)safe.question=privateText(context.question).slice(0,1000);
+  if(context.conversation)safe.conversation=context.conversation.map(turn=>({...turn,text:privateText(turn.text).slice(0,1000)}));
+  return safe;
+}
 function problemOnly(v:unknown):unknown {
   if(Array.isArray(v))return v.map(problemOnly);
   if(v&&typeof v==="object")return Object.fromEntries(Object.entries(v)

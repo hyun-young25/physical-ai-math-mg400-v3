@@ -138,6 +138,45 @@ test("privacy drops identity and network metadata while retaining units, source 
   assert.doesNotMatch(JSON.stringify(c),/PRIVATE|example.com|010-1234|192.168/);
   assert.match(c.execution,/measuredAt|ageMs|units|mock/);
 });
+test("actual model request redacts identifiers but retains paper math and displayed linked feedback",async()=>{
+  let body;
+  const paper=context({task:"paper-coordinate",trigger:"hint",question:"이번 풀이와 앞 시도 피드백을 비교해 주세요",
+    condition:JSON.stringify({name:"민감한 이름",studentId:"STU-2026-77",visitId:"VISIT-SECRET",
+      targetPaperCm:[{name:"A",xCm:3,yCm:2}],units:{paper:"cm",robot:"mm"},
+      frame:{coordinateSystem:"User 0 / Tool 0",samples:[{point:"O",pose:{x:180,y:-60,z:80,r:0}}]}}),
+    answers:JSON.stringify({savedStudentTransform:{originX:"180",originY:"-60",axisDirection:"y-",
+      millimetersPerCentimeter:"10",rotationDegrees:"0",explanation:"이름: 김가을, X=원점X+10×종이x"},
+      studentHypothesis:"학번: QA-12345; 축 방향을 다시 검토함",
+      revisionReason:"연락처: 010-1234-5678; 1 cm는 10 mm"}),
+    reason:"이메일 qa-person@example.com; 기준점 O와 X축을 다시 확인함",
+    initialPrediction:JSON.stringify({points:[{name:"A",robotX:210,robotY:-40}]}),
+    history:JSON.stringify([{taskVersion:"v4-paper-merged",attempt:1,studentId:"OTHER-STUDENT",
+      previouslyDisplayedFeedback:[{mode:"gpt",provider:"rules",status:"limited",
+        text:"시험용 대체 안내: 원점X+10×x를 확인하세요."}],
+      revisionReason:"원점 좌표를 식에 다시 반영",run:{source:"dt",status:"completed"}}]),
+    judgment:JSON.stringify({method:"rule-based",candidate:"원점 후보",pattern:"translation"}),
+    execution:JSON.stringify([{source:"dt",status:"completed",observations:[{point:"A",pose:{x:210,y:-40},measuredAt:1234}]}])});
+  await generateFeedback(paper,{key:"test-only",fetcher:async(_url,options)=>{
+    body=JSON.parse(options.body);
+    return {ok:true,status:200,json:async()=>({choices:[{message:{content:"모의 API 응답"}}]})};
+  }});
+  const sent=JSON.parse(body.messages[1].content),condition=JSON.parse(sent.condition),answers=JSON.parse(sent.answers);
+  const history=JSON.parse(sent.history);
+  const serialized=body.messages[1].content;
+  assert.doesNotMatch(serialized,/민감한 이름|김가을|STU-2026-77|VISIT-SECRET|QA-12345|010-1234-5678|qa-person@example.com|OTHER-STUDENT/);
+  assert.equal(condition.targetPaperCm[0].name,"A");
+  assert.deepEqual([condition.targetPaperCm[0].xCm,condition.targetPaperCm[0].yCm],[3,2]);
+  assert.equal(condition.units.robot,"mm");
+  assert.equal(condition.frame.coordinateSystem,"User 0 / Tool 0");
+  assert.equal(answers.savedStudentTransform.axisDirection,"y-");
+  assert.equal(answers.savedStudentTransform.millimetersPerCentimeter,"10");
+  assert.match(answers.savedStudentTransform.explanation,/X=원점X\+10×종이x/);
+  assert.match(answers.studentHypothesis,/축 방향을 다시 검토함/);
+  assert.match(answers.revisionReason,/1 cm는 10 mm/);
+  assert.match(history.attempts,/시험용 대체 안내/);
+  assert.match(history.attempts,/원점 좌표를 식에 다시 반영/);
+  assert.match(history.attempts,/source\\?["']?:?["']?dt|source/);
+});
 test("public budget bounds concurrency, IP, visit and global calls; releases are idempotent",()=>{
   let time=100;const budget=createFeedbackBudget(()=>time),releases=[];
   for(let i=0;i<4;i++)releases.push(budget.acquire("ip","visit"));

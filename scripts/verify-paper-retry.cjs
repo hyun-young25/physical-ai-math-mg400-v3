@@ -15,7 +15,14 @@ const apiCache={};function api(n){if(apiCache[n])return apiCache[n];const out=ap
  try{
  for(const rotated of [false,true]){
   const context=await browser.newContext({viewport:{width:1280,height:720}}),errors=[];
-  await context.route('**/api/**',r=>r.fulfill({json:{}}));await context.routeWebSocket('**',ws=>ws.close());
+   const aiRequests=[],mockReply='모의 API 규칙 대체 응답: 이전 풀이의 기준점을 다시 비교해 보세요.';
+   await context.route('**/api/**',r=>{
+    if(new URL(r.request().url()).pathname.endsWith('/api/learning/feedback')){
+     aiRequests.push(r.request().postDataJSON());
+     return r.fulfill({json:{provider:'rules',status:'limited',failureReason:'app_global_limit',text:mockReply,createdAt:'2026-10-30T00:00:00.000Z'}});
+    }
+    return r.fulfill({json:{}});
+   });await context.routeWebSocket('**',ws=>ws.close());
   await context.route('**/__paper-retry',r=>r.fulfill({contentType:'text/html',body:fixture}));
   const page=await context.newPage();page.setDefaultTimeout(30000);page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://localhost/__paper-retry');
@@ -38,7 +45,7 @@ const apiCache={};function api(n){if(apiCache[n])return apiCache[n];const out=ap
     await view.locator(`[data-paper-row="${name}"]`).getByRole('button',{name:'입력값 저장',exact:true}).click();
    }
   }else await click('다음 단계');
-  for(const [label,value] of [['원점 X (mm)',String(ox)],['원점 Y (mm)',String(oy)],['1 cm당 길이 (mm)','10'],['이 관계를 선택한 이유','종이 기준점과 이동량을 더합니다.']])await view.getByLabel(label,{exact:true}).fill(value);
+   for(const [label,value] of [['원점 X (mm)',String(ox)],['원점 Y (mm)',String(oy)],['1 cm당 길이 (mm)','10'],['이 관계를 선택한 이유','이름: 홍길동, X=원점X+10×종이x']])await view.getByLabel(label,{exact:true}).fill(value);
   if(rotated){await view.getByLabel('종이 x축이 향하는 방향').selectOption('x+');await view.getByLabel('추가 회전 (°)',{exact:true}).fill('30');}
   await click('관계 저장');await click('다음 단계');
   await view.getByLabel('직선 경로 명령').selectOption('MoveL');await view.getByLabel('닫힌 경로 ΔX 합').fill('0');await view.getByLabel('닫힌 경로 ΔY 합').fill('0');
@@ -58,12 +65,38 @@ const apiCache={};function api(n){if(apiCache[n])return apiCache[n];const out=ap
   assert.match(await page.locator('.square-type-badge').innerText(),/대입·계산 차이 · P3/);
   assert.doesNotMatch(await page.getByTestId('paper-diagnosis-visual').innerText(),/축·길이 뒤바뀜/);
   assert.match(await page.getByTestId('paper-diagnosis-visual').innerText(),/내 변환식에 종이 좌표/);
-  const first=(await records())[0];
-  const judgment=await page.evaluate(()=>JSON.parse(window.__tutor().context.judgment));assert.equal(first.diagnosis.pattern,'calculation');assert.equal(judgment.method,'rule-based');assert.equal(judgment.status,'complete');assert.equal(judgment.firstMismatch,first.diagnosis.firstMismatch);assert.equal(judgment.candidate,first.diagnosis.candidate);assert.deepEqual(judgment.predictionEvidence,first.diagnosis.predictionEvidence);
+   const first=(await records())[0];
+   const judgment=await page.evaluate(()=>JSON.parse(window.__tutor().context.judgment));assert.equal(first.diagnosis.pattern,'calculation');assert.equal(judgment.method,'rule-based');assert.equal(judgment.status,'complete');assert.equal(judgment.firstMismatch,first.diagnosis.firstMismatch);assert.equal(judgment.candidate,first.diagnosis.candidate);assert.deepEqual(judgment.predictionEvidence,first.diagnosis.predictionEvidence);
+   async function requestPaperAnalysis(expectedAttempt){
+    const analysis=view.getByRole('region',{name:'실행자료 AI 분석'});
+    await analysis.getByLabel('분석 방식').selectOption('gpt');
+    const button=analysis.getByRole('button',{name:'실행자료를 GPT에 보내 분석',exact:true});
+    await button.click();
+    const result=analysis.getByTestId('execution-ai-result');await result.waitFor();await result.scrollIntoViewIfNeeded();
+    assert.match(await result.innerText(),/GPT 분석 미완료/);
+    assert.match(await result.innerText(),/아래 내용은 GPT 응답이 아닙니다/);
+    assert.match(await result.innerText(),new RegExp(mockReply.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
+    await page.waitForFunction(text=>{
+     const key=Object.keys(localStorage).find(k=>k.endsWith('physical-ai-paper-coordinate-v1'));
+     const record=JSON.parse(localStorage.getItem(key)||'[]').at(-1);
+     return record?.aiAnalyses?.some(a=>a.text===text&&a.displayedAt&&a.recordId===record.id&&a.runId===record.run?.id);
+    },mockReply);
+    assert.equal(aiRequests.length,expectedAttempt);
+    return aiRequests.at(-1);
+   }
+   const firstRequest=await requestPaperAnalysis(1);
+   const firstCondition=JSON.parse(firstRequest.condition),firstAnswers=JSON.parse(firstRequest.answers);
+   assert.equal(firstCondition.frame.samples.length,3);
+   assert.equal(firstCondition.units.paper,'cm');assert.equal(firstCondition.units.robot,'mm');
+   assert.equal(firstAnswers.savedStudentTransform.axisDirection,'x+');
+   assert.equal(firstAnswers.savedStudentTransform.millimetersPerCentimeter,'10');
+   assert.match(firstAnswers.savedStudentTransform.explanation,/X=원점X\+10×종이x/);
+   assert.doesNotMatch(JSON.stringify(firstRequest),/홍길동|이름:/);
+   assert.equal(JSON.parse(firstRequest.history).attempts,'[]','first attempt must state that no prior attempt feedback exists');
   assert.match((await saved())[0].visual.diagnosis.label,/^대입·계산 차이 · P3/);
   await page.getByTestId('paper-diagnosis-visual').screenshot({path:path.join(shots,`${prefix}-diagnosis.png`)});
-  await view.getByLabel('차이가 생긴 이유').fill('P3의 X 대입값을 다시 확인했습니다.');await click('생각 저장');await click('다음 단계');
-  await view.getByLabel('무엇을 다시 살펴볼까요?').fill('피드백을 보고 P3의 X만 수정합니다.');await click('이유와 수정 기록');
+   await view.getByLabel('차이가 생긴 이유').fill('학번: QA-12345; P3의 X 대입값을 다시 확인했습니다.');await click('생각 저장');await click('다음 단계');
+   await view.getByLabel('무엇을 다시 살펴볼까요?').fill('이메일: qa-private@example.com; 피드백을 보고 P3의 X만 수정합니다.');await click('이유와 수정 기록');
   await view.getByTestId('paper-retry-note').waitFor();
   assert.equal(await view.getByLabel('직선 경로 명령').inputValue(),'MoveL');assert.equal(await view.getByLabel('닫힌 경로 ΔX 합').inputValue(),'0');
   const fields=await view.locator('[data-retry-difference=true]').evaluateAll(es=>es.map(e=>e.dataset.retryField));assert.deepEqual(fields,['P3.robotX']);
@@ -82,8 +115,19 @@ const apiCache={};function api(n){if(apiCache[n])return apiCache[n];const out=ap
   await click('관계식·이유 확인');assert.equal(await view.getByLabel('원점 X (mm)',{exact:true}).inputValue(),String(ox));await click('관계 저장');await click('다음 단계');
   assert.equal(await view.getByLabel('P3 예측 로봇 X · mm').inputValue(),String(values[2][0]+20));
   await view.getByLabel('P3 예측 로봇 X · mm').fill(String(values[2][0]));assert.equal(await view.locator('.pcv-retry-changed').count(),1);
-  await click('예측 저장');await click('다음 단계');await run();await click('다음 단계');
+   await click('예측 저장');await click('다음 단계');await run();await click('다음 단계');
   assert.match(await page.locator('.square-type-badge').innerText(),/예측과 실행 일치/);
+   const retryRequest=await requestPaperAnalysis(2);
+   const retryHistory=JSON.parse(JSON.parse(retryRequest.history).attempts);
+   assert.equal(retryHistory.length,1);
+   assert.equal(retryHistory[0].recordId,first.id);
+   assert.equal(retryHistory[0].previouslyDisplayedFeedback[0].text,mockReply);
+   assert.equal(retryHistory[0].previouslyDisplayedFeedback[0].mode,'gpt');
+   assert.equal(retryHistory[0].previouslyDisplayedFeedback[0].provider,'rules');
+   assert.equal(retryHistory[0].revisionReason,'이메일: [이메일 제외]; 피드백을 보고 P3의 X만 수정합니다.');
+   assert.equal(retryHistory[0].studentHypothesis,'학번: [식별정보 제외]; P3의 X 대입값을 다시 확인했습니다.');
+   assert.equal(retryHistory[0].run.source,'dt');assert.equal(retryHistory[0].run.status,'completed');
+   assert.doesNotMatch(JSON.stringify(retryRequest),/qa-private@example.com|QA-12345/);
   const final=await records();assert.equal(final[1].diagnosis.pattern,'match');assert.deepEqual(final[0],afterRevision,'first attempt remains byte-for-byte unchanged after correction');
   const dock=page.getByTestId('revision-scene-dock');await dock.getByRole('button',{name:/4.*재실행 결과/}).click();
   if(webgl)await page.getByRole('button',{name:'장면에서 P3 선택',exact:true}).click();

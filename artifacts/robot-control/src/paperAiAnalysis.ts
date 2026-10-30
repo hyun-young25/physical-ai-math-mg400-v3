@@ -16,10 +16,14 @@ export function linkedPaperAttempts(current: PaperTrialRecord, records: PaperTri
   const chain: PaperTrialRecord[] = [];
   const seen = new Set<string>();
   let item: PaperTrialRecord | undefined = current;
-  while (item && item.task === "paper-coordinate" && chain.length < 6 && !seen.has(item.id)) {
+  while (item && item.task === current.task && item.task === "paper-coordinate"
+    && item.taskVersion === current.taskVersion && item.level === current.level
+    && chain.length < 6 && !seen.has(item.id)) {
     seen.add(item.id);
     chain.unshift(item);
-    item = item.parentAttemptId ? byId.get(item.parentAttemptId) : undefined;
+    const parent=item.parentAttemptId ? byId.get(item.parentAttemptId) : undefined;
+    item=parent && parent.task===current.task && parent.taskVersion===current.taskVersion && parent.level===current.level
+      ? parent : undefined;
   }
   return chain;
 }
@@ -58,14 +62,28 @@ export function paperRunComparisons(current: PaperTrialRecord, targets: PaperGri
 }
 
 function linkedSummary(record: PaperTrialRecord) {
+  const run=record.run;
+  const displayedFeedback=(record.aiAnalyses??[])
+    .filter(analysis=>!!analysis.displayedAt&&analysis.recordId===record.id&&!!run
+      &&analysis.runId===run.id&&analysis.planHash===run.planHash&&analysis.source===run.source)
+    .map(({mode,provider,status,failureReason,question,text,requestedAt,displayedAt,source})=>({
+      mode,provider,status,...(failureReason?{failureReason}:{}),source,question,text,requestedAt,displayedAt,
+    }));
   return {
     recordId: record.id,
     parentAttemptId: record.parentAttemptId,
     attempt: record.attempt,
     taskVersion: record.taskVersion,
+    level:record.level,
     targetSet: record.targetSet,
     status: record.status,
     dataSource: record.dataSource,
+    transform: record.transform,
+    predictions: record.predictions,
+    studentHypothesis: record.studentHypothesis,
+    revisionReason: record.revisionReason,
+    revalidation: record.revalidation,
+    previouslyDisplayedFeedback: displayedFeedback,
     frame: record.frame ? {
       id: record.frame.id,
       source: record.frame.source,
@@ -75,18 +93,16 @@ function linkedSummary(record: PaperTrialRecord) {
       capturedAt: record.frame.capturedAt,
       samples: record.frame.samples,
     } : null,
-    transform: record.transform,
-    predictions: record.predictions,
-    run: record.run ? {
-      id: record.run.id,
-      planHash: record.run.planHash,
-      frameId: record.run.frameId,
-      source: record.run.source,
-      status: record.run.status,
-      startedAt: record.run.startedAt,
-      endedAt: record.run.endedAt,
-      commands: record.run.commands,
-      observations: record.run.observations,
+    run: run ? {
+      id: run.id,
+      planHash: run.planHash,
+      frameId: run.frameId,
+      source: run.source,
+      status: run.status,
+      startedAt: run.startedAt,
+      endedAt: run.endedAt,
+      commands: run.commands,
+      observations: run.observations,
     } : null,
     diagnosis: record.diagnosis ? {
       method: record.diagnosis.method,
@@ -157,7 +173,9 @@ export function paperFeedbackContext(current: PaperTrialRecord, records: PaperTr
       transform: current.transform ?? null,
       predictions: current.predictions ?? [],
     }),
-    history: JSON.stringify(chain.slice(0, -1).map(linkedSummary)),
+    // The immediately preceding linked attempt is the actionable context. Keeping
+    // it whole avoids truncating its displayed feedback before the AI request.
+    history: JSON.stringify(chain.slice(-2, -1).map(linkedSummary)),
     judgment: JSON.stringify({
       method: diagnosis?.method ?? "rule-based",
       status: diagnosis?.status ?? "not-ready",

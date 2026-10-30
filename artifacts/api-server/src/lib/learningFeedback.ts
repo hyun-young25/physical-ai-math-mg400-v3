@@ -19,16 +19,33 @@ paper-coordinate에서는 학생 풀이 설명과 직접 연결된 이전 시도
 export function redactFeedback(value: string): string {
   return value.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,"[이메일 제외]")
     .replace(/(?:\+82[- ]?)?0\d{1,2}[- ]?\d{3,4}[- ]?\d{4}/g,"[연락처 제외]")
-    .replace(/(?:제\s*이름은|이름\s*[:=]|성명\s*[:=])\s*[가-힣A-Za-z ]{2,20}/g,"[이름 제외]");
+    .replace(/(?:학번|학생\s*(?:번호|ID)|학생ID|학습자\s*ID|아이디|로그인)\s*[:=：]?\s*[A-Za-z0-9_-]{2,}/gi,"[식별정보 제외]")
+    .replace(/((?:제\s*이름은|(?:학생\s*)?이름\s*[:=：]|성명\s*[:=：])\s*)([가-힣]{2,4}|[A-Za-z][A-Za-z'-]{1,30}(?:\s+[A-Za-z][A-Za-z'-]{1,30})?)(?=$|[\s,.;!?，。])/g,"$1[이름 제외]")
+    .replace(/((?:제\s*이름은|(?:학생\s*)?이름\s*[:=：]|성명\s*[:=：])\s*)([가-힣]{2,4})(?=(?:은|는|이|가|의|이고|이며|을|를|와|과))/g,"$1[이름 제외]");
 }
 // Apply the same privacy boundary on the server even if a client is modified.
 export function sanitizeFeedbackContext(c: Omit<LearningFeedbackInput,"visitId">) {
+  const privateKeys=new Set([
+    "name","fullname","firstname","lastname","displayname","studentname","learnername",
+    "login","email","phone","contact","studentid","studentnumber","studentno",
+    "learnerid","account","accountid","accountname","visitid","token","secret",
+    "password","session","ip","ipaddress","url","host","socket","raw","packet",
+  ]);
+  const privateKey=(key:string,value:unknown,parent:unknown)=>{
+    const normalized=key.replace(/[_\-\s]/g,"").toLowerCase();
+    if(normalized==="name") {
+      if(typeof value==="string"&&/^(?:[A-Z]|P\d+|O|X|Y|[A-F])$/.test(value))return false;
+      if(parent&&typeof parent==="object"&&["x","y","xCm","yCm","robotX","robotY","pose","point"].some(k=>k in parent))return false;
+      return true;
+    }
+    return privateKeys.has(normalized);
+  };
   const scrub=(v:unknown,depth=0):unknown=>{
     if(depth>9)return "[생략]";
     if(typeof v==="string")return redactFeedback(v);
     if(Array.isArray(v))return v.map(x=>scrub(x,depth+1));
     if(v&&typeof v==="object")return Object.fromEntries(Object.entries(v)
-      .filter(([key])=>!/name|login|email|phone|contact|account|student|visit|token|secret|password|session|ip$|url|host|socket|raw|packet/i.test(key))
+      .filter(([key,value])=>!privateKey(key,value,v))
       .map(([key,value])=>[key,scrub(value,depth+1)]));
     return v;
   };

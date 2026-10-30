@@ -4,7 +4,7 @@ import type { LearningFeedback, LearningFeedbackInput } from "@workspace/api-cli
 import { getLearningUser } from "./learningClient";
 import { learningRecordContext } from "./learningFramework";
 import { readEvidence, writeEvidence } from "./learningEvidenceStorage";
-import { feedbackProblemKey, feedbackVersion, hasFeedbackExecution, privateText, type FeedbackContext } from "./learningAiContext";
+import { feedbackProblemKey, feedbackVersion, hasFeedbackExecution, privateText, sanitizeFeedbackContext, type FeedbackContext } from "./learningAiContext";
 import { updateTutor, unregisterTutor } from "./tutorRegistry";
 import { useTutorMode } from "./tutorMode";
 import { trialTutorFeedback } from "./trialTutorFeedback";
@@ -22,7 +22,8 @@ type Activity = ReturnType<typeof learningRecordContext> & {
 };
 export type TutorMessage={id:string;role:"student"|"tutor";text:string;source?:"openai"|"rules";at?:string;automatic?:boolean;unavailable?:boolean;evidence?:SquareEvidenceTag};
 const rows=()=>readEvidence<Activity>(KEY,(x):x is Activity=>!!x&&typeof x==="object"&&"id" in x);
-const delivered=(context:FeedbackContext)=>rows().filter(x=>x.feedbackStatus==="displayed"&&x.feedback&&feedbackProblemKey(x.prediction)===feedbackProblemKey(context));
+const delivered=(context:FeedbackContext)=>rows().filter(x=>x.feedbackStatus==="displayed"&&x.feedback
+  &&feedbackProblemKey(sanitizeFeedbackContext(x.prediction))===feedbackProblemKey(sanitizeFeedbackContext(context)));
 type DeliveredTurn=Pick<Activity,"id"|"prediction"|"feedback"|"question"|"automatic">;
 const messagesFor=(history:DeliveredTurn[]):TutorMessage[]=>history.flatMap(row=>[
   ...(row.question?[{id:row.id+"-question",role:"student" as const,text:row.question,at:row.feedback!.createdAt}]:[]),
@@ -68,7 +69,8 @@ export function useLearningAi(context:FeedbackContext,editVersion="") {
     cancel();
     ready.current=null;
     trialReady.current=null;
-    const problem=feedbackProblemKey(snapshot);
+    const safeSnapshot=sanitizeFeedbackContext(snapshot);
+    const problem=feedbackProblemKey(safeSnapshot);
     if(trigger==="retry"&&!question&&lastQuestion.current?.problem===problem)question=lastQuestion.current.text;
     question=privateText(question.trim()).slice(0,1000);
     lastQuestion.current={problem,text:question};
@@ -76,20 +78,20 @@ export function useLearningAi(context:FeedbackContext,editVersion="") {
     const priorMessages=messagesFor(prior.filter(row=>!row.feedback?.failureReason));
     for(const message of automatic.providedMessages())if(!priorMessages.some(row=>row.id===message.id))priorMessages.push(message);
     priorMessages.sort((a,b)=>(Date.parse(a.at??"")||0)-(Date.parse(b.at??"")||0));
-    const conversation=priorMessages.slice(-8).map(({role,text,source})=>({role,text:text.slice(0,1000),...(source?{source}:{})}));
+    const conversation=priorMessages.slice(-8).map(({role,text,source})=>({role,text:privateText(text).slice(0,1000),...(source?{source}:{})}));
     if(currentMode.current==="trial") {
       const feedback:LearningFeedback={provider:"rules",status:"unconfigured",createdAt:new Date().toISOString(),
-        text:trialTutorFeedback({...snapshot,question,conversation})};
-      const trialRow={id:crypto.randomUUID(),prediction:structuredClone(snapshot),question,feedback};
+        text:trialTutorFeedback({...safeSnapshot,question,conversation})};
+      const trialRow={id:crypto.randomUUID(),prediction:structuredClone(safeSnapshot),question,feedback};
       trialReady.current={key,row:trialRow};
       setState({key,pending:false,feedback,question,id:trialRow.id});
       return;
     }
-    const row:Activity={...learningRecordContext("math"),id:crypto.randomUUID(),task:snapshot.task,
-      at:new Date().toISOString(),prediction:structuredClone(snapshot),feedbackStatus:"displayed",trigger,
+    const row:Activity={...learningRecordContext("math"),id:crypto.randomUUID(),task:safeSnapshot.task,
+      at:new Date().toISOString(),prediction:structuredClone(safeSnapshot),feedbackStatus:"displayed",trigger,
       ...(question?{question}:{}),conversation:structuredClone(conversation)};
-    const input={...snapshot,question,conversation,attempts:Math.min(1000,snapshot.attempts),
-      history:JSON.stringify({attempts:snapshot.history.slice(0,3500),
+    const input={...safeSnapshot,question,conversation,attempts:Math.min(1000,safeSnapshot.attempts),
+      history:JSON.stringify({attempts:safeSnapshot.history.slice(0,3500),
         providedHints:priorMessages.filter(m=>m.role==="tutor").slice(-3).map(m=>m.text),
         recentAnswers:prior.slice(-2).map(x=>({answers:x.prediction.answers,reason:x.prediction.reason}))}).slice(0,6000)};
     const abort=new AbortController();active.current={key,abort,row};
