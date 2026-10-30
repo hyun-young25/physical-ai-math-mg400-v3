@@ -64,7 +64,7 @@ function revealPaperRow(row: Element) {
     host.scrollTo({top:host.scrollTop+focused.top-visible.top-12,behavior:editing?"instant":"smooth"});
 }
 
-export function PaperCoordinateStudyView({ state, actions }: PaperCoordinateStudyViewProps) {
+export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinateStudyViewProps) {
   const id = useId();
   const rectangle=isPaperRectangle(state.level),merged=isMergedPaper(state.level),dtOnly=isPaperDT(state.level),grid=merged?20:10;
   const [hypothesisDraft, setHypothesisDraft] = useState(state.studentHypothesis);

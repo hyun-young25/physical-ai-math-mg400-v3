@@ -3,7 +3,8 @@ function load(file,deps={}){const e={};new Function("exports","require",ts.trans
   compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX},
 }).outputText)(e,n=>{assert.ok(n in deps,n);return deps[n];});return e;}
 const ctx=load("learningAiContext.ts");
-const trial=load("trialTutorFeedback.ts",{"./learningAiContext":ctx});
+const tutorFollowUp=load("tutorFollowUp.ts",{"./learningAiContext":ctx});
+const trial=load("trialTutorFeedback.ts",{"./learningAiContext":ctx,"./tutorFollowUp":tutorFollowUp});
 const initial=()=>({task:"foundation",condition:'{"id":"height-practice"}',answers:'{"z":60}',reason:"목표와 변화량",initialPrediction:'{"z":60}',
   history:"[]",judgment:"미확정",execution:"[]",support:"guided",attempts:0});
 function mount(startMode="gpt") {
@@ -20,8 +21,11 @@ function mount(startMode="gpt") {
   global.fetch=()=>{calls++;return new Promise(r=>{resolve=r;});};
   const {useLearningAi}=load("LearningAiFeedback.tsx",{
     react,"react/jsx-runtime":{},"./learningAiContext":ctx,
+    "./squareComparisonVisual":{squareEvidenceTag:()=>undefined},
     "./tutorMode":{useTutorMode:()=>mode},
     "./trialTutorFeedback":trial,
+    "./useSubmissionFeedback":()=>({submit(){},providedMessages:()=>[],messages:[],storageFailed:false,
+      unread:false,preview:undefined,acknowledge:()=>false}),
     "./tutorRegistry":{registerTutor:()=>()=>{}},
     "./learningClient":{getLearningUser:()=>({visitId:"test-visit"})},
     "./learningFramework":{learningRecordContext:()=>({source:"math"})},

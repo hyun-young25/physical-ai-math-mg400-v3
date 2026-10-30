@@ -1,9 +1,9 @@
 const test=require("node:test"),assert=require("node:assert/strict"),fs=require("node:fs"),path=require("node:path"),ts=require("typescript");
 const target=path.join(__dirname,"paperAiAnalysis.ts");
-const exports={};
+const moduleExports={};
 new Function("exports","require",ts.transpileModule(fs.readFileSync(target,"utf8"),{
   compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS},
-}).outputText)(exports,name=>{
+}).outputText)(moduleExports,name=>{
   assert.equal(name,"./paperCoordinateStudy");
   return {frameTransformPoint:(_frame,point)=>({x:point.xCm*10,y:point.yCm*10,z:12,r:0})};
 });
@@ -24,15 +24,15 @@ const previous={...current,id:"attempt-old",attempt:1,parentAttemptId:null,run:{
 const unrelated={...previous,id:"other-task",task:"foundation",parentAttemptId:null};
 
 test("analysis is only ready for a complete diagnosis bound to the current plan and frame",()=>{
-  assert.equal(exports.paperAnalysisReady(current,"plan-current",{status:"complete"}),true);
-  assert.equal(exports.paperAnalysisReady({...current,run:{...run,status:"partial"}},"plan-current",{status:"complete"}),false);
-  assert.equal(exports.paperAnalysisReady({...current,planHash:"old-plan"},"plan-current",{status:"complete"}),false);
-  assert.equal(exports.paperAnalysisReady({...current,run:{...run,frameId:"old-frame"}},"plan-current",{status:"complete"}),false);
-  assert.equal(exports.paperAnalysisReady(current,"plan-current",{status:"incomplete"}),false);
+  assert.equal(moduleExports.paperAnalysisReady(current,"plan-current",{status:"complete"}),true);
+  assert.equal(moduleExports.paperAnalysisReady({...current,run:{...run,status:"partial"}},"plan-current",{status:"complete"}),false);
+  assert.equal(moduleExports.paperAnalysisReady({...current,planHash:"old-plan"},"plan-current",{status:"complete"}),false);
+  assert.equal(moduleExports.paperAnalysisReady({...current,run:{...run,frameId:"old-frame"}},"plan-current",{status:"complete"}),false);
+  assert.equal(moduleExports.paperAnalysisReady(current,"plan-current",{status:"incomplete"}),false);
 });
 
 test("comparison data keeps target-to-command separate from command-to-observation and labels mock evidence",()=>{
-  const rows=exports.paperRunComparisons(current,targets),first=rows[0];
+  const rows=moduleExports.paperRunComparisons(current,targets),first=rows[0];
   assert.deepEqual(first.targetRobotMm,{x:30,y:20,z:12,r:0});
   assert.deepEqual(first.targetVsCommandMm,{dx:10,dy:-1,distance:Math.hypot(10,1)});
   assert.deepEqual(first.commandVsReportedMm,{dx:2,dy:4,distance:Math.hypot(2,4)});
@@ -41,7 +41,7 @@ test("comparison data keeps target-to-command separate from command-to-observati
 });
 
 test("AI context includes current frame, saved model, source, run and only parent-linked history",()=>{
-  const context=exports.paperFeedbackContext(current,[unrelated,previous,current],targets);
+  const context=moduleExports.paperFeedbackContext(current,[unrelated,previous,current],targets);
   const condition=JSON.parse(context.condition),answers=JSON.parse(context.answers),execution=JSON.parse(context.execution)[0];
   const history=JSON.parse(context.history);
   assert.equal(condition.frame.id,"frame-new");

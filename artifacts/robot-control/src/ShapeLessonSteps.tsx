@@ -364,7 +364,7 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
             : measurementDetail?.source === "mock" ? "모의 브리지 · 실측 아님"
               : measurementDetail?.source === "dt" ? "DT · 실측 아님" : "관측 출처 또는 측정 자료 없음"}
           available={mission?.status === "completed" && latestMeasurement?.status === "completed"
-            && samePlanMeasurement && measurementDetail?.complete === true}/>
+            && samePlanMeasurement && measurementDetail?.complete === true}/>}
         {diagnosis&&<><SquareObservedDiagram/><SquareReplayControls/></>}
         {samePlanMeasurement&&!measurementDetail?.complete&&<p className="shape-step-feedback" role="status">
           {measurementDetail?.source==="mock"?"모의 GetPose 회신":"GetPose 회신"} 좌표 5개가 모두 확인되지 않아 실측 기반 진단은 완료되지 않았습니다. 입력 좌표나 이전 측정값으로 대체하지 않습니다.
