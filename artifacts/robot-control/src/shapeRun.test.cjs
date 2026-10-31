@@ -416,7 +416,23 @@ for (const shape of ['사각형','삼각형','동그라미']) test(`${shape}: th
     assert.ok(last>1, 'The preview contains arc interiors');
     for (const point of predictedPath.slice(0,last+1)) assert.ok(Math.abs(Math.hypot(point.x-center.x,point.y-center.y)-radius)<1e-7);
   }
-  app.component('ShapeLearningPanel').onRun(); app.render(); app.until(()=>app.complete);
+  const runPanel=app.component('ShapeLearningPanel');
+  assert.equal(runPanel.inquiry.ready,true);
+  runPanel.onRun(); app.render();
+  assert.ok(app.pending.size,`prediction was not scheduled: ${JSON.stringify({
+    ready:app.inquiry.ready,status:app.component('ShapeLearningPanel').status,
+    prediction:app.inquiry.record?.prediction,draft:app.inquiry.draft,
+    executionSeq:app.component('ShapeLearningPanel').executionSeq,
+    notice:app.text.slice(-500),
+  })}`);
+  for(let frame=0;!app.complete&&frame<100;frame++) {
+    assert.ok(app.pending.size,`DT stopped before completion: ${JSON.stringify({
+      status:app.component('ShapeLearningPanel').status,pending:app.pending.size,complete:app.complete,
+      runs:app.inquiry.record?.runs,notice:app.text.slice(-700),
+    })}`);
+    app.flush();
+  }
+  assert.equal(app.complete,true,'DT must finish and return to the initial pose');
   assert.deepEqual(app.visual.studentPath.map(xyzr), predictedPath, 'Execution must preserve the learner prediction for comparison');
   assert.deepEqual(app.inquiry.record.prediction, prediction);
   assert.notDeepEqual(app.visual.studentPath.map(xyzr), app.visual.programmedPath.map(xyzr), 'A complete prediction does not rewrite the diagnostic or commanded path');
