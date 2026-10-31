@@ -94,12 +94,14 @@ async function main() {
       const button = view.getByRole("button", { name: label, exact: true });
       await button.waitFor({ state: "visible" });
       await button.evaluate(element => element.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" }));
+      console.log(`UI click: ${label}`);
       try {
         await button.click({ noWaitAfter: true });
       } catch (error) {
         await page.screenshot({ path: path.join(evidenceDir, `click-failure-${Date.now()}.png`) });
         throw error;
       }
+      console.log(`UI clicked: ${label}`);
     };
     const stage = async number => {
       await view.getByText(`단계 ${number} / 7`, { exact: false }).waitFor();
@@ -166,9 +168,11 @@ async function main() {
 
     async function requestMockAnalysis(expectedCount, expectedText) {
       const analysis = view.getByRole("region", { name: "실행자료 AI 분석" });
-      await analysis.scrollIntoViewIfNeeded();
+      await analysis.evaluate(element => element.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" }));
+      console.log("Analysis panel visible");
       await analysis.getByLabel("분석 방식").selectOption("gpt");
-      await analysis.getByRole("button", { name: "실행자료를 GPT에 보내 분석", exact: true }).click({ noWaitAfter: true });
+      console.log("Analysis mode selected");
+      await click("실행자료를 GPT에 보내 분석");
       const result = analysis.getByTestId("execution-ai-result");
       await result.waitFor();
       assert.match(await result.innerText(), /GPT 분석 미완료/);
@@ -229,8 +233,10 @@ async function main() {
     // and the P3 prediction before its independent DT run.
     await click("이전");
     await stage(2);
+    console.log("PASS retry returned to model stage");
     await view.getByLabel(/이 관계를 선택한 이유/)
       .fill("P3의 X=180+10×11=290 mm로 다시 계산했습니다. 11 cm×10 mm/cm=110 mm입니다.");
+    console.log("PASS retry model explanation changed through visible UI");
     await click("관계 저장");
     await click("다음 단계");
     await stage(3);
