@@ -22,6 +22,7 @@
 - [Git 제공자 인증](git-provider-auth.md) — 연결 메타데이터가 healthy여도 Git 인증 성공은 별도 확인; 일반 연결 카드가 Git 제공자 연결을 처리하지 못할 수 있다.
 - [AI 학습 피드백 경계](ai-feedback-boundaries.md) — 기존 판정 기반 제출 자동 힌트와 질문형 GPT를 구분; 정오 추측·첫 답 누설 없이 최초 예측·출처·실행 승인 보존.
 - [Vite 검사 fixture](vite-browser-fixtures.md) — 최적화된 CommonJS의 수동 동적 import는 default 전용일 수 있음; fixture 부트스트랩 실패와 앱 회귀를 구분.
+- [Playwright 영상 캡처](playwright-video-capture.md) — `recordVideo`는 Playwright 캐시의 FFmpeg 실행 파일을 요구할 수 있어 시스템 FFmpeg만으로는 시작되지 않을 수 있음.
 - [MG400 연결 대상 고정](mg400-fixed-target.md) — 로봇 IP는 192.168.1.6 고정; 이전 주소 무시, 수동 연결·실행 확인 유지.
 - [실장비 속도·설치 확인](hardware-speed-installation-policy.md) — 공통 1~20%·새 기본 5%; 적용 응답과 사람 확인을 구분하고 현장 범위를 자동 확대하지 않는다.
 - [실습 화면 배치 원칙](practice-layout-scope.md) — 과제·안내·기존 튜터에 동시 접근; 2-1도 동일한 튜터 제공, 화면 전환 중 연결·준비·기록·진행 상태 보존.
