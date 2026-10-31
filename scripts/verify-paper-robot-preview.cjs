@@ -7,10 +7,11 @@ const fixture=require('./verify-revision-journey.cjs').fixture
  .replace("const React=",`const Fiber=await import('@react-three/fiber');
  window.__paperFrames=[];let sampled=0;
  const signature=root=>{const out=[];root?.traverse(o=>{if(o.isMesh)out.push(o.matrixWorld.elements.map(v=>Math.round(v*10000)/10000));});return JSON.stringify(out);};
- const materials=root=>{const out=[];root?.traverse(o=>{if(o.isMesh){const m=Array.isArray(o.material)?o.material[0]:o.material;out.push({opacity:m.opacity,color:m.color?.getHexString()});}});return out;};
+ const materials=root=>{const out=[];root?.traverse(o=>{if(o.isMesh){for(const m of (Array.isArray(o.material)?o.material:[o.material]))out.push({opacity:m.opacity,color:m.color?.getHexString(),transparent:m.transparent});}});return out;};
+ const outlines=root=>{const out=[];root?.traverse(o=>{if(o.isLineSegments&&o.name==='paper-dt-ghost-outline'){const m=o.material;out.push({opacity:m.opacity,color:m.color?.getHexString(),transparent:m.transparent});}});return out;};
  Fiber.addAfterEffect(()=>{for(const root of Fiber._roots.values()){
    const scene=root.store.getState().scene,source=scene.getObjectByName('paper-robot-appearance');
-   if(source){const fixed=scene.getObjectByName('paper-current-position');window.__paperRobot={sourceVisible:source.visible,fixedVisible:fixed?.visible??false,source:signature(source),fixed:signature(fixed),sourceMaterials:materials(source),fixedMaterials:materials(fixed)};
+   if(source){const fixed=scene.getObjectByName('paper-current-position');window.__paperRobot={sourceVisible:source.visible,fixedVisible:fixed?.visible??false,source:signature(source),fixed:signature(fixed),sourceMaterials:materials(source),sourceOutlines:outlines(source),fixedMaterials:materials(fixed)};
     if(fixed?.visible&&source.visible&&performance.now()-sampled>80){sampled=performance.now();window.__paperFrames.push(window.__paperRobot);}}
  }});
  const React=`);
@@ -67,11 +68,21 @@ const fixture=require('./verify-revision-journey.cjs').fixture
    assert.ok(frames.length>8,'real intermediate preview motion is rendered');
    assert.equal(new Set(frames.map(f=>f.fixed)).size,1,'current position must not move during the preview');
    assert.equal(frames[0].fixed,before,'current reference is the exact last pose before starting');
-   assert.ok(new Set(frames.map(f=>f.source)).size>6,'grey preview really moves');
-   assert.ok(after.sourceMaterials.every(m=>m.opacity<=.32));
+   assert.ok(new Set(frames.map(f=>f.source)).size>6,'blue preview really moves');
+   assert.ok(after.sourceMaterials.length>10,'the complete robot body is inspected');
+   assert.ok(after.sourceMaterials.every(m=>m.transparent&&m.opacity>0&&m.opacity<=.42&&m.color==='bfdbfe'),
+     'every robot-body material is translucent pale blue');
+   assert.ok(after.sourceOutlines.length>10,'the complete robot outline is inspected');
+   assert.ok(after.sourceOutlines.every(m=>m.transparent&&m.color==='3b82f6'&&m.opacity===.78),
+     'every robot-body outline is visible blue');
+   assert.ok(frames.every(frame=>frame.sourceMaterials.length>10
+     &&frame.sourceMaterials.every(m=>m.transparent&&m.opacity>0&&m.opacity<=.42&&m.color==='bfdbfe')
+     &&frame.sourceOutlines.length>10
+     &&frame.sourceOutlines.every(m=>m.transparent&&m.color==='3b82f6'&&m.opacity===.78)),
+     'body tint and outline remain present at every sampled animated pose');
    assert.ok(after.fixedMaterials.some(m=>m.opacity===1));
-   assert.ok(after.sourceMaterials.every(m=>!m.color||m.color==='8b98a6'));
-   console.log(`VERIFIED advanced ${advanced2?2:1}: ${frames.length} motion samples, fixed pose and distinct materials`);
+   assert.ok(after.fixedMaterials.some(m=>m.color!=='bfdbfe'),'frozen current-pose reference keeps original colours');
+   console.log(`VERIFIED advanced ${advanced2?2:1}: ${frames.length} moving poses, pale-blue body, blue outline, frozen current pose`);
    await click('06 비교·해석');
    await page.getByRole('button',{name:'장면에서 P3 선택',exact:true}).click();
    await page.screenshot({path:path.join(shots,`advanced${advanced2?2:1}-result.png`),timeout:60000});
@@ -84,7 +95,7 @@ const fixture=require('./verify-revision-journey.cjs').fixture
    await page.waitForFunction(()=>window.__paperRobot?.sourceVisible&&!window.__paperRobot.fixedVisible&&window.__paperRobot.sourceMaterials.some(m=>m.opacity===1));
    if(!process.env.CI)await page.screenshot({path:path.join(shots,`advanced${advanced2?2:1}-exit-restored.png`),timeout:30000});
    assert.deepEqual(errors,[]);
-   console.log(`PASS advanced ${advanced2?2:1}: original colours; frozen current pose; ${frames.length} real grey movement frames; original materials on exit; display controls do not write or move.`);
+   console.log(`PASS advanced ${advanced2?2:1}: original current-pose colours; frozen reference; ${frames.length} blue-body/blue-outline movement frames; original materials on exit; display controls do not write or move.`);
    await context.close();
   }
  }finally{await browser.close();}
