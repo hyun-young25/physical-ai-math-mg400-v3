@@ -59,6 +59,7 @@ async function main() {
     });
 
     await page.goto(origin, { waitUntil: "domcontentloaded" });
+    await page.addStyleTag({ content: "html, body, * { scroll-behavior: auto !important; }" });
     await page.getByLabel("학생 아이디").fill(`demo-paper-flow-${Date.now()}`);
     await page.getByRole("button", { name: "학습 시작", exact: true }).click({ noWaitAfter: true });
     await page.locator(".learning-student-bar").waitFor();
@@ -91,8 +92,14 @@ async function main() {
     });
     const click = async label => {
       const button = view.getByRole("button", { name: label, exact: true });
-      await button.scrollIntoViewIfNeeded();
-      await button.click({ noWaitAfter: true });
+      await button.waitFor({ state: "visible" });
+      await button.evaluate(element => element.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" }));
+      try {
+        await button.click({ noWaitAfter: true });
+      } catch (error) {
+        await page.screenshot({ path: path.join(evidenceDir, `click-failure-${Date.now()}.png`) });
+        throw error;
+      }
     };
     const stage = async number => {
       await view.getByText(`단계 ${number} / 7`, { exact: false }).waitFor();
@@ -110,7 +117,7 @@ async function main() {
     await view.getByLabel("원점 X (mm)", { exact: true }).fill("180");
     await view.getByLabel("원점 Y (mm)", { exact: true }).fill("-60");
     await view.getByLabel("1 cm당 길이 (mm)", { exact: true }).fill("10");
-    await view.getByLabel("이 관계를 선택한 이유", { exact: true })
+    await view.getByLabel(/이 관계를 선택한 이유/)
       .fill("이름: 홍길동, P3의 X=180+10×11을 계산해 310 mm라고 예측했어요.");
     await click("관계 저장");
     await click("다음 단계");
@@ -197,7 +204,10 @@ async function main() {
     await shot("05-mock-feedback.png");
     console.log("PASS first mocked feedback displayed, saved, and request sanitized");
 
-    await view.getByRole("textbox", { name: /내가 생각하는 이유/ })
+    const causeInput = view.getByTestId("paper-diagnosis-visual")
+      .getByRole("textbox", { name: "차이가 생긴 이유", exact: true });
+    await causeInput.waitFor({ state: "visible" });
+    await causeInput
       .fill("P3의 X 계산에서 11 cm × 10 mm/cm를 110 mm로 계산해 원점 180 mm에 더해야 한다는 점을 다시 확인하겠습니다.");
     console.log("PASS student hypothesis entered through visible UI");
     await click("생각 저장");
@@ -219,7 +229,7 @@ async function main() {
     // and the P3 prediction before its independent DT run.
     await click("이전");
     await stage(2);
-    await view.getByLabel("이 관계를 선택한 이유", { exact: true })
+    await view.getByLabel(/이 관계를 선택한 이유/)
       .fill("P3의 X=180+10×11=290 mm로 다시 계산했습니다. 11 cm×10 mm/cm=110 mm입니다.");
     await click("관계 저장");
     await click("다음 단계");
