@@ -87,6 +87,15 @@ function mountLesson(shape = '삼각형', lessonIndex = 0, supportMode = 'guided
     './shapeLearning': domain,
     './learningFramework': framework,
     './curriculum': curriculum,
+    './revisionJourney': load('revisionJourney.ts', {
+      './paperCoordinateStudy': { frameTransformPoint: () => ({ x: 0, y: 0 }) },
+      './paperRectangleTask': { paperTaskTargets: () => [] },
+    }),
+    './LearningRevisionJourney': {
+      LearningRevisionJourney: 'LearningRevisionJourney',
+      RevisionEditingLayout: 'RevisionEditingLayout',
+    },
+    './ExecutionAiAnalysis': { ExecutionAiAnalysis: 'ExecutionAiAnalysis' },
     './shapeLessonSteps.css': {},
   });
   lesson = domain.getShapeLesson(shape, lessonIndex);

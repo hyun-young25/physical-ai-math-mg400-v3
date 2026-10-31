@@ -50,7 +50,7 @@ function mountArm() {
     useMemo(factory,deps){const index=cursor++,old=slots[index];if(!old||changed(old.deps,deps))slots[index]={value:factory(),deps};return slots[index].value;},
     useEffect:effect,useLayoutEffect:effect,
   };
-  const inquiry={ready:true,observed:false,checked:false,reviewed:false,draft:{},record:null,fields:[],interrupt(){},
+  const inquiry={ready:true,observed:false,checked:false,reviewed:false,draft:{},reviewDraft:{},record:null,fields:[],interrupt(){},
     begin(){
       if(!this.ready)return false;
       this.record ??= {id:'saved-prediction',prediction:{},runs:[],reflections:[]};
@@ -62,13 +62,17 @@ function mountArm() {
   const jsx=(type,props)=>({type,props});
   const {RobotArm}=load('RobotArm.tsx',{
     './PracticeProvider':{usePractice:()=>({hardware:!!props.hardwareConnected,snap:{busy:false,connection:'disconnected',setup:null},
-      cancelConfirmation(){},lockVirtual:()=>()=>{},session:{stop(){}},
+      cancelConfirmation(){},lockVirtual:()=>()=>{},session:{stop(){},getConnectionId:()=>null,
+        getSnapshot:()=>({setup:null,source:'virtual',measurement:null,busy:false})},
       runOps(){throw new Error('Unexpected physical command in virtual regression test');}})},
     './PracticeControls':{sourceLabel:source=>source==='mock'?'모의 통신 · 실장비 아님':'실측'},
+    './TaskStartPoint':{TaskStartPoint:'TaskStartPoint',moveVirtualTaskStart:()=>{}},
     './MeasurementFeedbackReview':{},'./MathInquiry':{useMathInquiry:()=>inquiry,MathInquiryPanel:'MathInquiryPanel'},
+    './squareContinuation':load('squareContinuation.ts'),
     './learningFramework':{LEARNING_STAGES:[],learningRecordContext:()=>({source:'dt'})},
     './ShapeLessonSteps':{ShapeLessonSteps:'ShapeLessonSteps'},
     './LessonCoursePath':{LessonCoursePath:'LessonCoursePath'},
+    './PaperCoordinateStudy':{PaperCoordinateStudy:'PaperCoordinateStudy'},
     './shapeLearning':shapeLearning,
     './measurementFeedback':{},'./shapeRun':helpers,react,'react/jsx-runtime':{jsx,jsxs:jsx,Fragment:'Fragment'},
     './learningEvidenceStorage':{...load('learningEvidenceStorage.ts'),downloadEvidence:(name,records)=>downloads.push({name,records:clone(records)})},
@@ -332,7 +336,7 @@ test('RobotArm routes every shape through the same panel and seven-stage compone
   assert.equal(app.hardwareCommands.length, 0); app.unmount();
 });
 
-for (const shape of ['사각형','삼각형','동그라미']) test(`${shape}: parent execution handler requires a saved prediction and blocks DT while hardware is connected`, () => {
+for (const shape of ['사각형','삼각형','동그라미']) test(`${shape}: saved prediction is required and hardware-connected execution never sends an unapproved physical command`, () => {
   const app = mountArm(); app.choose(shape);
   app.updateInquiry({ ready: false });
   app.component('ShapeLearningPanel').onRun(); app.render();
@@ -340,8 +344,13 @@ for (const shape of ['사각형','삼각형','동그라미']) test(`${shape}: pa
   app.updateInquiry({ ready: true }); app.saveCompletePrediction();
   app.update({ hardwareConnected: true, hardwareHomed: true });
   app.component('ShapeLearningPanel').onRun(); app.render();
-  assert.equal(app.pending.size, 0); assert.equal(app.moves, 0);
-  assert.equal(app.hardwareCommands.length, 0); app.unmount();
+  if(shape==='사각형') {
+    assert.ok(app.pending.size>0,"square comparison may run the DT for the saved plan");
+    app.until(()=>app.complete);
+  } else {
+    assert.equal(app.pending.size, 0); assert.equal(app.moves, 0);
+  }
+  assert.equal(app.hardwareCommands.length, 0,"DT never dispatches hardware commands"); app.unmount();
 });
 
 for (const shape of ['사각형','삼각형','동그라미']) test(`${shape}: every required waypoint and relation must be saved before the real execution handler can start`, () => {
@@ -365,6 +374,10 @@ for (const shape of ['사각형','삼각형','동그라미']) test(`${shape}: ev
 const xyzr = point => ({x:point.x,y:point.y,z:point.z,r:point.r});
 for (const shape of ['사각형','삼각형','동그라미']) test(`${shape}: the 3D prediction exposes every entered waypoint and keeps the student's complete path after execution`, () => {
   const app = mountArm(); app.choose(shape);
+  if(shape==='사각형') {
+    app.component('ShapeLearningPanel').onSupportModeChange('challenge');
+    app.render();
+  }
   const lesson = app.component('ShapeLearningPanel').lesson, start = lesson.sequence[0].coords;
   app.component('ShapeLearningPanel').onStageChange(3); app.render();
   assert.deepEqual(app.visual.studentPoints.map(xyzr), [start], 'Only the given P1 may be shown before input');
@@ -379,7 +392,7 @@ for (const shape of ['사각형','삼각형','동그라미']) test(`${shape}: th
     prediction[row.yKey] = String(Number(prediction[row.yKey])-index-2);
     return {x:Number(prediction[row.xKey]),y:Number(prediction[row.yKey]),z:row.z,r:row.r};
   });
-  app.updateInquiry({ready:true,draft:{},record:{id:'complete-own-prediction',prediction,runs:[],reflections:[]}});
+  app.updateInquiry({ready:true,draft:shape==='사각형'?{...prediction}:{},record:{id:'complete-own-prediction',prediction,runs:[],reflections:[]}});
   assert.deepEqual(app.visual.studentPoints.map(xyzr), [start,...predictedPoints], 'Incorrect predictions must still display exactly as entered');
   const predictedPath = clone(app.visual.studentPath).map(xyzr);
   assert.deepEqual(predictedPath[0], start);
@@ -410,27 +423,14 @@ for (const shape of ['사각형','삼각형','동그라미']) test(`${shape}: th
   app.unmount();
 });
 
-test('the square diagnosis task requires coordinate repair and a fresh completed run before advancement', () => {
+test('the advanced paper route is separate from the legacy sixth square lesson and starts no motion', () => {
   const app = mountArm();
   app.component('ShapeLearningPanel').onLessonChange(5); app.render();
-  assert.equal(app.component('ShapeLearningPanel').lessonIndex, 5);
-  app.start(); app.until(() => app.complete);
-  assert.equal(app.component('ShapeLearningPanel').completedShapeRun, true);
-  assert.equal(sharedSteps(app).canAdvance, false, 'A closed but misshapen path is not a repaired target');
-  app.updateInquiry({ reviewed: true });
-  app.component('ShapeLearningPanel').onNewCondition(); app.render();
-  assert.equal(app.component('ShapeLearningPanel').lessonIndex, 5);
-  const lesson = app.component('ShapeLearningPanel').lesson;
-  app.component('ShapeLearningPanel').onEditCoord(2, 'x', lesson.targetSequence[2].coords.x); app.render();
-  assert.equal(sharedSteps(app).canAdvance, false, 'Repairing coordinates cannot reuse the old DT approval');
-  app.component('ShapeLearningPanel').onNewCondition(); app.render();
-  assert.equal(app.component('ShapeLearningPanel').lessonIndex, 5);
-  app.start(); app.until(() => app.complete);
-  assert.equal(sharedSteps(app).canAdvance, true);
-  app.component('ShapeLearningPanel').onNewCondition(); app.render();
-  assert.equal(app.component('ShapeLearningPanel').lessonIndex, 0);
-  assert.equal(sharedSteps(app).canAdvance, false);
-  assert.equal(JSON.parse(app.storage.get('physical-ai-shape-runs-v1')).length, 2);
+  assert.equal(nodes(app.tree).some(node=>node.type==='PaperCoordinateStudy'), true,
+    'the current sixth route is the advanced physical-paper study');
+  assert.equal(nodes(app.tree).some(node=>node.type?.name==='ShapeLearningPanel'), false);
+  assert.equal(app.pending.size, 0);
+  assert.equal(app.hardwareCommands.length, 0);
   app.unmount();
 });
 

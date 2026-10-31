@@ -18,7 +18,9 @@ const errors = [];
 const networkFailures = [];
 fs.mkdirSync(evidenceDir, { recursive: true });
 for (const file of fs.readdirSync(evidenceDir)) {
-  if (file.endsWith(".png") || file.endsWith(".json")) fs.rmSync(path.join(evidenceDir, file), { force: true });
+  if (file.endsWith(".png") || file.endsWith(".json") || file.endsWith(".webm")) {
+    fs.rmSync(path.join(evidenceDir, file), { force: true });
+  }
 }
 
 async function main() {
@@ -26,7 +28,11 @@ async function main() {
     executablePath: process.env.PLAYWRIGHT_CHROMIUM || "/repl/tools/bin/chromium",
     args: ["--no-sandbox", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
   });
-  const context = await browser.newContext({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1 });
+  const context = await browser.newContext({
+    viewport: { width: 1600, height: 900 },
+    deviceScaleFactor: 1,
+    recordVideo: { dir: evidenceDir, size: { width: 1600, height: 900 } },
+  });
   // Keep the real API for student entry and record sync. Stub only the paid GPT
   // endpoint so the visible UI is truthful about its fallback source.
   await context.route("**/api/learning/feedback", async route => {
@@ -47,6 +53,7 @@ async function main() {
   });
   try {
     const page = await context.newPage();
+    const recording = page.video();
     page.setDefaultTimeout(12_000);
     page.on("pageerror", error => errors.push(error.message));
     page.on("console", message => {
@@ -65,6 +72,7 @@ async function main() {
     await page.locator(".learning-student-bar").waitFor();
     assert.deepEqual(entryResponses, [200], "the real student-entry API must succeed");
     console.log("PASS real student entry");
+    await page.waitForTimeout(4_000);
     // Redact the synthetic test login from evidence screenshots only.
     await page.addStyleTag({ content: ".learning-student-bar > strong { filter: blur(5px); }" });
 
@@ -136,10 +144,12 @@ async function main() {
     }
     await click("예측 저장");
     await shot("03-student-prediction.png");
+    await page.waitForTimeout(4_000);
     await click("다음 단계");
     await stage(4);
     assert.match(await view.innerText(), /DT · 실측 아님|가상 DT/);
     await click("DT에서 확인");
+    await page.waitForTimeout(2_000);
     await page.waitForFunction(() => {
       const key = Object.keys(localStorage).find(value => value.endsWith("physical-ai-paper-coordinate-v1"));
       const rows = key ? JSON.parse(localStorage.getItem(key) || "[]") : [];
@@ -152,6 +162,7 @@ async function main() {
     await previewLabel.waitFor({ timeout: 15_000 });
     assert.match(await previewLabel.innerText(), /파란 고스트 · DT · 실측 아님/);
     await shot("04-blue-ghost-dt.png");
+    await page.waitForTimeout(5_000);
     console.log("PASS first DT run and blue ghost");
 
     await click("다음 단계");
@@ -206,6 +217,7 @@ async function main() {
     assert.equal(firstEnvelope.attempts, "[]");
     assert.equal((await records())[0].aiAnalyses.at(-1).provider, "rules");
     await shot("05-mock-feedback.png");
+    await page.waitForTimeout(5_000);
     console.log("PASS first mocked feedback displayed, saved, and request sanitized");
 
     const causeInput = view.getByTestId("paper-diagnosis-visual")
@@ -222,6 +234,7 @@ async function main() {
     await click("이유와 수정 기록");
     await view.getByTestId("paper-retry-note").waitFor();
     console.log("PASS revision reason saved and linked retry created");
+    await page.waitForTimeout(4_000);
     let all = await records();
     assert.equal(all.length, 2);
     const parentAfterReason = all[0], child = all[1];
@@ -245,6 +258,7 @@ async function main() {
     await click("다음 단계");
     await stage(4);
     await click("DT에서 확인");
+    await page.waitForTimeout(2_000);
     await page.waitForFunction(() => {
       const key = Object.keys(localStorage).find(value => value.endsWith("physical-ai-paper-coordinate-v1"));
       const rows = key ? JSON.parse(localStorage.getItem(key) || "[]") : [];
@@ -264,6 +278,7 @@ async function main() {
     assert.equal(all[1].diagnosis.pattern, "match");
     assert.match(all[1].transform.explanation, /290 mm/);
     await shot("06-rerun-match.png");
+    await page.waitForTimeout(4_000);
 
     const secondRequest = await requestMockAnalysis(2, secondMock);
     const secondAnswers = JSON.parse(secondRequest.answers);
@@ -281,6 +296,7 @@ async function main() {
     assert.match(secondBody, /이름: \[이름 제외\]/);
     assert.ok(secondBody.length > 3500, "follow-up history should exercise the long-history path");
     await shot("07-follow-up-history.png");
+    await page.waitForTimeout(5_000);
 
     const comparison = page.getByTestId("revision-scene-dock");
     await comparison.getByRole("button", { name: /4.*재실행 결과/ }).click({ noWaitAfter: true });
@@ -288,6 +304,7 @@ async function main() {
     assert.match(await comparison.innerText(), /첫 실행/);
     assert.match(await comparison.innerText(), /수정 후 실행/);
     await shot("08-linked-comparison.png");
+    await page.waitForTimeout(8_000);
     assert.deepEqual(errors, [], "no browser runtime errors");
     assert.deepEqual(networkFailures, [], "no failed browser requests");
     const report = {
@@ -306,6 +323,7 @@ async function main() {
     fs.writeFileSync(path.join(evidenceDir, "verification.json"), JSON.stringify(report, null, 2));
     console.log("PASS real student shell end-to-end:", JSON.stringify(report));
     await context.close();
+    console.log("Recorded browser video:", await recording.path());
   } finally {
     await browser.close();
   }

@@ -53,6 +53,7 @@ function mountLesson(options = {}) {
   });
   const { MathStartLesson } = load('MathStartLesson.tsx', {
     react, 'react/jsx-runtime': runtime, './MathInquiry': inquiry,
+    './TaskStartPoint': { TaskStartPoint: 'TaskStartPoint', moveVirtualTaskStart: () => {} },
     './LessonConceptHeader': { LessonConceptHeader: 'LessonConceptHeader' },
     './foundationMotion': load('foundationMotion.ts'),
     './FoundationMovePanel': load('FoundationMovePanel.tsx', {'react/jsx-runtime':runtime}),

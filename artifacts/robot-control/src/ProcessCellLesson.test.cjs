@@ -67,6 +67,7 @@ function mountLesson(level = 1, { compilationError, initialStorage = [] } = {}) 
   const { ProcessCellLesson } = load('ProcessCellLesson.tsx', {
     react, 'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' }, './curriculum': curriculum,
     './learningFramework': load('learningFramework.ts'), './learningEvidenceStorage': load('learningEvidenceStorage.ts'),
+    './TaskStartPoint': { TaskStartPoint: 'TaskStartPoint' },
     './processEvidence': load('processEvidence.ts'),
     './LearningJudgment': load('LearningJudgment.tsx', { 'react/jsx-runtime': { jsx, jsxs: jsx } }),
     './processCell': cell, './processLearning': learning, './processCell.css': {},
