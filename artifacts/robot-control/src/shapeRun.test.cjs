@@ -388,8 +388,13 @@ for (const shape of ['사각형','삼각형','동그라미']) test(`${shape}: th
   assert.deepEqual(app.visual.studentPath, [], 'A partial point must not generate a synthetic full path');
   const prediction = Object.fromEntries(Object.entries(shapeLearning.shapeLessonExpected(lesson)).map(([key,value])=>[key,String(value)]));
   const predictedPoints = lesson.pathPlan.rows.map((row,index)=>{
-    prediction[row.xKey] = String(Number(prediction[row.xKey])+index+1);
-    prediction[row.yKey] = String(Number(prediction[row.yKey])-index-2);
+    if(row.kind==="closure") {
+      prediction[row.xKey]=String(start.x);
+      prediction[row.yKey]=String(start.y);
+    } else {
+      prediction[row.xKey] = String(Number(prediction[row.xKey])+index+1);
+      prediction[row.yKey] = String(Number(prediction[row.yKey])-index-2);
+    }
     return {x:Number(prediction[row.xKey]),y:Number(prediction[row.yKey]),z:row.z,r:row.r};
   });
   app.updateInquiry({ready:true,draft:shape==='사각형'?{...prediction}:{},record:{id:'complete-own-prediction',prediction,runs:[],reflections:[]}});
@@ -435,7 +440,15 @@ for (const shape of ['사각형','삼각형','동그라미']) test(`${shape}: th
   assert.equal(app.complete,true,'DT must finish and return to the initial pose');
   assert.deepEqual(app.visual.studentPath.map(xyzr), predictedPath, 'Execution must preserve the learner prediction for comparison');
   assert.deepEqual(app.inquiry.record.prediction, prediction);
-  assert.notDeepEqual(app.visual.studentPath.map(xyzr), app.visual.programmedPath.map(xyzr), 'A complete prediction does not rewrite the diagnostic or commanded path');
+  if(shape==='사각형') {
+    assert.deepEqual(app.visual.studentPath.map(xyzr), app.visual.programmedPath.map(xyzr),
+      'The square DT command path must be the saved learner prediction');
+    assert.notDeepEqual(app.visual.studentPath.map(xyzr), app.visual.targetPath.map(xyzr),
+      'The wrong but closed square prediction must remain distinguishable from the target path');
+  } else {
+    assert.notDeepEqual(app.visual.studentPath.map(xyzr), app.visual.programmedPath.map(xyzr),
+      'A triangle/circle prediction must not overwrite the existing programmed command path');
+  }
   app.unmount();
 });
 
