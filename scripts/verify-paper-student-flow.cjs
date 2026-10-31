@@ -10,7 +10,8 @@ const { chromium } = require("playwright");
 const domain = process.env.REPLIT_DEV_DOMAIN;
 if (!domain) throw new Error("REPLIT_DEV_DOMAIN is required for the real student preview.");
 const origin = process.env.PAPER_STUDENT_FLOW_URL || `https://${domain}`;
-const evidenceDir = path.resolve(__dirname, "../generated-artifacts/paper-student-flow");
+const evidenceDir = path.resolve(process.env.PAPER_STUDENT_FLOW_EVIDENCE_DIR
+  || path.resolve(__dirname, "../generated-artifacts/paper-student-flow"));
 const firstMock = "모의 규칙 응답: P3의 예측 X 310 mm와 DT 좌표 290 mm가 다릅니다. 원점 180 mm와 종이 x=11 cm를 식에 어떻게 대입했나요?";
 const secondMock = "모의 규칙 응답: 이전 질문 뒤 P3의 X를 290 mm로 수정했습니다. 새 DT 결과와 고친 대입식을 비교해 보세요.";
 const requests = [];

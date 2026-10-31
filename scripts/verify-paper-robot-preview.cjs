@@ -10,9 +10,10 @@ const fixture=require('./verify-revision-journey.cjs').fixture
  const materials=root=>{const out=[];root?.traverse(o=>{if(o.isMesh){for(const m of (Array.isArray(o.material)?o.material:[o.material]))out.push({opacity:m.opacity,color:m.color?.getHexString(),transparent:m.transparent});}});return out;};
  const outlines=root=>{const out=[];root?.traverse(o=>{if(o.isLineSegments&&o.name==='paper-dt-ghost-outline'){const m=o.material;out.push({opacity:m.opacity,color:m.color?.getHexString(),transparent:m.transparent});}});return out;};
  Fiber.addAfterEffect(()=>{for(const root of Fiber._roots.values()){
+   if(performance.now()-sampled<80)continue;
    const scene=root.store.getState().scene,source=scene.getObjectByName('paper-robot-appearance');
-   if(source){const fixed=scene.getObjectByName('paper-current-position');window.__paperRobot={sourceVisible:source.visible,fixedVisible:fixed?.visible??false,source:signature(source),fixed:signature(fixed),sourceMaterials:materials(source),sourceOutlines:outlines(source),fixedMaterials:materials(fixed)};
-    if(fixed?.visible&&source.visible&&performance.now()-sampled>80){sampled=performance.now();window.__paperFrames.push(window.__paperRobot);}}
+   if(source){sampled=performance.now();const fixed=scene.getObjectByName('paper-current-position');window.__paperRobot={sourceVisible:source.visible,fixedVisible:fixed?.visible??false,source:signature(source),fixed:signature(fixed),sourceMaterials:materials(source),sourceOutlines:outlines(source),fixedMaterials:materials(fixed)};
+    if(fixed?.visible&&source.visible)window.__paperFrames.push(window.__paperRobot);}
  }});
  const React=`);
 
