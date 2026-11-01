@@ -1539,6 +1539,7 @@ export function RobotArm({
         cancelFrame: id => window.cancelAnimationFrame(id),
         setTimer: (callback, delayMs) => window.setTimeout(callback, delayMs),
         clearTimer: timer => window.clearTimeout(timer as number),
+        now: () => window.performance.now(),
       },
     });
     const abort = (reason?: string) => playback.cancel(reason);

@@ -16,6 +16,7 @@ class FakeScheduler {
     this.frames = new Map();
     this.timers = new Map();
     this.cancelledFrames = [];
+    this.clock = 0;
   }
   requestFrame(callback) {
     const id = ++this.nextId;
@@ -33,10 +34,12 @@ class FakeScheduler {
     return id;
   }
   clearTimer(id) { this.timers.delete(id); }
+  now() { return this.clock; }
   frame(now) {
     const [id, callback] = this.frames.entries().next().value ?? [];
     assert.ok(callback, "expected a queued animation frame");
     this.frames.delete(id);
+    this.clock = now;
     callback(now);
   }
   timeout() {
@@ -64,9 +67,9 @@ test("DT completes every waypoint and returns to its start", async () => {
     canReach: () => true, moveTo: value => visited.push(value.x), moveEnd: () => ended++,
     scheduler,
   });
-  scheduler.frame(0); scheduler.frame(350);
-  scheduler.frame(351); scheduler.frame(701);
-  scheduler.frame(702); scheduler.frame(1052);
+  scheduler.frame(350);
+  scheduler.frame(700);
+  scheduler.frame(1050);
   await run.promise;
   const reachedWaypoints = visited.filter(x => x === 10 || x === 20)
     .filter((value, index, values) => index === 0 || value !== values[index - 1]);
@@ -103,7 +106,7 @@ test("manual cancellation rejects and makes queued movement callbacks inert", as
     moveTo: value => visited.push(value.x), moveEnd: () => {}, scheduler,
   });
   const failed = assert.rejects(run.promise, /실행이 중단되었습니다/);
-  scheduler.frame(0);
+  scheduler.frame(350);
   run.cancel();
   const beforeLateFrame = [...visited];
   scheduler.fireLateFrame(500);

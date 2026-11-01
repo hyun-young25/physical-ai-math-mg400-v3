@@ -5,6 +5,7 @@ export type PaperDtFrameScheduler = {
   cancelFrame: (id: number) => void;
   setTimer: (callback: () => void, delayMs: number) => unknown;
   clearTimer: (timer: unknown) => void;
+  now: () => number;
 };
 
 export type PaperDtPlaybackOptions = {
@@ -75,6 +76,9 @@ export function startPaperDigitalTwinPlayback(options: PaperDtPlaybackOptions) {
   const schedule = () => {
     if (settled) return;
     try {
+      // Start each segment at scheduling time. If the next RAF is delayed by a
+      // low frame rate, that interval still counts toward motion progress.
+      if (segmentStart === null) segmentStart = scheduler.now();
       frameId = scheduler.requestFrame(tick);
       stallTimer = scheduler.setTimer(() => {
         fail(new Error(`DT 애니메이션이 ${frameStallTimeoutMs / 1000}초 동안 진행되지 않아 중단했습니다. 이 실행은 완료로 기록되지 않습니다.`));
@@ -97,7 +101,6 @@ export function startPaperDigitalTwinPlayback(options: PaperDtPlaybackOptions) {
       finish();
       return;
     }
-    if (segmentStart === null) segmentStart = now;
     const t = Math.min(1, Math.max(0, (now - segmentStart) / segmentDurationMs));
     const pose = {
       x: from.x + (target.x - from.x) * t,
@@ -116,7 +119,7 @@ export function startPaperDigitalTwinPlayback(options: PaperDtPlaybackOptions) {
         moveEnd();
         from = target;
         segmentIndex += 1;
-        segmentStart = null;
+        segmentStart = now;
         if (segmentIndex >= targets.length) {
           finish();
           return;
