@@ -22,10 +22,10 @@ const fixture=require('./verify-revision-journey.cjs').fixture
  .replace('</head>',`<style>html,body{height:100%;overflow:hidden}.journey-fixture{height:calc(100vh - 30px);box-sizing:border-box;overflow:hidden}.journey-robot{height:100%;position:relative;top:0;box-sizing:border-box}.curriculum-body{height:100%;overflow:hidden}</style></head>`)
  .replace("const React=",`const Fiber=await import('@react-three/fiber');
   window.__paperFrames=[];let sampled=0;
-  const meshCache=new WeakMap(),appearanceCache=new WeakMap();
+   const meshCache=new WeakMap();
   const meshes=root=>{if(!root)return[];let found=meshCache.get(root);if(!found){found=[];root.traverse(o=>{if(o.isMesh)found.push(o);});meshCache.set(root,found);}return found;};
   const signature=root=>{let hash=2166136261;for(const o of meshes(root)){const e=o.matrixWorld.elements;for(let i=0;i<16;i++)hash=Math.imul(hash^Math.round(e[i]*10000),16777619);}return(hash>>>0).toString(36);};
-  const appearance=root=>{if(!root)return{materials:[],outlines:[]};let found=appearanceCache.get(root);if(!found){const materialList=[],outlineList=[];root.traverse(o=>{if(o.isMesh){for(const m of(Array.isArray(o.material)?o.material:[o.material]))materialList.push({opacity:m.opacity,color:m.color?.getHexString(),transparent:m.transparent});}if(o.isLineSegments&&o.name==='paper-dt-ghost-outline'){const m=o.material;outlineList.push({opacity:m.opacity,color:m.color?.getHexString(),transparent:m.transparent});}});found={materials:materialList,outlines:outlineList};appearanceCache.set(root,found);}return found;};
+   const appearance=root=>{if(!root)return{materials:[],outlines:[]};const materialList=[],outlineList=[];root.traverse(o=>{if(o.isMesh){for(const m of(Array.isArray(o.material)?o.material:[o.material]))materialList.push({opacity:m.opacity,color:m.color?.getHexString(),transparent:m.transparent});}if(o.isLineSegments&&o.name==='paper-dt-ghost-outline'){const m=o.material;outlineList.push({opacity:m.opacity,color:m.color?.getHexString(),transparent:m.transparent});}});return{materials:materialList,outlines:outlineList};};
  Fiber.addAfterEffect(()=>{for(const root of Fiber._roots.values()){
     if(performance.now()-sampled<140)continue;
    const scene=root.store.getState().scene,source=scene.getObjectByName('paper-robot-appearance');
@@ -98,7 +98,10 @@ const fixture=require('./verify-revision-journey.cjs').fixture
     throw error;
    }
    await page.waitForTimeout(400);
-   const frames=await page.evaluate(()=>window.__paperFrames),after=await page.evaluate(()=>window.__paperRobot);
+    const frames=await page.evaluate(()=>window.__paperFrames),after=await page.evaluate(()=>window.__paperRobot);
+    const completedRun=await page.evaluate(()=>JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.endsWith('physical-ai-paper-coordinate-v1')))||'[]').at(-1)?.run);
+    assert.equal(completedRun?.status,'completed','DT run must reach an actual completed state');
+    assert.equal(completedRun?.observations?.length,4,'all four target observations must be saved');
    assert.ok(frames.length>8,'real intermediate preview motion is rendered');
    assert.equal(new Set(frames.map(f=>f.fixed)).size,1,'current position must not move during the preview');
    assert.equal(frames[0].fixed,before,'current reference is the exact last pose before starting');
@@ -118,7 +121,7 @@ const fixture=require('./verify-revision-journey.cjs').fixture
      'body tint and outline remain present at every sampled animated pose');
    assert.ok(after.fixedMaterials.some(m=>m.opacity===1));
    assert.ok(after.fixedMaterials.some(m=>m.color!=='bfdbfe'),'frozen current-pose reference keeps original colours');
-   console.log(`VERIFIED advanced ${advanced2?2:1}: ${frames.length} moving poses, pale-blue body, blue outline, frozen current pose`);
+    console.log(`VERIFIED advanced ${advanced2?2:1}: ${frames.length} moving poses, ${completedRun.observations.length} completed observations, status=${completedRun.status}, pale-blue body, blue outline, frozen current pose`);
    await click('06 비교·해석');
    await page.getByRole('button',{name:'장면에서 P3 선택',exact:true}).click();
    await page.screenshot({path:path.join(shots,`advanced${advanced2?2:1}-result.png`),timeout:60000});
