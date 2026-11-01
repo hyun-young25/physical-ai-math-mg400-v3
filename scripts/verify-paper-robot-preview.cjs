@@ -25,7 +25,8 @@ const fixture=require('./verify-revision-journey.cjs').fixture
   :['--enable-webgl','--ignore-gpu-blocklist']});
  const shots=process.env.DIAG_SHOTS||path.resolve(__dirname,'../diagnosis-qa/robot-preview');fs.mkdirSync(shots,{recursive:true});
  try{
-  for(const advanced2 of process.env.PREVIEW_LEVEL==='2'?[true]:[false,true]){
+  const levels=process.env.PREVIEW_LEVEL==='1'?[false]:process.env.PREVIEW_LEVEL==='2'?[true]:[false,true];
+  for(const advanced2 of levels){
    console.log(`START advanced ${advanced2?2:1}: current-pose and animated-preview verification`);
    const context=await browser.newContext({viewport:{width:1600,height:900}}),errors=[];
    await context.route('**/api/**',r=>r.fulfill({json:{}}));
