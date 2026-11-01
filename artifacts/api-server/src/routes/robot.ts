@@ -5,13 +5,13 @@
  * The API server maintains a single TCP connection to the robot
  * and proxies REST calls into Dashboard TCP commands.
  */
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Response } from "express";
 import { mg400 } from "../lib/mg400";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
-function replyCommandResult(res: Parameters<Parameters<IRouter["post"]>[1]>[1], response: { errorId: number; raw: string }): void {
+function replyCommandResult(res: Response, response: { errorId: number; raw: string }): void {
   if (response.errorId !== 0) {
     res.status(422).json({ ok: false, errorId: response.errorId, raw: response.raw });
     return;

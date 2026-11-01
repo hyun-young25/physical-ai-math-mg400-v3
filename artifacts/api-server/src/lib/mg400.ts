@@ -56,8 +56,10 @@ export class MG400Client {
     return new Promise((resolve, reject) => {
       const sock = new net.Socket();
       sock.setTimeout(5000);
+      let settled = false;
 
       sock.once("connect", () => {
+        settled = true;
         this.socket = sock;
         this._connected = true;
         logger.info({ ip, port }, "MG400 TCP connected");
@@ -65,36 +67,62 @@ export class MG400Client {
       });
 
       sock.on("data", (chunk: Buffer) => {
+        if (this.socket !== sock || !this._connected) return;
         this.responseBuffer += chunk.toString();
         while (this.responseBuffer.includes(";")) {
           const idx = this.responseBuffer.indexOf(";");
           const frame = this.responseBuffer.substring(0, idx + 1);
           this.responseBuffer = this.responseBuffer.substring(idx + 1);
-          const resolver = this.pendingResolvers.shift();
-          this.pendingRejectors.shift();
-          if (resolver) resolver(parseResponse(frame));
+          let response: MG400Response;
+          try {
+            response = parseMG400Response(frame);
+          } catch (error) {
+            this.failConnection(error instanceof Error ? error : new Error(String(error)), sock);
+            return;
+          }
+          const pending = this.pendingCommands[0];
+          if (!pending) {
+            logger.warn({ command: response.command }, "Ignoring unsolicited MG400 response");
+            continue;
+          }
+          if (response.command !== pending.command) {
+            this.failConnection(new Error(
+              `MG400 응답 명령이 요청과 다릅니다. 요청=${pending.command}, 응답=${response.command}`,
+            ), sock);
+            return;
+          }
+          this.pendingCommands.shift();
+          clearTimeout(pending.timer);
+          pending.resolve(response);
         }
       });
 
       sock.on("error", (err) => {
-        this._connected = false;
         logger.error({ err: err.message }, "MG400 socket error");
-        const rej = this.pendingRejectors.shift();
-        this.pendingResolvers.shift();
-        if (rej) rej(err);
-        reject(err);
+        if (!settled) {
+          settled = true;
+          reject(err);
+        }
+        this.failConnection(err, sock);
       });
 
       sock.on("close", () => {
-        this._connected = false;
-        this.socket = null;
-        this.responseBuffer = "";
         logger.info("MG400 socket closed");
+        const error = new Error("MG400 연결이 닫혔습니다.");
+        if (!settled) {
+          settled = true;
+          reject(error);
+        }
+        this.failConnection(error, sock, false);
       });
 
       sock.once("timeout", () => {
-        sock.destroy();
-        reject(new Error("MG400 connection timeout"));
+        const error = new Error("MG400 연결 시간 초과");
+        if (!settled) {
+          settled = true;
+          reject(error);
+        }
+        this.failConnection(error, sock);
       });
 
       sock.connect(port, ip);
@@ -103,12 +131,22 @@ export class MG400Client {
 
   /* ── Disconnect ─────────────────────────────────────────────────── */
   async disconnect(): Promise<void> {
-    this.socket?.destroy();
+    this.failConnection(new Error("MG400 연결을 종료했습니다."));
+  }
+
+  private failConnection(error: Error, expectedSocket?: net.Socket, destroy = true): void {
+    if (expectedSocket && this.socket && this.socket !== expectedSocket) return;
+    const socket = this.socket;
     this.socket = null;
     this._connected = false;
     this.responseBuffer = "";
-    this.pendingResolvers = [];
-    this.pendingRejectors = [];
+    const pending = this.pendingCommands;
+    this.pendingCommands = [];
+    for (const command of pending) {
+      clearTimeout(command.timer);
+      command.reject(error);
+    }
+    if (destroy && socket && !socket.destroyed) socket.destroy();
   }
 
   /* ── Raw command send ───────────────────────────────────────────── */
@@ -118,26 +156,22 @@ export class MG400Client {
     }
 
     return new Promise((resolve, reject) => {
+      const socket = this.socket;
+      if (!socket || !this._connected) {
+        reject(new Error("Not connected to MG400"));
+        return;
+      }
       const timer = setTimeout(() => {
-        const i = this.pendingRejectors.indexOf(reject);
-        if (i !== -1) {
-          this.pendingResolvers.splice(i, 1);
-          this.pendingRejectors.splice(i, 1);
-        }
-        reject(new Error(`MG400 command timeout: ${command}`));
+        this.failConnection(new Error(`MG400 command timeout: ${command}`), socket);
       }, timeoutMs);
 
-      this.pendingResolvers.push((r) => {
-        clearTimeout(timer);
-        resolve(r);
-      });
-      this.pendingRejectors.push((e) => {
-        clearTimeout(timer);
-        reject(e);
-      });
-
-      this.socket!.write(command + "\n");
-      logger.debug({ command }, "→ MG400");
+      this.pendingCommands.push({ command, resolve, reject, timer });
+      try {
+        socket.write(command + "\n");
+        logger.debug({ command }, "→ MG400");
+      } catch (error) {
+        this.failConnection(error instanceof Error ? error : new Error(String(error)), socket);
+      }
     });
   }
 
@@ -162,7 +196,9 @@ export class MG400Client {
 
   async getMode(): Promise<number> {
     const res = await this.send("RobotMode()");
-    return parseInt(res.values[0] ?? "0") || 0;
+    const [mode] = requireFiniteMG400Values(res, "RobotMode", 1);
+    if (!Number.isInteger(mode)) throw new Error("RobotMode 응답이 정수가 아닙니다.");
+    return mode;
   }
 
   /**
@@ -170,8 +206,8 @@ export class MG400Client {
    */
   async getAngle(): Promise<{ j1: number; j2: number; j3: number; j4: number }> {
     const res = await this.send("GetAngle()");
-    const [j1, j2, j3, j4] = res.values.map(Number);
-    return { j1: j1 ?? 0, j2: j2 ?? 0, j3: j3 ?? 0, j4: j4 ?? 0 };
+    const [j1, j2, j3, j4] = requireFiniteMG400Values(res, "GetAngle", 4);
+    return { j1, j2, j3, j4 };
   }
 
   /**
@@ -179,8 +215,8 @@ export class MG400Client {
    */
   async getPose(): Promise<{ x: number; y: number; z: number; rx: number; ry: number; rz: number }> {
     const res = await this.send("GetPose()");
-    const [x, y, z, rx, ry, rz] = res.values.map(Number);
-    return { x: x ?? 0, y: y ?? 0, z: z ?? 0, rx: rx ?? 0, ry: ry ?? 0, rz: rz ?? 0 };
+    const [x, y, z, rx, ry, rz] = requireFiniteMG400Values(res, "GetPose", 6);
+    return { x, y, z, rx, ry, rz };
   }
 
   /**
