@@ -2,7 +2,7 @@ const test=require("node:test"),assert=require("node:assert/strict"),fs=require(
 const exports_={};new Function("exports",ts.transpileModule(fs.readFileSync(__dirname+"/learningAiContext.ts","utf8"),{
   compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS},
 }).outputText)(exports_);
-const {makeFeedbackContext,numericFeedbackContext,feedbackVersion,localFeedback,sanitizeFeedbackContext,feedbackHistoryEnvelope}=exports_;
+const {makeFeedbackContext,numericFeedbackContext,feedbackVersion,localFeedback,sanitizeFeedbackContext,feedbackHistoryEnvelope,squareMeasurementLinkedToMission}=exports_;
 const condition={id:"height-practice",prompt:"현재 높이 20, 목표 높이 60",support:"guided"};
 const original={conditionKey:JSON.stringify(condition),prediction:{z:"60"},reason:"최초 풀이",runs:[],answerReviews:[],explanationReviews:[]};
 const input=(patch={})=>({task:"foundation",condition,fields:[{key:"z",label:"변화량",unit:"mm"}],
@@ -94,4 +94,58 @@ test("unsaved answer and explanation edits are current context, not a new verdic
   assert.match(c.judgment,/미확정/);assert.doesNotMatch(c.judgment,/correct/);
   assert.equal(JSON.parse(c.initialPrediction).answers.z,original.prediction.z);
   assert.deepEqual(record,original);
+});
+function squareFeedbackContext(runs){
+  const squareCondition={id:"square-lesson",support:"guided"};
+  const record={id:"square-attempt",task:"square",conditionKey:JSON.stringify(squareCondition),condition:squareCondition,
+    fields:[{key:"p1",label:"P1 X",unit:"mm"}],prediction:{p1:"120"},reason:"처음 예측한 풀이",
+    submittedAt:"2026-11-01T10:00:00.000Z",runs,reflections:[],answerReviews:[],explanationReviews:[]};
+  return makeFeedbackContext({task:"square",condition:squareCondition,fields:record.fields,answers:record.prediction,
+    reason:record.reason,record,history:[record]});
+}
+const squareDtRun=(id,planKey)=>({id,action:"mission",status:"completed",
+  startedAt:"2026-11-01T10:00:00.000Z",endedAt:"2026-11-01T10:00:01.000Z",
+  expected:{p1:120},detail:{source:"dt",planKey}});
+const squareHardwareRun=(id,dtId,planKey,status="completed",actualX=121)=>({
+  id,action:"square-measurement",status,startedAt:"2026-11-01T10:01:00.000Z",endedAt:"2026-11-01T10:01:02.000Z",
+  detail:{runId:id,prevalidationRunId:dtId,planKey,source:"hardware",complete:status==="completed",
+    observedVertices:status==="completed"?[{label:"P1",x:actualX,y:230,z:50}]:[],
+    measurements:status==="completed"?[{label:"P1",target:{x:120,y:230,z:50,r:0},
+      actual:{x:actualX,y:229,z:50,r:0},source:"hardware",seq:44,measuredAt:1234,ageMs:12}]:[],
+    ...(status!=="completed"?{error:"제어기 회신 누락"}:{})},
+});
+test("square AI evidence uses the measurement linked to the latest same-plan DT; command and observation stay separate",()=>{
+  const oldDt=squareDtRun("dt-old","same-plan");
+  const oldMeasurement=squareHardwareRun("hardware-old","dt-old","same-plan","completed",999);
+  const currentDt=squareDtRun("dt-current","same-plan");
+  const currentMeasurement=squareHardwareRun("hardware-current","dt-current","same-plan","completed",121);
+  assert.equal(squareMeasurementLinkedToMission(currentDt,currentMeasurement),true);
+  const run=JSON.parse(squareFeedbackContext([oldDt,oldMeasurement,currentDt,currentMeasurement]).execution)[0];
+  assert.equal(run.runId,"hardware-current");
+  assert.equal(run.prevalidationRunId,"dt-current");
+  assert.equal(run.measurement.isPhysicalMeasurement,true);
+  assert.equal(run.commandCoordinates[0].target.x,120);
+  assert.equal(run.measurement.observations[0].pose.x,121);
+  assert.doesNotMatch(JSON.stringify(run),/hardware-old|999/);
+});
+test("a new same-plan DT without a new measurement cannot reuse the previous hardware result",()=>{
+  const oldDt=squareDtRun("dt-old","same-plan");
+  const oldMeasurement=squareHardwareRun("hardware-old","dt-old","same-plan","completed",999);
+  const currentDt=squareDtRun("dt-current","same-plan");
+  assert.equal(squareMeasurementLinkedToMission(currentDt,oldMeasurement),false);
+  const run=JSON.parse(squareFeedbackContext([oldDt,oldMeasurement,currentDt]).execution)[0];
+  assert.equal(run.runId,null);
+  assert.equal(run.measurement,null);
+  assert.equal(run.measurementStatus,"stale-or-unlinked");
+  assert.doesNotMatch(JSON.stringify(run),/hardware-old|999/);
+});
+test("an exact-run hardware failure remains unavailable and is never promoted to an observation",()=>{
+  const dt=squareDtRun("dt-current","same-plan");
+  const failed=squareHardwareRun("hardware-failed","dt-current","same-plan","unavailable");
+  const run=JSON.parse(squareFeedbackContext([dt,failed]).execution)[0];
+  assert.equal(run.runId,"hardware-failed");
+  assert.equal(run.measurement.status,"unavailable");
+  assert.equal(run.measurement.isPhysicalMeasurement,false);
+  assert.deepEqual(run.measurement.observations,[]);
+  assert.match(run.measurement.detail.error,/제어기 회신 누락/);
 });
