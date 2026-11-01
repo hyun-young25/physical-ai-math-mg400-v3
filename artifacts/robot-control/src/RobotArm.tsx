@@ -725,6 +725,10 @@ export function RobotArm({
   }, [status]);
   const measuredPathRef = useRef<Coords[]>([]);
   const hardwareRunTokenRef = useRef(0);
+  const activeSquareMeasurementRef = useRef<null|{
+    token:number;
+    save:(status:"unavailable"|"stopped",summary:string,error?:string)=>void;
+  }>(null);
   const makeBaseSeq = (shape: ShapeType, mode: "MoveJ"|"MoveL") =>
     getShapeLesson(shape, shapeLessonIndex, undefined, undefined, mode).sequence;
   const [editableSeq, setEditableSeq] = useState<SeqStep[]>(() => makeBaseSeq("사각형", "MoveL"));
@@ -951,6 +955,8 @@ export function RobotArm({
 
   useLayoutEffect(() => {
     if (hardwareConnected || runKindRef.current !== "hardware" || continuationRef.current) return;
+    activeSquareMeasurementRef.current?.save("unavailable","실장비 연결이 끊겨 측정을 중단했습니다.","실장비 연결이 끊겨 측정을 중단했습니다.");
+    activeSquareMeasurementRef.current=null;
     hardwareRunTokenRef.current += 1;
     onHardwareStop();
     setStatus("idle");
@@ -1293,10 +1299,12 @@ export function RobotArm({
     }):()=>{};
     const attempt = attemptCount + 1;
     const results: WaypointMeasurement[] = [];
-    const runStartedAt=new Date().toISOString();
+    const trialId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${attempt}`;
+    let runStartedAt=new Date().toISOString();
+    let prevalidationRunId:string|null=null;
     let src = practice.session.getSnapshot().source === "mock" ? "mock" as const : "hardware" as const;
     let stepStart = performance.now();
-    const saveMeasurementRun=(status:"completed"|"unavailable"|"stopped",summary:string)=>{
+    const saveMeasurementRun=(status:"completed"|"unavailable"|"stopped",summary:string,error?:string)=>{
       const sequenceOrder=["P1","P2","P3","P4","P1"];
       const valid=results.length===5&&results.every((row,index)=>row.source===src
         &&Number.isFinite(row.actual.x)&&Number.isFinite(row.actual.y)&&Number.isFinite(row.actual.z)
@@ -1305,14 +1313,16 @@ export function RobotArm({
       const observedVertices:SquareObservedVertex[]|undefined=valid
         ?results.map((row,index)=>({...row.actual,label:sequenceOrder[index]})):undefined;
       inquiry.recordExecution(inquiry.record!,{
-        action:"square-measurement",status,startedAt:runStartedAt,endedAt:new Date().toISOString(),summary,
-        detail:{source:src,planKey:approvedKey,complete:status==="completed"&&valid,
+        id:trialId,action:"square-measurement",status,startedAt:runStartedAt,endedAt:new Date().toISOString(),summary,
+        detail:{runId:trialId,prevalidationRunId,source:src,planKey:approvedKey,complete:status==="completed"&&valid,
+          ...(error?{error}:{}),
           measurementContract:"bridge controller-reported TCP (MG400 port 30004 feedback); not pen contact or paper drawing",
           observedVertices,measurements:results.map(row=>({label:row.label,target:row.target,actual:row.actual,
             source:row.source,seq:row.seq,measuredAt:row.measuredAt,ageMs:row.ageMs,distanceError:row.distanceError}))},
       });
       return valid;
     };
+    activeSquareMeasurementRef.current={token,save:(status,summary,error)=>{saveMeasurementRun(status,summary,error);}};
     try {
       const done = await practice.runOps(ops, continuous
         ? `사각형 연속 실행: 학생의 ${squareCorrect?"예측 경로":"오답 가능성이 있는 예측 경로"}를 DT에서 완주·닫힘·복귀 확인한 뒤, 같은 계획을 실제 장비에서 1회 실행합니다. 오답이면 목표와 다른 도형이 그려질 수 있습니다. DT 중 물리 명령은 없으며 연결·준비·서보·작업 범위와 사람의 최종 확인을 통과해야 합니다.`
@@ -1336,6 +1346,14 @@ export function RobotArm({
           pending.beginHardware();
         } else if(!squareApprovalRef.current.approved||squareApprovalRef.current.key!==approvedKey
           ||hardwareRunTokenRef.current!==token)throw new Error("확인 중 답안이나 실행 계획이 변경되었습니다. 새 입력으로 DT 실행·비교를 다시 완료하세요.");
+        const currentRecord=inquiry.getCurrentRecord();
+        const prevalidation=currentRecord?.runs.filter(run=>run.action==="mission").at(-1);
+        const prevalidationDetail=prevalidation?.detail&&typeof prevalidation.detail==="object"
+          ?prevalidation.detail as Record<string,unknown>:{};
+        if(!prevalidation?.id||prevalidation.status!=="completed"||prevalidationDetail.planKey!==approvedKey)
+          throw new Error("이번 실제 실행에 연결할 최신 DT 검증 기록이 없습니다. 같은 계획의 DT를 다시 완료한 뒤 승인하세요.");
+        prevalidationRunId=prevalidation.id;
+        runStartedAt=new Date().toISOString();
         stopAnim(); onMissionStart?.();
         setAttemptCount(attempt); setStatus("running"); setRunKind("hardware"); runKindRef.current = "hardware";
         setCurrentStep(plan[0].index); setMeasurements([]); setMeasuredPath([]); setMeasurementSource(null); setMockRun(false);
@@ -1352,13 +1370,13 @@ export function RobotArm({
       }:undefined);
       if (!done) {
         if(inquiry.record)saveMeasurementRun("stopped","사람이 시작 전 확인을 취소했습니다. 좌표 실측은 없습니다.");
+        if(activeSquareMeasurementRef.current?.token===token)activeSquareMeasurementRef.current=null;
         pending?.cancel("시작 전 물리 실행 확인을 취소했습니다.");
         if(pending)setContinuationReason(pending.reason);
         return;
       }
       if (hardwareRunTokenRef.current !== token) return;
       setMockRun(src === "mock");
-      const trialId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${attempt}`;
       if (src === "hardware") registerMeasurementReview(trialId, currentShapeLesson.id, "hardware", results);
       setMeasurementTrialId(src === "hardware" ? trialId : null);
       setMeasurements(results);
@@ -1402,11 +1420,13 @@ export function RobotArm({
       }
     } catch (error) {
       if (hardwareRunTokenRef.current !== token) return;
-      if(inquiry.record&&results.length)saveMeasurementRun("unavailable","실행이 끝나지 않았거나 유효한 최신 측정이 부족합니다. 이 자료로는 전체 도형을 진단하지 않습니다.");
+      const failure=error instanceof Error?error.message:"실장비 실행 중 오류가 발생했습니다.";
+      if(inquiry.getCurrentRecord())saveMeasurementRun("unavailable",
+        `실행이 완료되지 않았습니다. ${failure} 이 시도에는 확인된 최신 관측만 기록합니다.`,failure);
       setStatus("idle");
       setRunKind(null);
       runKindRef.current = null;
-      setRunError(error instanceof Error ? error.message : "실장비 실행 중 오류가 발생했습니다.");
+      setRunError(failure);
       // Keep only the measured prefix; no review/learning record is created for an incomplete run.
       setMockRun(src === "mock");
       if (results.length) { setMeasurements(results); setMeasurementSource(src === "hardware" ? "hardware" : "virtual"); }
@@ -1414,6 +1434,7 @@ export function RobotArm({
       pending?.cancel(error instanceof Error?error.message:"연속 실행 실패");
       if(pending)setContinuationReason(pending.reason);
     } finally {
+      if(activeSquareMeasurementRef.current?.token===token)activeSquareMeasurementRef.current=null;
       unsubscribe();
       unsubscribeStop();
       if(continuationRef.current===pending)continuationRef.current=null;
@@ -1473,6 +1494,8 @@ export function RobotArm({
 
   function stopHardwareSquare() {
     if(continuationRef.current){cancelContinuation("연속 실행을 중지했습니다. 실제 장비 정지 여부는 현장에서 확인하고 새로 승인하세요.");return;}
+    activeSquareMeasurementRef.current?.save("stopped","실장비 실행을 사용자가 중지했습니다. 이 시도는 완료로 처리하지 않습니다.","사용자가 실행을 중지했습니다.");
+    activeSquareMeasurementRef.current=null;
     hardwareRunTokenRef.current += 1;
     stopHardware();
     setStatus("idle");

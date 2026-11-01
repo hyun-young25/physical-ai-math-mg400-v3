@@ -105,6 +105,9 @@ test("hardware feedback request carries only the current run's controller-report
   assert.equal(execution[0].observations[0].kind,"controller-tcp");
   assert.deepEqual(execution[0].observations[0].pose,{x:43,y:24,z:12,r:0});
   assert.deepEqual(execution[0].comparisons[0].controllerReportedMm,{x:43,y:24,z:12,r:0});
-  assert.deepEqual(execution[0].comparisons[0].commandVsReportedMm,{dx:3,dy:5,distance:Math.sqrt(34)});
+  const delta=execution[0].comparisons[0].commandVsReportedMm;
+  assert.equal(delta.dx,3);
+  assert.equal(delta.dy,5);
+  assert.ok(Math.abs(delta.distance-Math.sqrt(34))<1e-12);
   assert(!context.execution.includes("run-old"));
 });

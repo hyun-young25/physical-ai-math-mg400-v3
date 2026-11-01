@@ -149,26 +149,35 @@ export function makeFeedbackContext(input:{
       const mission=record.runs.filter(run=>run.action==="mission").at(-1);
       const missionDetail=mission?.detail&&typeof mission.detail==="object"?mission.detail as Record<string,unknown>:{};
       const planKey=typeof missionDetail.planKey==="string"?missionDetail.planKey:null;
-      const measurement=planKey
-        ?record.runs.filter(run=>run.action==="square-measurement"&&run.detail&&typeof run.detail==="object"
-          &&(run.detail as Record<string,unknown>).planKey===planKey).at(-1)
-        :undefined;
-      const measurementDetail=measurement?.detail&&typeof measurement.detail==="object"
-        ?measurement.detail as Record<string,unknown>:{};
+       const candidate=record.runs.filter(run=>run.action==="square-measurement").at(-1);
+       const candidateDetail=candidate?.detail&&typeof candidate.detail==="object"
+         ?candidate.detail as Record<string,unknown>:{};
+       const linked=!!mission?.id&&!!candidate?.id&&candidateDetail.planKey===planKey
+         &&candidateDetail.prevalidationRunId===mission.id;
+       const measurement=linked?candidate:undefined;
+       const measurementDetail=linked?candidateDetail:{};
+       const rows=Array.isArray(measurementDetail.measurements)
+         ?measurementDetail.measurements.filter((row):row is Record<string,unknown>=>!!row&&typeof row==="object")
+         :[];
       if(!mission)return [];
       return [{
-        task:"square",recordId:record.id,runId:String(record.runs.length),planKey,
+         task:"square",recordId:record.id,runId:measurement?.id??null,prevalidationRunId:mission.id??null,planKey,
         taskStatus:mission.status,taskStartedAt:mission.startedAt,taskEndedAt:mission.endedAt,
-        taskSummary:mission.summary,commandCoordinates:mission.expected??{},
+         taskSummary:mission.summary,dtExpectedCoordinates:mission.expected??null,
+         commandCoordinates:linked?rows.map(row=>({point:row.label,target:row.target})):null,
         commandDetail:missionDetail,
         measurement:measurement?{
-          status:measurement.status,source:measurementDetail.source??"unknown",
+           runId:measurement.id,prevalidationRunId:measurementDetail.prevalidationRunId,
+           status:measurement.status,source:measurementDetail.source??"unknown",
           complete:measurementDetail.complete===true,startedAt:measurement.startedAt,endedAt:measurement.endedAt,
           observedVertices:measurementDetail.observedVertices??null,detail:measurementDetail,
+           commands:rows.map(row=>({point:row.label,target:row.target})),
+           observations:rows.map(row=>({point:row.label,source:row.source,seq:row.seq,
+             measuredAt:row.measuredAt,ageMs:row.ageMs,pose:row.actual})),
           isPhysicalMeasurement:measurementDetail.source==="hardware"&&measurement.status==="completed"&&measurementDetail.complete===true,
-        }:null,
-        // For a square, missing a matching measurement stays explicit; commands are not observations.
-        measurementStatus:measurement?"same-plan-recorded":"missing",
+         }:null,
+         // A same-plan result is still stale unless it is linked to this exact DT prevalidation run.
+         measurementStatus:measurement?"same-plan-prevalidation-linked":candidate?"stale-or-unlinked":"missing",
       }];
     })() : record?.runs.slice(-4).map(r=>({
       action:r.action,id:`${r.action}:${r.startedAt}`,status:r.status,startedAt:r.startedAt,endedAt:r.endedAt,summary:r.summary,

@@ -59,7 +59,9 @@ export class MG400Client {
       let settled = false;
 
       sock.once("connect", () => {
+        if (settled) return;
         settled = true;
+        sock.setTimeout(0);
         this.socket = sock;
         this._connected = true;
         logger.info({ ip, port }, "MG400 TCP connected");

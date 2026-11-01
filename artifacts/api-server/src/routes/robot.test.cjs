@@ -69,3 +69,18 @@ test("successful controller command acknowledgements remain successful", async (
   assert.equal(res.code, 200);
   assert.deepEqual(res.body, { ok: true, errorId: 0 });
 });
+
+test("a missing pose observation is returned as unavailable, never as a zero pose", async () => {
+  const router = loadRoute({
+    isConnected: () => true,
+    getAngle: async () => ({ j1: 1, j2: 2, j3: 3, j4: 4 }),
+    getPose: async () => { throw new Error("GetPose 응답 측정값이 6개가 아닙니다."); },
+  });
+  const handler = router.stack.find(entry => entry.route.path === "/robot/pose").route.stack[0].handle;
+  const res = { code: 200, status(code) { this.code = code; return this; }, json(value) { this.body = value; return this; } };
+  await handler({ log: { warn() {} } }, res);
+  assert.equal(res.code, 503);
+  assert.equal(res.body.ok, undefined);
+  assert.match(res.body.error, /측정값이 6개가 아닙니다/);
+  assert.equal(res.body.x, undefined);
+});

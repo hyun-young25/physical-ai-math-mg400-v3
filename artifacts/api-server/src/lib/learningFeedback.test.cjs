@@ -177,6 +177,36 @@ test("actual model request redacts identifiers but retains paper math and displa
   assert.equal(history[0].revisionReason,"원점 좌표를 식에 다시 반영");
   assert.equal(history[0].run.source,"dt");
 });
+test("the model payload preserves the current hardware observation separately from its command",async()=>{
+  let body;
+  const hardware=context({task:"paper-coordinate",trigger:"hint",
+    condition:JSON.stringify({recordId:"attempt-current",runId:"hardware-run-current",source:"hardware",
+      targetPaperCm:[{name:"D",xCm:2,yCm:3}],units:{paper:"cm",robot:"mm"}}),
+    answers:JSON.stringify({transform:{explanation:"X=원점X+10×x"},revisionReason:"축 식을 다시 확인"}),
+    reason:"학생 설명: 축 방향을 다시 검토함",
+    history:JSON.stringify([{recordId:"attempt-before",runId:"hardware-run-before",
+      previouslyDisplayedFeedback:[{text:"이전 시도의 질문"}],revisionReason:"이전 수정 이유",
+      run:{source:"hardware",status:"completed",observations:[{pose:{x:999,y:888}}]}}]),
+    execution:JSON.stringify([{recordId:"attempt-current",runId:"hardware-run-current",planHash:"plan-current",
+      source:"hardware",status:"completed",commands:[{point:"D",pose:{x:120,y:230,z:50,r:0}}],
+      observations:[{point:"D",kind:"controller-tcp",source:"hardware",seq:44,measuredAt:1234,ageMs:12,
+        command:{x:120,y:230,z:50,r:0},pose:{x:121,y:229,z:50,r:0}}],
+      comparisons:[{point:"D",commandVsReportedMm:{dx:1,dy:-1,distance:Math.sqrt(2)}}]}])});
+  const result=await generateFeedback(hardware,{key:"test-only",fetcher:async(_url,options)=>{
+    body=JSON.parse(options.body);
+    return new Response(JSON.stringify({choices:[{message:{content:"모의 API 응답"}}]}),{status:200});
+  }});
+  const sent=JSON.parse(body.messages[1].content);
+  assert.equal(result.provider,"openai");
+  assert.equal(result.providerAttempted,true);
+  assert.match(sent.execution,/"runId":"hardware-run-current"/);
+  assert.match(sent.execution,/"source":"hardware"/);
+  assert.match(sent.execution,/"x":121/);
+  assert.match(sent.execution,/commandVsReportedMm/);
+  assert.doesNotMatch(sent.execution,/999|888|hardware-run-before/);
+  assert.match(sent.history,/이전 시도의 질문/);
+  assert.match(sent.answers,/축 식을 다시 확인/);
+});
 test("public budget bounds concurrency, IP, visit and global calls; releases are idempotent",()=>{
   let time=100;const budget=createFeedbackBudget(()=>time),releases=[];
   for(let i=0;i<4;i++)releases.push(budget.acquire("ip","visit"));

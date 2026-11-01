@@ -11,7 +11,7 @@ import { LearningAiFeedback, useLearningAi } from "./LearningAiFeedback";
 import { makeFeedbackContext } from "./learningAiContext";
 
 export type InquiryField = { key:string; label:string; unit?:string; options?:{value:string;label:string}[] };
-export type Evidence = { action:string; status:"running"|"completed"|"unavailable"|"stopped"; startedAt:string;
+export type Evidence = { id?:string; action:string; status:"running"|"completed"|"unavailable"|"stopped"; startedAt:string;
   endedAt?:string; summary?:string; expected?:Record<string,number|string>; detail?:unknown };
 export type ExplanationEntry = { text:string; at:string; runCount:number; phase:"initial"|"revision"; answers:Record<string,string>; assessment:ExplanationAssessment };
 export type InquiryRecord = ReturnType<typeof learningRecordContext> & {
@@ -103,8 +103,9 @@ export function useMathInquiry(task:string, condition:unknown, fields:InquiryFie
   const [openHints,setOpenHints]=useState<string[]>([]);
   const [storageFailed,setStorageFailed]=useState(false);
   const ref=useRef(record);ref.current=record;
-  const active=useRef<{id:string;index:number}|null>(null);
+  const active=useRef<{id:string;index:number;runId:string}|null>(null);
   const save=useCallback((next:InquiryRecord)=>{ref.current=next;setStorageFailed(!remember(next));setRecord(next);},[]);
+  const getCurrentRecord=useCallback(()=>ref.current,[]);
   const interrupt=useCallback(()=>{
     const token=active.current,r=ref.current;
     active.current=null;
@@ -170,8 +171,9 @@ export function useMathInquiry(task:string, condition:unknown, fields:InquiryFie
   const begin=useCallback((action:string)=>{
     const r=ref.current;if(!r)return false;
     interrupt();const current=ref.current!;
-    active.current={id:current.id,index:current.runs.length};
-    save({...current,runs:[...current.runs,{action,status:"running",startedAt:now()}]});return true;
+    const runId=globalThis.crypto?.randomUUID?.()??`${now()}-${current.runs.length}`;
+    active.current={id:current.id,index:current.runs.length,runId};
+    save({...current,runs:[...current.runs,{id:runId,action,status:"running",startedAt:now()}]});return true;
   },[interrupt,save]);
   const finish=useCallback((summary:string,expected:Record<string,number|string>,detail:unknown,status:"completed"|"unavailable"="completed")=>{
     const token=active.current,r=ref.current;if(!token||!r||r.id!==token.id)return;
@@ -280,7 +282,7 @@ export function useMathInquiry(task:string, condition:unknown, fields:InquiryFie
     if(task==="square"&&ref.current&&Object.entries(next).some(([key,value])=>value!==ref.current!.prediction[key]))setSquareReviewEdited(true);
     setReviewDraft(next);
   };
-  return {conditionKey,record,draft,setDraft:updateDraft,reason,setReason,reflection,setReflection,message,ready,observed,ai:recordedAi,requestAi,
+  return {conditionKey,record,getCurrentRecord,draft,setDraft:updateDraft,reason,setReason,reflection,setReflection,message,ready,observed,ai:recordedAi,requestAi,
     taskKind,detailedReflection,reflectionRequired:needsReflection,reflectionReady:!needsReflection||!!reflection.trim(),
     judgment,setJudgment,judgmentReady:judgmentComplete(judgment,detailedReflection),observation,setObservation,saveObservation,
     checked,comparisonAvailable,reviewDraft,setReviewDraft:updateReviewDraft,reviewAnswers,openHints,showHint,feedbackEvent,storageFailed,
