@@ -101,7 +101,9 @@ export function startPaperDigitalTwinPlayback(options: PaperDtPlaybackOptions) {
       finish();
       return;
     }
-    const t = Math.min(1, Math.max(0, (now - segmentStart) / segmentDurationMs));
+    const startedAt = segmentStart ?? scheduler.now();
+    segmentStart = startedAt;
+    const t = Math.min(1, Math.max(0, (now - startedAt) / segmentDurationMs));
     const pose = {
       x: from.x + (target.x - from.x) * t,
       y: from.y + (target.y - from.y) * t,
