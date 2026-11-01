@@ -14,6 +14,7 @@ import { shapeLessonAnswerMatches, shapeLessonFeedback, shapeLessonStages, type 
 import { assessSquare, squareTutorJudgment } from "./squareLearningFlow";
 import { LearningAiFeedback } from "./LearningAiFeedback";
 import { LEARNING_STAGES } from "./learningFramework";
+import { squareMeasurementLinkedToMission } from "./learningAiContext";
 import "./shapeLessonSteps.css";
 import { LearningJudgmentFields, sameJudgment } from "./LearningJudgment";
 import { diagnoseSquare, priorSquareDiagnoses, squareFeedbackPlan, squareMismatchName, squarePlannedVertices, squareCondition, type SquareObservedVertex, type SquareExecutionSource, type XY } from "./squareMismatchDiagnosis";
@@ -84,9 +85,7 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
   const measurementDetail=latestMeasurement?.detail as {runId?:string;prevalidationRunId?:string;source?:SquareExecutionSource;
     planKey?:string;complete?:boolean;observedVertices?:SquareObservedVertex[]}|undefined;
   const samePlanMeasurement=!!latestMeasurement&&!!measurementDetail
-    &&measurementDetail.planKey===missionDetail?.planKey
-    &&mission?.status==="completed"&&!!mission.id&&latestMeasurement.id===measurementDetail.runId
-    &&measurementDetail.prevalidationRunId===mission.id
+    &&mission?.status==="completed"&&squareMeasurementLinkedToMission(mission,latestMeasurement)
     &&(measurementDetail.source==="hardware"||measurementDetail.source==="mock");
   const diagnosisSource=samePlanMeasurement?measurementDetail?.source:"dt";
   const diagnosisVertices=samePlanMeasurement

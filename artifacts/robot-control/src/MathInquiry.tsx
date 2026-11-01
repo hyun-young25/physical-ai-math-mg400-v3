@@ -103,7 +103,7 @@ export function useMathInquiry(task:string, condition:unknown, fields:InquiryFie
   const [openHints,setOpenHints]=useState<string[]>([]);
   const [storageFailed,setStorageFailed]=useState(false);
   const ref=useRef(record);ref.current=record;
-  const active=useRef<{id:string;index:number;runId:string}|null>(null);
+  const active=useRef<{id:string;index:number}|null>(null);
   const save=useCallback((next:InquiryRecord)=>{ref.current=next;setStorageFailed(!remember(next));setRecord(next);},[]);
   const getCurrentRecord=useCallback(()=>ref.current,[]);
   const interrupt=useCallback(()=>{
@@ -172,7 +172,7 @@ export function useMathInquiry(task:string, condition:unknown, fields:InquiryFie
     const r=ref.current;if(!r)return false;
     interrupt();const current=ref.current!;
     const runId=globalThis.crypto?.randomUUID?.()??`${now()}-${current.runs.length}`;
-    active.current={id:current.id,index:current.runs.length,runId};
+    active.current={id:current.id,index:current.runs.length};
     save({...current,runs:[...current.runs,{id:runId,action,status:"running",startedAt:now()}]});return true;
   },[interrupt,save]);
   const finish=useCallback((summary:string,expected:Record<string,number|string>,detail:unknown,status:"completed"|"unavailable"="completed")=>{

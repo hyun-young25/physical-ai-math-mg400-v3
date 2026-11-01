@@ -56,6 +56,16 @@ const paperHistoryKeys=[
 const pickKeys=(row:Record<string,unknown>,keys:readonly string[]):Record<string,unknown>=>{
   return Object.fromEntries(keys.filter(key=>row[key]!==undefined).map(key=>[key,row[key]]));
 };
+export function squareMeasurementLinkedToMission(
+  mission:{id?:string;detail?:unknown}|null|undefined,
+  measurement:{id?:string;detail?:unknown}|null|undefined,
+) {
+  if(!mission?.id||!measurement?.id)return false;
+  const missionDetail=mission.detail&&typeof mission.detail==="object"?mission.detail as Record<string,unknown>:{};
+  const measurementDetail=measurement.detail&&typeof measurement.detail==="object"?measurement.detail as Record<string,unknown>:{};
+  return typeof missionDetail.planKey==="string"&&measurementDetail.planKey===missionDetail.planKey
+    &&measurementDetail.runId===measurement.id&&measurementDetail.prevalidationRunId===mission.id;
+}
 function compactPaperHistoryAttempt(value:unknown) {
   if(!value||typeof value!=="object"||Array.isArray(value))return value;
   const row=value as Record<string,unknown>;
@@ -152,8 +162,7 @@ export function makeFeedbackContext(input:{
        const candidate=record.runs.filter(run=>run.action==="square-measurement").at(-1);
        const candidateDetail=candidate?.detail&&typeof candidate.detail==="object"
          ?candidate.detail as Record<string,unknown>:{};
-       const linked=!!mission?.id&&!!candidate?.id&&candidateDetail.planKey===planKey
-         &&candidateDetail.prevalidationRunId===mission.id;
+       const linked=squareMeasurementLinkedToMission(mission,candidate)&&candidateDetail.planKey===planKey;
        const measurement=linked?candidate:undefined;
        const measurementDetail=linked?candidateDetail:{};
        const rows=Array.isArray(measurementDetail.measurements)
