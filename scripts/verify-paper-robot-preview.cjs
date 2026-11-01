@@ -97,6 +97,7 @@ const fixture=require('./verify-revision-journey.cjs').fixture
    if(!process.env.CI)await page.screenshot({path:path.join(shots,`advanced${advanced2?2:1}-exit-restored.png`),timeout:30000});
    assert.deepEqual(errors,[]);
    console.log(`PASS advanced ${advanced2?2:1}: original current-pose colours; frozen reference; ${frames.length} blue-body/blue-outline movement frames; original materials on exit; display controls do not write or move.`);
+   await page.close();
    await context.close();
   }
  }finally{await browser.close();}

@@ -1,0 +1,101 @@
+{
+  "date": "2026-11-01",
+  "appSourceCommit": "a6d0ad2e47700a2559e667ea6c95039ec6891d1f",
+  "unitTests": {
+    "tests": 646,
+    "passed": 646,
+    "failed": 0
+  },
+  "typecheck": "passed",
+  "productionBuild": "passed",
+  "retryScenarios": [
+    "advanced1 DT",
+    "advanced2 rotated task using DT"
+  ],
+  "fullStudentWebgl": {
+    "sourceCommit": "a6d0ad2e47700a2559e667ea6c95039ec6891d1f",
+    "testEnvironment": "production-built UI; synthetic student, storage acknowledgements and AI response; no physical robot",
+    "syncedEventCount": 40,
+    "renderer": "webgl",
+    "runSource": "dt",
+    "physicalRobotCommands": 0,
+    "aiMode": "mock-rules",
+    "requestCount": 2,
+    "attempts": 2,
+    "diagnosisBefore": "calculation",
+    "diagnosisAfter": "match",
+    "previousDisplayedFeedbackLinked": true,
+    "screenshots": [
+      "01-paper-student-entry.png",
+      "03-student-prediction.png",
+      "04-blue-ghost-dt.png",
+      "05-mock-feedback.png",
+      "06-rerun-match.png",
+      "07-follow-up-history.png",
+      "08-linked-comparison.png"
+    ],
+    "errors": [],
+    "networkFailures": []
+  },
+  "trialScenario": {
+    "sourceCommit": "a6d0ad2e47700a2559e667ea6c95039ec6891d1f",
+    "services": "synthetic student entry and storage acknowledgement",
+    "feedback": "actual application trial rules",
+    "renderer": "svg",
+    "runSource": "dt",
+    "realRobotCommands": 0,
+    "externalAiRequests": 0,
+    "attempts": 2,
+    "diagnosisBefore": "calculation",
+    "diagnosisAfter": "match",
+    "originalPreserved": true,
+    "previousFeedbackLinked": true,
+    "syncedEventCount": 33,
+    "errors": []
+  },
+  "trialRecording": {
+    "sourceCommit": "a6d0ad2e47700a2559e667ea6c95039ec6891d1f",
+    "services": "synthetic student entry and storage acknowledgement",
+    "feedback": "actual application trial rules",
+    "renderer": "webgl",
+    "runSource": "dt",
+    "realRobotCommands": 0,
+    "externalAiRequests": 0,
+    "attempts": 2,
+    "diagnosisBefore": "calculation",
+    "diagnosisAfter": "match",
+    "originalPreserved": true,
+    "previousFeedbackLinked": true,
+    "syncedEventCount": 38,
+    "errors": []
+  },
+  "video": {
+    "path": "artifacts/robot-control/public/demos/mg400-learning-cycle-2026-11-01.mp4",
+    "durationSeconds": 157.96,
+    "width": 1920,
+    "height": 1080,
+    "codec": "h264",
+    "fps": 25,
+    "bytes": 6377977,
+    "sha256": "517563ccab610718534a7c2411b4235f0ba984e1ff39eb534a239d7343733511",
+    "fullDecode": "passed",
+    "visualReview": "all scene overview and full-resolution comparison frame checked"
+  },
+  "ghostVerification": {
+    "exitCode": 0,
+    "scenarios": [
+      {
+        "lesson": "advanced1",
+        "movingPoses": 23
+      },
+      {
+        "lesson": "advanced2",
+        "movingPoses": 20
+      }
+    ],
+    "originalFrozen": true,
+    "originalColorsPreserved": true,
+    "blueBodyAndOutline": true,
+    "restoredOnExit": true
+  }
+}

@@ -123,7 +123,6 @@ const apiCache={};function api(n){if(apiCache[n])return apiCache[n];const out=ap
   assert.match(await page.locator('.square-type-badge').innerText(),/예측과 실행 일치/);
    const retryRequest=await requestPaperAnalysis(2);
    const retryHistoryEnvelope=JSON.parse(retryRequest.history);
-   console.log('retry history envelope',JSON.stringify({keys:Object.keys(retryHistoryEnvelope),attemptsType:typeof retryHistoryEnvelope.attempts,attemptsLength:retryHistoryEnvelope.attempts?.length,attemptsPreview:retryHistoryEnvelope.attempts?.slice(0,240)}));
    const retryHistory=JSON.parse(retryHistoryEnvelope.attempts||'[]');
    assert.equal(retryHistory.length,1);
    assert.equal(retryHistory[0].recordId,first.id);
@@ -131,7 +130,7 @@ const apiCache={};function api(n){if(apiCache[n])return apiCache[n];const out=ap
    assert.equal(retryHistory[0].previouslyDisplayedFeedback[0].mode,'gpt');
    assert.equal(retryHistory[0].previouslyDisplayedFeedback[0].provider,'rules');
    assert.equal(retryHistory[0].revisionReason,'이메일: [이메일 제외]; 피드백을 보고 P3의 X만 수정합니다.');
-   assert.equal(retryHistory[0].studentHypothesis,'학번: [식별정보 제외]; P3의 X 대입값을 다시 확인했습니다.');
+   assert.equal(retryHistory[0].studentHypothesis,'[식별정보 제외]; P3의 X 대입값을 다시 확인했습니다.');
    assert.equal(retryHistory[0].run.source,'dt');assert.equal(retryHistory[0].run.status,'completed');
    assert.doesNotMatch(JSON.stringify(retryRequest),/qa-private@example.com|QA-12345/);
   const final=await records();assert.equal(final[1].diagnosis.pattern,'match');assert.deepEqual(final[0],afterRevision,'first attempt remains byte-for-byte unchanged after correction');
