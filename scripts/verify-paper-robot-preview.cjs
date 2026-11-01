@@ -64,7 +64,18 @@ const fixture=require('./verify-revision-journey.cjs').fixture
    await click('DT에서 확인');await page.getByTestId('paper-preview-label').waitFor();
    await page.waitForTimeout(1800);
    if(!process.env.CI)await page.screenshot({path:path.join(shots,`advanced${advanced2?2:1}-moving.png`),timeout:30000});
-   await page.waitForFunction(()=>JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.endsWith('physical-ai-paper-coordinate-v1')))||'[]').at(-1)?.run?.status==='completed');
+   try {
+    await page.waitForFunction(()=>JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.endsWith('physical-ai-paper-coordinate-v1')))||'[]').at(-1)?.run?.status==='completed');
+   } catch(error) {
+    console.error('DT completion diagnostics',await page.evaluate(()=>{
+     const records=JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.endsWith('physical-ai-paper-coordinate-v1')))||'[]');
+     const run=records.at(-1)?.run;
+     return {status:run?.status,error:run?.error,observations:run?.observations?.length,
+      recordStatus:records.at(-1)?.status,dtMoves:window.__dt?.length,
+      movingFrames:window.__paperFrames?.length,visibleText:document.body.innerText.slice(-1800)};
+    }));
+    throw error;
+   }
    await page.waitForTimeout(400);
    const frames=await page.evaluate(()=>window.__paperFrames),after=await page.evaluate(()=>window.__paperRobot);
    assert.ok(frames.length>8,'real intermediate preview motion is rendered');
