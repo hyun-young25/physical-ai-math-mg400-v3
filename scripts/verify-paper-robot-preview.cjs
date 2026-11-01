@@ -3,16 +3,33 @@ require('./isolated-ui-fixtures.cjs');
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const fixture=require('./verify-revision-journey.cjs').fixture
  .replace('window.requestAnimationFrame=cb=>raf(t=>cb(t*8));','')
+ .replace("const [coords,setCoords]=React.useState(shapeFK(joints.current));",
+  "const liveJoints=React.useRef(null);const liveCoords=React.useRef(null);const [coords,setCoords]=React.useState(shapeFK(joints.current));")
+ .replace("const move=j=>{joints.current={...j};const p=shapeFK(j);window.__dt.push(p);setCoords(p);};",
+  "const move=j=>{liveJoints.current={...j};liveCoords.current=shapeFK(j);window.__dt.push(liveCoords.current);};const moveEnd=()=>{const pose=liveJoints.current;if(!pose)return;joints.current={...pose};liveJoints.current=null;setCoords(shapeFK(pose));liveCoords.current=null;};")
+ .replace("const reset=()=>move({...SHAPE_HOME_JOINTS});",
+  "const reset=()=>{move({...SHAPE_HOME_JOINTS});moveEnd();};")
+ .replace("RobotScene,{joints:joints.current,coords,",
+  "RobotScene,{joints:joints.current,liveJointsRef:liveJoints,liveCoordsRef:liveCoords,coords,")
+ .replace("coords,onJointStart:noop,onJogStop:noop,onMoveEnd:noop,",
+  "coords,onJointStart:noop,onJogStop:noop,onMoveEnd:moveEnd,")
+ .replace("onMoveTo:(x,y,z,r)=>{const j=shapeIK(x,y,z,r,joints.current.j3);if(j)move(j);},",
+  "onMoveTo:(x,y,z,r)=>{const j=shapeIK(x,y,z,r,(liveJoints.current??joints.current).j3);if(j)move(j);},")
+ .replace("onGetJoints:()=>joints.current,",
+  "onGetJoints:()=>liveJoints.current??joints.current,")
+ .replace("onCapturePose:()=>({joints:{...joints.current},coords:shapeFK(joints.current)}),",
+  "onCapturePose:()=>{const pose=liveJoints.current??joints.current;return {joints:{...pose},coords:shapeFK(pose)};},")
  .replace('</head>',`<style>html,body{height:100%;overflow:hidden}.journey-fixture{height:calc(100vh - 30px);box-sizing:border-box;overflow:hidden}.journey-robot{height:100%;position:relative;top:0;box-sizing:border-box}.curriculum-body{height:100%;overflow:hidden}</style></head>`)
  .replace("const React=",`const Fiber=await import('@react-three/fiber');
- window.__paperFrames=[];let sampled=0;
- const signature=root=>{const out=[];root?.traverse(o=>{if(o.isMesh)out.push(o.matrixWorld.elements.map(v=>Math.round(v*10000)/10000));});return JSON.stringify(out);};
- const materials=root=>{const out=[];root?.traverse(o=>{if(o.isMesh){for(const m of (Array.isArray(o.material)?o.material:[o.material]))out.push({opacity:m.opacity,color:m.color?.getHexString(),transparent:m.transparent});}});return out;};
- const outlines=root=>{const out=[];root?.traverse(o=>{if(o.isLineSegments&&o.name==='paper-dt-ghost-outline'){const m=o.material;out.push({opacity:m.opacity,color:m.color?.getHexString(),transparent:m.transparent});}});return out;};
+  window.__paperFrames=[];let sampled=0;
+  const meshCache=new WeakMap(),appearanceCache=new WeakMap();
+  const meshes=root=>{if(!root)return[];let found=meshCache.get(root);if(!found){found=[];root.traverse(o=>{if(o.isMesh)found.push(o);});meshCache.set(root,found);}return found;};
+  const signature=root=>{let hash=2166136261;for(const o of meshes(root)){const e=o.matrixWorld.elements;for(let i=0;i<16;i++)hash=Math.imul(hash^Math.round(e[i]*10000),16777619);}return(hash>>>0).toString(36);};
+  const appearance=root=>{if(!root)return{materials:[],outlines:[]};let found=appearanceCache.get(root);if(!found){const materialList=[],outlineList=[];root.traverse(o=>{if(o.isMesh){for(const m of(Array.isArray(o.material)?o.material:[o.material]))materialList.push({opacity:m.opacity,color:m.color?.getHexString(),transparent:m.transparent});}if(o.isLineSegments&&o.name==='paper-dt-ghost-outline'){const m=o.material;outlineList.push({opacity:m.opacity,color:m.color?.getHexString(),transparent:m.transparent});}});found={materials:materialList,outlines:outlineList};appearanceCache.set(root,found);}return found;};
  Fiber.addAfterEffect(()=>{for(const root of Fiber._roots.values()){
-   if(performance.now()-sampled<80)continue;
+    if(performance.now()-sampled<140)continue;
    const scene=root.store.getState().scene,source=scene.getObjectByName('paper-robot-appearance');
-   if(source){sampled=performance.now();const fixed=scene.getObjectByName('paper-current-position');window.__paperRobot={sourceVisible:source.visible,fixedVisible:fixed?.visible??false,source:signature(source),fixed:signature(fixed),sourceMaterials:materials(source),sourceOutlines:outlines(source),fixedMaterials:materials(fixed)};
+    if(source){sampled=performance.now();const fixed=scene.getObjectByName('paper-current-position'),sourceAppearance=appearance(source),fixedAppearance=appearance(fixed);window.__paperRobot={sourceVisible:source.visible,fixedVisible:fixed?.visible??false,source:signature(source),fixed:signature(fixed),sourceMaterials:sourceAppearance.materials,sourceOutlines:sourceAppearance.outlines,fixedMaterials:fixedAppearance.materials};
     if(fixed?.visible&&source.visible)window.__paperFrames.push(window.__paperRobot);}
  }});
  const React=`);
@@ -26,6 +43,8 @@ const fixture=require('./verify-revision-journey.cjs').fixture
  const shots=process.env.DIAG_SHOTS||path.resolve(__dirname,'../diagnosis-qa/robot-preview');fs.mkdirSync(shots,{recursive:true});
  try{
   const levels=process.env.PREVIEW_LEVEL==='1'?[false]:process.env.PREVIEW_LEVEL==='2'?[true]:[false,true];
+ if(fixture.includes("setCoords(p);")||!fixture.includes("liveJointsRef:liveJoints,liveCoordsRef:liveCoords"))
+  throw new Error("Paper preview fixture did not adopt the production ref-based movement adapter.");
   for(const advanced2 of levels){
    console.log(`START advanced ${advanced2?2:1}: current-pose and animated-preview verification`);
    const context=await browser.newContext({viewport:{width:1600,height:900}}),errors=[];
