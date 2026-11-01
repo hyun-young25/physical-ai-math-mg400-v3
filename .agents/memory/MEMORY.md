@@ -25,6 +25,7 @@
 - [Playwright 영상 캡처](playwright-video-capture.md) — `recordVideo`는 Playwright 캐시의 FFmpeg 실행 파일을 요구할 수 있어 시스템 FFmpeg만으로는 시작되지 않을 수 있음.
 - [MG400 연결 대상 고정](mg400-fixed-target.md) — 로봇 IP는 192.168.1.6 고정; 이전 주소 무시, 수동 연결·실행 확인 유지.
 - [MG400 TCP 응답 상관관계](mg400-tcp-response-correlation.md) — 응답에 요청 ID가 없으므로 timeout 후 연결을 닫아 늦은 응답이 다음 명령에 붙지 않게 한다.
+- [사각형 실행 증거 연결](square-run-evidence-links.md) — 계획 키만 같아서는 부족하며 실측을 정확한 완료 DT 시도와 장비 실행 ID에 연결한다.
 - [실장비 속도·설치 확인](hardware-speed-installation-policy.md) — 공통 1~20%·새 기본 5%; 적용 응답과 사람 확인을 구분하고 현장 범위를 자동 확대하지 않는다.
 - [실습 화면 배치 원칙](practice-layout-scope.md) — 과제·안내·기존 튜터에 동시 접근; 2-1도 동일한 튜터 제공, 화면 전환 중 연결·준비·기록·진행 상태 보존.
 - [저프레임 종이 DT 종료](paper-dt-low-frame.md) — 프레임 지연은 이동 진행에 반영하고, 무프레임 정체는 실패로 종료하며 늦은 콜백은 무시한다.
