@@ -29,7 +29,7 @@ const fixture=require('./verify-revision-journey.cjs').fixture
  Fiber.addAfterEffect(()=>{for(const root of Fiber._roots.values()){
     if(performance.now()-sampled<140)continue;
    const scene=root.store.getState().scene,source=scene.getObjectByName('paper-robot-appearance');
-    if(source){sampled=performance.now();const fixed=scene.getObjectByName('paper-current-position'),sourceAppearance=appearance(source),fixedAppearance=appearance(fixed);window.__paperRobot={sourceVisible:source.visible,fixedVisible:fixed?.visible??false,source:signature(source),fixed:signature(fixed),sourceMaterials:sourceAppearance.materials,sourceOutlines:sourceAppearance.outlines,fixedMaterials:fixedAppearance.materials};
+     if(source){sampled=performance.now();const fixed=scene.getObjectByName('paper-current-position'),sourceAppearance=appearance(source),fixedAppearance=appearance(fixed),gl=root.store.getState().gl;window.__paperRobot={sourceVisible:source.visible,fixedVisible:fixed?.visible??false,source:signature(source),fixed:signature(fixed),sourceMaterials:sourceAppearance.materials,sourceOutlines:sourceAppearance.outlines,fixedMaterials:fixedAppearance.materials,renderBudget:{shadows:gl.shadowMap.enabled,pixelRatio:gl.getPixelRatio()}};
     if(fixed?.visible&&source.visible)window.__paperFrames.push(window.__paperRobot);}
  }});
  const React=`);
@@ -107,6 +107,8 @@ const fixture=require('./verify-revision-journey.cjs').fixture
    assert.ok(after.sourceOutlines.length>10,'the complete robot outline is inspected');
    assert.ok(after.sourceOutlines.every(m=>m.transparent&&m.color==='3b82f6'&&m.opacity===.78),
      'every robot-body outline is visible blue');
+    assert.ok(frames.some(frame=>!frame.renderBudget.shadows&&frame.renderBudget.pixelRatio<=.65),
+      'DT preview enables the low-cost render budget without dropping robot geometry checks');
    assert.ok(frames.every(frame=>frame.sourceMaterials.length>10
      &&frame.sourceMaterials.every(m=>m.transparent&&m.opacity>0&&m.opacity<=.42&&m.color==='bfdbfe')
      &&frame.sourceOutlines.length>10

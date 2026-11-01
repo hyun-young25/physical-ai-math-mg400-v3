@@ -3132,6 +3132,7 @@ function ThreeDScene({ suctionZoomOpen, onSuctionZoomClose, joints, liveJointsRe
   const revision=useActiveRevisionScene();
   const paper=usePaperScene();
   const comparisonShown=!!paper.data||!!comparison.visual&&comparison.enabled||!!revision.data&&!revision.data.running;
+  const paperDtRunning=!!paper.data?.running;
 
   const suctionSourceRef = useRef<THREE.Group|null>(null);
   const suctionSlotRef = useRef<HTMLDivElement|null>(null);
@@ -3229,9 +3230,9 @@ function ThreeDScene({ suctionZoomOpen, onSuctionZoomClose, joints, liveJointsRe
     <div style={{width:"100%",height:"100%", position:"relative",
       background:"linear-gradient(165deg,#f2f2f2 0%,#ebebeb 50%,#e2e2e2 100%)"}}
       onWheel={e => e.stopPropagation()}>
-      <Canvas key="robot-3d-v2" shadows frameloop="always"
+      <Canvas key="robot-3d-v2" shadows={!paperDtRunning} frameloop="always"
         gl={{ antialias:true, failIfMajorPerformanceCaveat:false, powerPreference:"high-performance", preserveDrawingBuffer:false }}
-        dpr={[1, 1.25]}
+        dpr={paperDtRunning ? 0.65 : [1, 1.25]}
         style={{ display:"block" }}>
         <WebGLContextRecovery onLost={onContextLost} onRestored={onContextRestored}/>
         {/* scene.background 명시 — WebGL 일시 중단 시 흰 화면 방지 */}
