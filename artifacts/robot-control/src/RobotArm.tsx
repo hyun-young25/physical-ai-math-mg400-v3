@@ -19,6 +19,7 @@ import { copyShapePose, measureShapeClosure, prepareShapeMotion, sampleShapeMoti
 import type { ShapeClosure, ShapeMotion, ShapePoseSnapshot, ShapeReturn, ShapeRunPhase } from "./shapeRun";
 import { usePractice } from "./PracticeProvider";
 import { PaperCoordinateStudy } from "./PaperCoordinateStudy";
+import { startPaperDigitalTwinPlayback } from "./paperDigitalTwinPlayback";
 import { downloadEvidence, readEvidence, writeEvidence } from "./learningEvidenceStorage";
 import { getEvidenceItem, setEvidenceItem } from "./learningSync";
 import type { SquareObservedVertex } from "./squareMismatchDiagnosis";
@@ -683,7 +684,17 @@ export function RobotArm({
   const [paperLevel,setPaperLevel] = useState<PaperRectangleLevel|null>(null);
   const paperCoordinateOpen=paperLevel!==null;
   const [paperBusy,setPaperBusy]=useState(false);
-  const paperDtCancelRef = useRef(false);
+  const paperDtRunIdRef = useRef(0);
+  const paperDtAbortRef = useRef<((reason?: string) => void) | null>(null);
+  useEffect(() => () => {
+    paperDtRunIdRef.current += 1;
+    paperDtAbortRef.current?.("화면을 닫아 DT 실행을 중단했습니다. 완료로 기록하지 않습니다.");
+  }, []);
+  useEffect(() => {
+    if (hardwareConnected) {
+      paperDtAbortRef.current?.("실장비 연결이 시작되어 가상 DT를 중단했습니다. 완료로 기록하지 않습니다.");
+    }
+  }, [hardwareConnected]);
   const [dtCompletionKey, setDtCompletionKey] = useState<string | null>(null);
   const shapeEvidenceRef = useRef<Record<string, unknown>[] | null>(null);
   const [measurements, setMeasurements] = useState<WaypointMeasurement[]>([]);
@@ -1507,46 +1518,40 @@ export function RobotArm({
   const runPaperDigitalTwin = async (commands: Coords[]) => {
     if (hardwareConnected) throw new Error("실장비 연결 중에는 좌표 변환 DT를 시작하지 않았습니다.");
     if (status === "running") throw new Error("기존 로봇 동작이 진행 중입니다.");
-    paperDtCancelRef.current = false;
     const start = { ...coords };
+    for (const command of [...commands, start]) {
+      if (!onComputeIK(command.x, command.y, command.z, command.r, onGetJoints().j3))
+        throw new Error("DT 기구학 검사에서 도달 불가 지점을 확인했습니다.");
+    }
+    if (paperDtAbortRef.current) throw new Error("기존 DT 실행이 아직 종료 중입니다.");
+    const runId = ++paperDtRunIdRef.current;
     setStatus("running");
     setRunError(null);
     onMissionStart?.();
-    const animate = (from: Coords, to: Coords) => new Promise<void>((resolve, reject) => {
-      const started = performance.now();
-      const duration = 350;
-      const tick = (now: number) => {
-        if (paperDtCancelRef.current) { reject(new Error("DT가 중단되었습니다. 완료로 기록하지 않습니다.")); return; }
-        const t = Math.min(1, Math.max(0, (now - started) / duration));
-        const next = {
-          x: from.x + (to.x - from.x) * t,
-          y: from.y + (to.y - from.y) * t,
-          z: from.z + (to.z - from.z) * t,
-          r: from.r + (to.r - from.r) * t,
-        };
-        if (!onComputeIK(next.x, next.y, next.z, next.r, onGetJoints().j3)) {
-          reject(new Error("DT 기구학 검사에서 도달 불가 지점을 확인했습니다."));
-          return;
-        }
-        onMoveTo(next.x, next.y, next.z, next.r);
-        if (t < 1) requestAnimationFrame(tick);
-        else { onMoveEnd(); resolve(); }
-      };
-      requestAnimationFrame(tick);
+    const playback = startPaperDigitalTwinPlayback({
+      start,
+      commands,
+      canReach: pose => !!onComputeIK(pose.x, pose.y, pose.z, pose.r, onGetJoints().j3),
+      moveTo: pose => onMoveTo(pose.x, pose.y, pose.z, pose.r),
+      moveEnd: onMoveEnd,
+      scheduler: {
+        requestFrame: callback => window.requestAnimationFrame(callback),
+        cancelFrame: id => window.cancelAnimationFrame(id),
+        setTimer: (callback, delayMs) => window.setTimeout(callback, delayMs),
+        clearTimer: timer => window.clearTimeout(timer as number),
+      },
     });
+    const abort = (reason?: string) => playback.cancel(reason);
+    paperDtAbortRef.current = abort;
     try {
-      let previous = start;
-      for (const command of [...commands, start]) {
-        if (!onComputeIK(command.x, command.y, command.z, command.r, onGetJoints().j3))
-          throw new Error("DT 기구학 검사에서 도달 불가 지점을 확인했습니다.");
-        await animate(previous, command);
-        previous = command;
-      }
+      await playback.promise;
+      if (paperDtRunIdRef.current !== runId) throw new Error("종료된 DT 실행의 완료 응답을 무시했습니다.");
     } finally {
-      paperDtCancelRef.current = false;
-      onMoveTo(start.x, start.y, start.z, start.r);
-      onMoveEnd();
-      setStatus("idle");
+      if (paperDtRunIdRef.current === runId) {
+        paperDtRunIdRef.current += 1;
+        if (paperDtAbortRef.current === abort) paperDtAbortRef.current = null;
+        setStatus("idle");
+      }
     }
   };
 
@@ -1559,7 +1564,10 @@ export function RobotArm({
           onSelect={index=>{if(status==="running"||paperBusy)return;if(index>=4)setPaperLevel(index===4?"advanced-paper-dt":"advanced-paper-hardware");else{setPaperLevel(null);selectShapeLesson(index);}}}/>
 
         <PaperCoordinateStudy key={paperLevel!} initialLevel={paperLevel!} supportMode={supportMode} onRunningChange={setPaperBusy}
-          onBack={() => { paperDtCancelRef.current = true; setPaperLevel(null); }}
+          onBack={() => {
+            paperDtAbortRef.current?.("학생이 DT 화면을 나가 실행을 중단했습니다. 완료로 기록하지 않습니다.");
+            setPaperLevel(null);
+          }}
           hardwareConnected={hardwareConnected}
           currentPose={coords}
           canReach={pose => !!onComputeIK(pose.x, pose.y, pose.z, pose.r, onGetJoints().j3)}
