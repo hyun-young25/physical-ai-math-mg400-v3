@@ -81,9 +81,12 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
   const missionDetail=mission?.detail as {rejectedTarget?:XY;observedVertices?:SquareObservedVertex[];planKey?:string}|undefined;
   const rejected = mission?.status === "unavailable" ? missionDetail?.rejectedTarget ?? null : null;
   const latestMeasurement=record?.runs.filter(run=>run.action==="square-measurement").at(-1);
-  const measurementDetail=latestMeasurement?.detail as {source?:SquareExecutionSource;planKey?:string;complete?:boolean;observedVertices?:SquareObservedVertex[]}|undefined;
+  const measurementDetail=latestMeasurement?.detail as {runId?:string;prevalidationRunId?:string;source?:SquareExecutionSource;
+    planKey?:string;complete?:boolean;observedVertices?:SquareObservedVertex[]}|undefined;
   const samePlanMeasurement=!!latestMeasurement&&!!measurementDetail
     &&measurementDetail.planKey===missionDetail?.planKey
+    &&mission?.status==="completed"&&!!mission.id&&latestMeasurement.id===measurementDetail.runId
+    &&measurementDetail.prevalidationRunId===mission.id
     &&(measurementDetail.source==="hardware"||measurementDetail.source==="mock");
   const diagnosisSource=samePlanMeasurement?measurementDetail?.source:"dt";
   const diagnosisVertices=samePlanMeasurement
@@ -124,7 +127,7 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
       observed:diagnosis.evidence.source==="prediction"?[]:diagnosis.evidence.executed?.vertices??[],
       priorSameType:priorTypes.filter(type=>type===diagnosis.type).length,supportMode} : null;
   const taskIndex=Array.from({length:6},(_,i)=>getShapeLesson("사각형",i).id).indexOf(lesson.id);
-  const attemptHistory=useSquareAttemptHistory(fieldId,taskIndex,presentation&&record?.taskVersion==="v4-paper-merged"?{id:presentation.key,recordId:record.id,runId:String(record.runs.length),parentAttemptId:record.previousId,revisionReason:record.explanationReviews?.at(-1)?.text??record.reason,taskVersion:record.taskVersion,taskIndex,supportMode,predictions:record.prediction,predictionReason:record.reason,observed:presentation.observed,studentCause:cause,createdAt:record.runs.at(-1)?.endedAt??record.submittedAt,visual:presentation}:null,locked);
+  const attemptHistory=useSquareAttemptHistory(fieldId,taskIndex,presentation&&record?.taskVersion==="v4-paper-merged"?{id:presentation.key,recordId:record.id,runId:latestMeasurement?.id??latestMission?.id??"unlinked",parentAttemptId:record.previousId,revisionReason:record.explanationReviews?.at(-1)?.text??record.reason,taskVersion:record.taskVersion,taskIndex,supportMode,predictions:record.prediction,predictionReason:record.reason,observed:presentation.observed,studentCause:cause,createdAt:record.runs.at(-1)?.endedAt??record.submittedAt,visual:presentation}:null,locked);
   const journey=isSquare?squareRevisionJourney(lesson,q.conditionKey,record,q.history,attemptHistory.items,
     activeStage===7?{...record?.prediction,...q.reviewDraft}:q.draft,q.reason,activeStage):null;
   if(journey&&activeStage===7){journey.draftRevisionReason=cause;journey.editing=diagnosisMismatch;}
@@ -358,7 +361,7 @@ export function ShapeLessonSteps({ lesson, inquiry: q, locked, onStageChange, on
       {activeStage === 6 && record && <>
         {diagnosisPanel}
         {isSquare && <ExecutionAiAnalysis ai={q.ai}
-          scopeKey={`${record.id}:${record.runs.length}:${missionDetail?.planKey ?? "no-plan"}`}
+          scopeKey={`${record.id}:${mission?.id??"no-mission"}:${latestMeasurement?.id??"no-measurement"}:${missionDetail?.planKey ?? "no-plan"}`}
           attemptLabel={`사각형 ${lesson.id} · 시도 ${record.attemptKind}`}
           sourceLabel={measurementDetail?.source === "hardware" ? "실장비 · 제어기 보고값 (잉크 관측 아님)"
             : measurementDetail?.source === "mock" ? "모의 브리지 · 실측 아님"

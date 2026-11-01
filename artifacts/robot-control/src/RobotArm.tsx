@@ -955,8 +955,7 @@ export function RobotArm({
 
   useLayoutEffect(() => {
     if (hardwareConnected || runKindRef.current !== "hardware" || continuationRef.current) return;
-    activeSquareMeasurementRef.current?.save("unavailable","실장비 연결이 끊겨 측정을 중단했습니다.","실장비 연결이 끊겨 측정을 중단했습니다.");
-    activeSquareMeasurementRef.current=null;
+    finalizeActiveSquareMeasurement("unavailable","실장비 연결이 끊겨 측정을 중단했습니다.");
     hardwareRunTokenRef.current += 1;
     onHardwareStop();
     setStatus("idle");
@@ -1220,9 +1219,17 @@ export function RobotArm({
     return true;
   }
 
+  function finalizeActiveSquareMeasurement(status:"unavailable"|"stopped",reason:string) {
+    const activeMeasurement=activeSquareMeasurementRef.current;
+    if(!activeMeasurement)return;
+    activeMeasurement.save(status,reason,reason);
+    activeSquareMeasurementRef.current=null;
+  }
+
   function cancelContinuation(reason:string,alreadyStopping=false) {
     const pending=continuationRef.current;
     if(!pending)return;
+    finalizeActiveSquareMeasurement("stopped",reason);
     continuationRef.current=null;pending.cancel(reason);
     setContinuationReason(reason);
     practiceRef.current.cancelConfirmation();
@@ -1235,6 +1242,7 @@ export function RobotArm({
 
   function resetMission() {
     cancelContinuation("취소·정지로 가상과 후속 실제 실행 승인을 모두 폐기했습니다.");
+    finalizeActiveSquareMeasurement("stopped","실행 초기화로 이 시도를 중단했습니다.");
     if (runKindRef.current === "hardware") practice.session.stop();
     hardwareRunTokenRef.current += 1;
     stopAnim();
@@ -1494,8 +1502,7 @@ export function RobotArm({
 
   function stopHardwareSquare() {
     if(continuationRef.current){cancelContinuation("연속 실행을 중지했습니다. 실제 장비 정지 여부는 현장에서 확인하고 새로 승인하세요.");return;}
-    activeSquareMeasurementRef.current?.save("stopped","실장비 실행을 사용자가 중지했습니다. 이 시도는 완료로 처리하지 않습니다.","사용자가 실행을 중지했습니다.");
-    activeSquareMeasurementRef.current=null;
+    finalizeActiveSquareMeasurement("stopped","실장비 실행을 사용자가 중지했습니다. 이 시도는 완료로 처리하지 않습니다.");
     hardwareRunTokenRef.current += 1;
     stopHardware();
     setStatus("idle");
