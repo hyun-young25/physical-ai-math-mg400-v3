@@ -11,6 +11,14 @@ import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
+function replyCommandResult(res: Parameters<Parameters<IRouter["post"]>[1]>[1], response: { errorId: number; raw: string }): void {
+  if (response.errorId !== 0) {
+    res.status(422).json({ ok: false, errorId: response.errorId, raw: response.raw });
+    return;
+  }
+  res.json({ ok: true, errorId: 0 });
+}
+
 /* ── POST /api/robot/connect ─────────────────────────────────────────
    Body: { ip: string, port?: number }
    Establishes TCP connection to MG400 Dashboard port.           */
@@ -109,8 +117,8 @@ router.post("/robot/reset", async (req, res): Promise<void> => {
     return;
   }
   try {
-    await mg400.reset();
-    res.json({ ok: true });
+    const r = await mg400.reset();
+    replyCommandResult(res, r);
   } catch (err) {
     res.status(503).json({ error: err instanceof Error ? err.message : String(err) });
   }
@@ -130,7 +138,7 @@ router.post("/robot/speed", async (req, res): Promise<void> => {
   }
   try {
     const r = await mg400.setSpeed(ratio);
-    res.json({ ok: true, errorId: r.errorId });
+    replyCommandResult(res, r);
   } catch (err) {
     res.status(503).json({ error: err instanceof Error ? err.message : String(err) });
   }
@@ -180,7 +188,7 @@ router.post("/robot/jog", async (req, res): Promise<void> => {
 
   try {
     const r = await mg400.moveJog(axis.toLowerCase());
-    res.json({ ok: true, errorId: r.errorId, raw: r.raw });
+    replyCommandResult(res, r);
   } catch (err) {
     res.status(503).json({ error: err instanceof Error ? err.message : String(err) });
   }
@@ -194,8 +202,8 @@ router.post("/robot/stop-jog", async (req, res): Promise<void> => {
     return;
   }
   try {
-    await mg400.stopJog();
-    res.json({ ok: true });
+    const r = await mg400.stopJog();
+    replyCommandResult(res, r);
   } catch (err) {
     res.status(503).json({ error: err instanceof Error ? err.message : String(err) });
   }

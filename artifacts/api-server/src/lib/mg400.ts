@@ -10,32 +10,7 @@
  */
 import net from "net";
 import { logger } from "./logger";
-
-/* ── Response parsing ─────────────────────────────────────────────── */
-interface MG400Response {
-  errorId: number;
-  values: string[];
-  raw: string;
-}
-
-function parseResponse(raw: string): MG400Response {
-  const cleaned = raw.replace(/;\s*$/, "").trim();
-  const braceStart = cleaned.indexOf("{");
-  const braceEnd = cleaned.indexOf("},");
-
-  let errorId = 0;
-  let values: string[] = [];
-
-  if (braceEnd !== -1) {
-    errorId = parseInt(cleaned.substring(0, braceStart - 1)) || 0;
-    const rest = cleaned.substring(braceEnd + 2).trim();
-    values = rest.length > 0 ? rest.split(",").map((v) => v.trim()) : [];
-  } else {
-    errorId = parseInt(cleaned.split(",")[0]) || 0;
-  }
-
-  return { errorId, values, raw };
-}
+import { parseMG400Response, requireFiniteMG400Values, type MG400Response } from "./mg400Protocol";
 
 /* ── Robot mode constants ─────────────────────────────────────────── */
 export const RobotMode = {
@@ -54,12 +29,18 @@ export const RobotMode = {
 export type RobotModeValue = (typeof RobotMode)[keyof typeof RobotMode];
 
 /* ── MG400Client ──────────────────────────────────────────────────── */
-class MG400Client {
+type PendingCommand = {
+  command: string;
+  resolve: (response: MG400Response) => void;
+  reject: (error: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+};
+
+export class MG400Client {
   private socket: net.Socket | null = null;
   private _connected = false;
   private responseBuffer = "";
-  private pendingResolvers: Array<(r: MG400Response) => void> = [];
-  private pendingRejectors: Array<(e: Error) => void> = [];
+  private pendingCommands: PendingCommand[] = [];
 
   /* ── Public state ───────────────────────────────────────────────── */
   isConnected(): boolean {
