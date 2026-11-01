@@ -91,7 +91,9 @@ const fixture=require('./verify-revision-journey.cjs').fixture
      const run=records.at(-1)?.run;
      return {status:run?.status,error:run?.error,observations:run?.observations?.length,
       recordStatus:records.at(-1)?.status,dtMoves:window.__dt?.length,
-      movingFrames:window.__paperFrames?.length,visibleText:document.body.innerText.slice(-1800)};
+       movingFrames:window.__paperFrames?.length,renderBudget:window.__paperRobot?.renderBudget,
+       sampledBudgets:window.__paperFrames?.slice(-5).map(frame=>frame.renderBudget),
+       visibleText:document.body.innerText.slice(-1800)};
     }));
     throw error;
    }
