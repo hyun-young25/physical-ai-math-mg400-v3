@@ -89,3 +89,22 @@ test("first attempt has no previous feedback and a different paper assignment ca
   const versionChanged=moduleExports.paperFeedbackContext(versionChild,[otherVersion,versionChild],targets);
   assert.deepEqual(JSON.parse(versionChanged.history),[]);
 });
+
+test("hardware feedback request carries only the current run's controller-reported pose",()=>{
+  const hardwareFrame={...frame,source:"hardware"};
+  const hardwareRun={...run,id:"physical-run-current",source:"hardware",status:"completed",
+    observations:[{point:"A",pose:{x:43,y:24,z:12,r:0},source:"hardware",seq:22,measuredAt:39,ageMs:4,
+      command:{x:40,y:19,z:12,r:0},kind:"controller-tcp"}]};
+  const physical={...current,dataSource:"hardware",frame:hardwareFrame,run:hardwareRun};
+  const context=moduleExports.paperFeedbackContext(physical,[unrelated,previous,physical],targets);
+  const execution=JSON.parse(context.execution);
+  assert.equal(execution.length,1);
+  assert.equal(execution[0].recordId,physical.id);
+  assert.equal(execution[0].runId,"physical-run-current");
+  assert.equal(execution[0].source,"hardware");
+  assert.equal(execution[0].observations[0].kind,"controller-tcp");
+  assert.deepEqual(execution[0].observations[0].pose,{x:43,y:24,z:12,r:0});
+  assert.deepEqual(execution[0].comparisons[0].controllerReportedMm,{x:43,y:24,z:12,r:0});
+  assert.deepEqual(execution[0].comparisons[0].commandVsReportedMm,{dx:3,dy:5,distance:Math.sqrt(34)});
+  assert(!context.execution.includes("run-old"));
+});

@@ -136,7 +136,7 @@ export class MG400Client {
 
   private failConnection(error: Error, expectedSocket?: net.Socket, destroy = true): void {
     if (expectedSocket && this.socket && this.socket !== expectedSocket) return;
-    const socket = this.socket;
+    const socket = this.socket ?? expectedSocket ?? null;
     this.socket = null;
     this._connected = false;
     this.responseBuffer = "";
