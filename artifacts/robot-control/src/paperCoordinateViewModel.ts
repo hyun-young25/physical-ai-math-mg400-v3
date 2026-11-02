@@ -164,6 +164,31 @@ export type PaperCoordinateStudyViewState = {
   saveState: "ready" | "saving" | "saved" | "failed";
   saveMessage: string;
   preparationSummary: string[];
+  teacherPreparationReady: boolean;
+  teacherPreparationBlockers: string[];
+  tcpJog: {
+    mode: "virtual" | "hardware";
+    connection: "disconnected" | "connecting" | "connected";
+    source: "hardware" | "mock" | null;
+    pose: { x: number; y: number; z: number; r: number } | null;
+    seq: number | null;
+    ageMs: number | null;
+    fresh: boolean;
+    user: number | null;
+    tool: number | null;
+    appliedUser: number | null;
+    appliedTool: number | null;
+    appliedSpeed: number | null;
+    busy: boolean;
+    pending: boolean;
+    stopAvailable: boolean;
+    canMove: boolean;
+    blocker: string;
+    status: "idle" | "confirming" | "moving" | "completed" | "cancelled" | "failed";
+    message: string;
+  };
+  referenceConnectionCurrent: boolean;
+  liftConnectionCurrent: boolean;
   running: boolean;
   error: string;
 };
@@ -200,9 +225,13 @@ export type PaperCoordinateStudyViewActions = {
   ) => void;
   onBack: () => void;
   onExport: () => void;
-  onStageChange: (stage: PaperLessonStage) => void;
+  onStageChange: (
+    stage: PaperLessonStage,
+  ) => { message: string; target?: string } | null;
   onLevelChange: (level: PaperCoordinateLevel) => void;
   onRecordCurrentReference: (point: PaperPointName) => void;
+  onPreparationTcpJog: (axis: "x" | "y" | "z", deltaMm: number) => void;
+  onStopPreparationMovement: () => void;
   onManualReferenceChange: (
     point: PaperPointName,
     field: "x" | "y" | "z" | "r",
@@ -213,7 +242,7 @@ export type PaperCoordinateStudyViewActions = {
     field: keyof PaperStudentTransform,
     value: string,
   ) => void;
-  onSaveTransform: () => void;
+  onSaveTransform: () => { message: string; target?: string } | null;
   onPredictionChange: (
     point: string,
     field: "robotX" | "robotY",

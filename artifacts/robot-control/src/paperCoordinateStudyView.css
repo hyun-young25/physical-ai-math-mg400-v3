@@ -695,6 +695,42 @@
 .pcv-previous-attempt blockquote p { margin:6px 0 0; }
 .pcv-save-status { display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .pcv-save-status.is-failed { color:#9f2f24; background:#fff5f3; border-color:#e8b4ad; }
+.pcv-guided-flow { display:grid; gap:14px; }
+.pcv-guided-progress { display:grid; gap:8px; margin:0 0 14px; padding:14px 16px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; }
+.pcv-guided-progress > div { display:flex; align-items:center; justify-content:space-between; gap:12px; color:#274778; font-size:12px; }
+.pcv-guided-progress > div strong { color:#163b70; font-size:15px; }
+.pcv-guided-progress progress { width:100%; height:7px; accent-color:#2563eb; }
+.pcv-guided-progress p { margin:0; color:#334155; font-size:13px; line-height:1.55; }
+.pcv-guided-completion { color:#475569 !important; }
+.pcv-guided-instruction { margin:0; padding:11px 13px; color:#334155; background:#f8fafc; border-left:3px solid #60a5fa; border-radius:6px; font-size:13px; line-height:1.55; }
+.pcv-guided-blocker { padding:10px 12px; color:#8a3a21; background:#fff7ed; border:1px solid #fed7aa; border-radius:7px; }
+.pcv-point-stepper { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:10px 0; padding:9px; background:#f1f5f9; border-radius:8px; }
+.pcv-point-stepper strong { color:#173b73; font-size:13px; }
+.pcv-preparation-summary > p { margin:0 0 8px; color:#586273; font-size:12px; line-height:1.5; }
+.pcv-preparation-summary details > summary,
+.pcv-previous-attempt > summary { cursor:pointer; color:#334155; font-size:12px; font-weight:700; }
+.pcv-previous-attempt > summary { padding:4px 0; }
+.pcv-optional-analysis { margin:12px 0; }
+.pcv-tcp-jog { display:grid; gap:12px; margin:14px 0; padding:14px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:10px; }
+.pcv-tcp-jog__heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.pcv-tcp-jog__heading h4 { margin:3px 0 0; color:#173b73; font-size:15px; }
+.pcv-tcp-jog__telemetry { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:0; }
+.pcv-tcp-jog__telemetry > div { min-width:0; padding:9px 10px; background:#fff; border:1px solid #e2e8f0; border-radius:7px; }
+.pcv-tcp-jog__telemetry dt { margin-bottom:4px; color:#64748b; font-size:10px; font-weight:700; }
+.pcv-tcp-jog__telemetry dd { margin:0; color:#1e293b; overflow-wrap:anywhere; font-size:12px; line-height:1.45; }
+.pcv-tcp-jog__increment { max-width:220px; }
+.pcv-tcp-jog__axes { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+.pcv-tcp-jog__axis { display:grid; grid-template-columns:1fr 1fr; align-items:center; gap:6px; padding:9px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; }
+.pcv-tcp-jog__axis strong { grid-column:1/-1; color:#334155; }
+.pcv-tcp-jog__axis .pcv-button { padding:8px 6px; font-size:12px; }
+.pcv-tcp-jog__status { display:grid; grid-template-columns:1fr auto; align-items:center; gap:5px 12px; }
+.pcv-tcp-jog__status p { margin:0; color:#475569; font-size:12px; line-height:1.5; }
+.pcv-tcp-jog__status p[data-state="failed"] { color:#9f2f24; }
+.pcv-tcp-jog__status small { grid-column:1/-1; color:#64748b; font-size:10px; }
+.pcv-stage-nav--three { width:100%; min-width:0; }
+.pcv-stage-nav--three ol { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); width:100%; }
+.pcv-stage-nav--three li { min-width:0; display:flex; align-items:center; justify-content:flex-start; white-space:normal; }
+.pcv-stage-nav--three strong { min-width:0; white-space:normal; word-break:keep-all; overflow-wrap:normal; }
 
 @media (max-width: 560px) {
   .pcv-stage-nav--three ol { gap:4px; padding:8px; }
@@ -703,4 +739,17 @@
   .pcv-preparation-summary ul,
   .pcv-prep-list { display:block; }
   .pcv-save-status { align-items:flex-start; flex-direction:column; }
+  .pcv-guided-progress > div { align-items:flex-start; flex-direction:column; gap:4px; }
+  .pcv-point-stepper { flex-wrap:wrap; }
+  .pcv-point-stepper strong { flex:1 1 100%; order:-1; text-align:center; }
+  .pcv-tcp-jog__telemetry,
+  .pcv-tcp-jog__axes { grid-template-columns:1fr; }
+  .pcv-tcp-jog__increment { max-width:none; }
+  .pcv-tcp-jog__status { grid-template-columns:1fr; }
+  .pcv-tcp-jog__status small { grid-column:auto; }
+}
+
+@media (max-width: 760px) {
+  .pcv-stage-nav--three ol { grid-template-columns:1fr; }
+  .pcv-stage-nav--three li { min-height:42px; }
 }

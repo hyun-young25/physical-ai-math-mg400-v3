@@ -33,6 +33,8 @@ export type PracticeSnapshot = {
   mode: PracticeMode; connection: "disconnected" | "connecting" | "connected";
   source: MeasurementSource | null; measurement: RobotMeasurement | null; busy: boolean;
   setup: PracticeSetup | null; error: string; uncertainMotion: boolean; jointStepSupported?: boolean;
+  /** Opaque per-connection identity; persisted evidence from another bridge session cannot be reused. */
+  connectionToken: string | null;
 };
 type SocketLike = Pick<WebSocket, "send" | "close" | "readyState"> & {
   onopen: ((event: Event) => void) | null; onmessage: ((event: MessageEvent) => void) | null;
@@ -102,7 +104,7 @@ export function changedSetup(previous:PracticeSetup,next:PracticeSetup):Practice
 /** Local-PC protocol v2. There is no SDK/API key and no automatic motor command. */
 export class PracticeSession {
   private snapshot: PracticeSnapshot = { mode: "virtual", connection: "disconnected", source: null,
-    measurement: null, busy: false, setup: null, error: "", uncertainMotion: false };
+    measurement: null, busy: false, setup: null, error: "", uncertainMotion: false, connectionToken: null };
   private listeners = new Set<() => void>();
   private stopListeners = new Set<() => void>();
   private socket: SocketLike | null = null;
@@ -112,7 +114,8 @@ export class PracticeSession {
   private configuring=false;
   private connectionTarget="";
   constructor(private makeSocket: (url: string) => SocketLike = url => new WebSocket(url),
-    private now: () => number = Date.now) {}
+    private now: () => number = Date.now,
+    private makeConnectionToken: () => string = () => crypto.randomUUID()) {}
   getSnapshot = () => this.snapshot;
   getConnectionId = () => this.generation;
   getBridgeUrl = () => this.connectionTarget;
@@ -143,7 +146,7 @@ export class PracticeSession {
     for (const p of this.pending.values()) { clearTimeout(p.timer); p.reject(new Error(reason)); }
     this.pending.clear();
     if (this.executing || this.snapshot.measurement?.moving) this.change({ uncertainMotion: true });
-    this.change({ error: reason, setup: null });
+    this.change({ error: reason, setup: null, connectionToken: null });
   }
   disconnect() {
     if (this.executing) this.stop();
@@ -181,7 +184,8 @@ export class PracticeSession {
         try {
           await this.request({ type: "connect", robotIp: MG400_ROBOT_IP });
           if (!this.snapshot.source) throw new Error("지원되는 프로토콜 v2 인사 메시지가 없습니다.");
-          this.change({ connection: "connected" }); clearTimeout(timeout); resolve();
+          this.change({ connection: "connected", connectionToken: this.makeConnectionToken() });
+          clearTimeout(timeout); resolve();
           this.monitor = setInterval(() => {
             if (this.executing && !measurementFresh(this.snapshot.measurement, this.now())) {
               this.stop(); this.invalidate("측정값이 오래되어 실행을 중단했습니다. 실제 정지 여부를 현장에서 확인하세요.");

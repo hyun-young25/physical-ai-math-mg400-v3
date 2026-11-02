@@ -14,6 +14,8 @@ export type PaperReferenceSample = {
   point: PaperPointName;
   pose: LessonPose;
   source: PaperReferenceSource;
+  /** Opaque live-session identity; absent on legacy or teacher-entered samples. */
+  connectionToken?: string;
   seq: number | null;
   capturedAt: number;
   ageMsAtCapture: number | null;
@@ -193,7 +195,7 @@ export type PaperTrialRecord = {
   revisionReason?: string;
   revalidationTarget?: PaperTargetSet | null;
   invalidatedRunIds?: string[];
-  liftHeight?: { z: number; source: PaperReferenceSource; seq: number | null; capturedAt: number; ageMsAtCapture: number | null; user: number; tool: number; coordinateSystem: string };
+  liftHeight?: { z: number; source: PaperReferenceSource; connectionToken?: string; seq: number | null; capturedAt: number; ageMsAtCapture: number | null; user: number; tool: number; coordinateSystem: string };
   predictionModelComparison?: Array<{ point: string; dx: number; dy: number; distance: number }>;
   revalidation?: { parentAttemptId: string; runId: string; source: PaperEvidenceSource; checkedAt: number; scope: string;
     result: "physical-verified" | "simulation-only" | "incomplete"; tcpWithinTolerance?: boolean; inkWithinTolerance?: boolean };

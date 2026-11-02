@@ -24,6 +24,8 @@ type Ctx = {
   setupDraft: PracticeSetup; setSetupDraft: (s: PracticeSetup) => void;
   confirm: (title: string, lines: string[], okLabel?: string) => Promise<boolean>;
   runOps: RunOps;
+  operationPending: boolean;
+  hasPendingOperation: () => boolean;
   cancelConfirmation: () => void;
   lockVirtual: () => () => void;
   journal: JournalEntry[];
@@ -62,6 +64,9 @@ export function PracticeProvider({ children }: { children: ReactNode }) {
   const [journal, setJournal] = useState<JournalEntry[]>([]);
   const [ask, setAsk] = useState<{ title: string; lines: string[]; okLabel: string; resolve: (v: boolean) => void } | null>(null);
   const askRef = useRef(ask); askRef.current = ask;
+  const operationLock = useRef(false);
+  const [operationPending, setOperationPending] = useState(false);
+  const hasPendingOperation = useCallback(() => operationLock.current, []);
 
   const confirm = useCallback((title: string, lines: string[], okLabel = "확인하고 실행") =>
     new Promise<boolean>(resolve => {
@@ -86,6 +91,10 @@ export function PracticeProvider({ children }: { children: ReactNode }) {
   }, [session]);
 
   const runOps = useCallback<RunOps>(async (ops, label, onStep, onStart, beforeExecute) => {
+    if (operationLock.current) throw new Error("다른 장비 확인 또는 실행이 진행 중입니다. 완료되거나 취소된 뒤 다시 시도하세요.");
+    operationLock.current = true;
+    setOperationPending(true);
+    try {
     const needsServo = ops.some(o => o.kind !== "enable" && o.kind !== "disable");
     const problem = session.readiness(needsServo); if (problem) throw new Error(problem);
     if(beforeExecute&&(session.getSnapshot().busy||session.getSnapshot().measurement?.moving))
@@ -154,12 +163,16 @@ export function PracticeProvider({ children }: { children: ReactNode }) {
         error: error instanceof Error ? error.message : String(error) }, source);
       throw error;
     }
+    } finally {
+      operationLock.current = false;
+      setOperationPending(false);
+    }
   }, [session, confirm,bridgeUrl]);
 
   const value = useMemo<Ctx>(() => ({
     session, snap, hardware: snap.mode === "hardware", panelOpen, setPanelOpen, bridgeUrl, setBridgeUrl, robotIp: MG400_ROBOT_IP,
-    setupDraft, setSetupDraft, confirm, runOps, cancelConfirmation, lockVirtual, journal,
-  }), [session, snap, panelOpen, bridgeUrl, setupDraft, confirm, runOps, cancelConfirmation, lockVirtual, journal]);
+    setupDraft, setSetupDraft, confirm, runOps, operationPending, hasPendingOperation, cancelConfirmation, lockVirtual, journal,
+  }), [session, snap, panelOpen, bridgeUrl, setupDraft, confirm, runOps, operationPending, hasPendingOperation, cancelConfirmation, lockVirtual, journal]);
 
   return <PracticeContext.Provider value={value}>
     {children}

@@ -103,6 +103,8 @@ import {
 } from "./learningEvidenceStorage";
 import {
   measurementFresh,
+  installationKey,
+  setupProblem,
   targetProblem,
   workspaceFindings,
 } from "./practiceSession";
@@ -211,6 +213,10 @@ export function PaperCoordinateStudy({
   const [predictionFeedback, setPredictionFeedback] = useState("");
   const [pageError, setPageError] = useState("");
   const [running, setRunning] = useState(false);
+  const [tcpJogStatus, setTcpJogStatus] =
+    useState<PaperCoordinateStudyViewState["tcpJog"]["status"]>("idle");
+  const [tcpJogMessage, setTcpJogMessage] = useState("");
+  const tcpJogInFlightRef = useRef(false);
   // Per-lesson opt-in. Never restored from a student's saved attempt.
   const [allowMismatchedHardware, setAllowMismatchedHardware] = useState(false);
   const activeRunRef = useRef(false);
@@ -1026,6 +1032,113 @@ export function PaperCoordinateStudy({
     };
   };
 
+  async function runPreparationTcpJog(axis: "x" | "y" | "z", deltaMm: number) {
+    const fail = (message: string) => {
+      setTcpJogStatus("failed");
+      setTcpJogMessage(message);
+    };
+    if (tcpJogInFlightRef.current || practice.hasPendingOperation()) {
+      fail("다른 장비 확인 또는 실행이 진행 중입니다. 완료되거나 취소된 뒤 다시 시도하세요.");
+      return;
+    }
+    if (level !== "advanced-paper-hardware") {
+      fail("TCP 준비 이동은 종이 좌표 심화2에서만 사용할 수 있습니다.");
+      return;
+    }
+    if (hardwareConnected) {
+      fail("기존 연결 경로가 사용 중입니다. 연결·User/Tool 설정의 같은 MG400 세션을 사용하세요.");
+      return;
+    }
+    if (running) {
+      fail("도형 실행 중에는 TCP 준비 이동을 시작할 수 없습니다.");
+      return;
+    }
+    if (!Number.isFinite(deltaMm) || Math.abs(deltaMm) < 0.01 || Math.abs(deltaMm) > 5) {
+      fail("미세 이동은 한 번에 0.01~5 mm 범위에서만 요청할 수 있습니다.");
+      return;
+    }
+    const live = practice.session.getSnapshot();
+    const ready = practice.session.readiness(true);
+    if (ready) {
+      fail(ready);
+      return;
+    }
+    if (!live.setup || !live.measurement || !measurementFresh(live.measurement)) {
+      fail("현재 연결의 최신 TCP 보고와 적용된 준비 설정이 필요합니다.");
+      return;
+    }
+    if (live.measurement.moving || live.busy) {
+      fail("현재 장비가 움직이거나 다른 명령을 처리 중입니다. 정지 확인 후 다시 시도하세요.");
+      return;
+    }
+    let bridgeMatches = false;
+    try {
+      bridgeMatches =
+        new URL(practice.bridgeUrl).href === practice.session.getBridgeUrl();
+    } catch {
+      bridgeMatches = false;
+    }
+    if (
+      !bridgeMatches ||
+      installationKey(practice.setupDraft) !== installationKey(live.setup) ||
+      setupProblem({ ...practice.setupDraft, speed: live.setup.speed })
+    ) {
+      fail("연결 대상 또는 설치 설정이 변경되었습니다. 설정을 다시 확인·적용하세요.");
+      return;
+    }
+    const target = {
+      x: axis === "x" ? deltaMm : 0,
+      y: axis === "y" ? deltaMm : 0,
+      z: axis === "z" ? deltaMm : 0,
+      r: 0,
+    };
+    const proposed = {
+      ...live.measurement.pose,
+      x: live.measurement.pose.x + target.x,
+      y: live.measurement.pose.y + target.y,
+      z: live.measurement.pose.z + target.z,
+    };
+    const boundsError = targetProblem(proposed, live.setup, "2-4 TCP 준비 미세 이동");
+    if (boundsError) {
+      fail(boundsError);
+      return;
+    }
+
+    tcpJogInFlightRef.current = true;
+    setTcpJogStatus("confirming");
+    setTcpJogMessage("사용자 확인을 기다립니다. 확인 전에는 이동 명령을 보내지 않습니다.");
+    try {
+      const result = await practice.runOps(
+        [{
+          kind: "move",
+          motion: "MoveL",
+          target,
+          relative: true,
+        }],
+        `2-4 TCP 준비 미세 이동 · ${axis.toUpperCase()} ${deltaMm > 0 ? "+" : ""}${deltaMm} mm`,
+        undefined,
+        () => {
+          setTcpJogStatus("moving");
+          setTcpJogMessage("확인된 속도로 한 번의 상대 MoveL을 처리하고 새 TCP 보고를 기다립니다.");
+        },
+      );
+      const measured = result?.at(-1);
+      if (!measured) {
+        setTcpJogStatus("cancelled");
+        setTcpJogMessage("확인이 취소되어 이동 명령을 보내지 않았습니다.");
+        return;
+      }
+      setTcpJogStatus("completed");
+      setTcpJogMessage(
+        `${measured.source === "mock" ? "모의 응답 · 실측 아님" : "실제 제어기 새 보고"} · seq ${measured.seq} · TCP (${measured.pose.x.toFixed(2)}, ${measured.pose.y.toFixed(2)}, ${measured.pose.z.toFixed(2)}, ${measured.pose.r.toFixed(2)})`,
+      );
+    } catch (error) {
+      fail(error instanceof Error ? error.message : String(error));
+    } finally {
+      tcpJogInFlightRef.current = false;
+    }
+  }
+
   const actions: PaperCoordinateStudyViewActions = {
     onBack,
     onAllowMismatchedHardware: (value) => {
@@ -1348,22 +1461,24 @@ export function PaperCoordinateStudy({
       }),
     onStageChange: (nextStage) => {
       if (running) {
-        setPageError(
-          "DT 실행이 끝나거나 중단될 때까지 단계 이동이 잠겨 있습니다.",
-        );
-        return;
+        const message =
+          "실행이 끝나거나 중단될 때까지 단계 이동이 잠겨 있습니다.";
+        setPageError(message);
+        return { message, target: "run" };
       }
-      let currentActive = active;
+      let currentActive = active?.id
+        ? (recordsRef.current.find((item) => item.id === active.id) ?? active)
+        : active;
       if (pendingInkDraftRef.current) {
         if (
           !currentActive ||
           pendingInkDraftRef.current.recordId !== currentActive.id ||
           !persistPendingInkDraft(currentActive, inkDraft)
         ) {
-          setPageError(
-            "잉크 입력 자동 저장에 실패해 단계 이동을 막았습니다. 현재 화면의 입력을 유지했습니다. 저장 공간을 확인한 뒤 다시 시도하세요.",
-          );
-          return;
+          const message =
+            "잉크 입력 자동 저장에 실패해 단계 이동을 막았습니다. 현재 입력을 유지했습니다. 저장 공간을 확인한 뒤 다시 시도하세요.";
+          setPageError(message);
+          return { message, target: "ink" };
         }
         currentActive =
           recordsRef.current.find((item) => item.id === currentActive!.id) ??
@@ -1395,7 +1510,17 @@ export function PaperCoordinateStudy({
                   : (stageNavigationBlocker?.message ?? "");
       if (required) {
         setPageError(required);
-        return;
+        const target =
+          nextStage >= 2 && !currentActive?.frame
+            ? "references"
+            : nextStage >= 3 && !currentActive?.transform
+              ? "transform"
+              : nextStage >= 4 && !currentActive?.predictions?.length
+                ? "predictions"
+                : nextStage >= 5 && currentActive?.run?.status !== "completed"
+                  ? "run"
+                  : stageNavigationBlocker?.target ?? "criteria";
+        return { message: required, target };
       }
       setPageError("");
       setStage(nextStage);
@@ -1414,6 +1539,9 @@ export function PaperCoordinateStudy({
         setDiagnosisOverride(analyzed.diagnosis);
         upsert(analyzed.record, analyzed.message);
       }
+      return {
+        message: `${nextStage}단계로 이동했습니다.`,
+      };
     },
     onLevelChange: (nextLevel) => {
       if (running || initialLevel) return;
@@ -1428,13 +1556,24 @@ export function PaperCoordinateStudy({
     },
     onRecordCurrentReference: (point) => {
       if (running) return;
+      const live = practice.session.getSnapshot();
+      const latest = live.measurement;
       if (
-        !measurementAvailable ||
-        !currentMeasurement ||
-        !currentMeasurement.pose
+        practice.hasPendingOperation() ||
+        live.busy ||
+        latest?.moving
+      ) {
+        setReferenceError("장비 조작 중에는 기준점을 기록할 수 없습니다. 정지와 최신 위치 보고를 확인하세요.");
+        return;
+      }
+      if (
+        live.connection !== "connected" ||
+        !latest ||
+        !latest.pose ||
+        !measurementFresh(latest)
       ) {
         setReferenceError(
-          "현재 연결의 최신 측정값이 없습니다. 제조사 프로그램에서 기준점에 맞춘 뒤, 연결 상태와 새 TCP 보고 좌표를 확인하세요.",
+          "현재 연결의 최신 TCP 보고가 없습니다. 아래 TCP 미세 이동으로 맞춘 뒤, 새 위치 보고를 기다리세요.",
         );
         return;
       }
@@ -1444,16 +1583,21 @@ export function PaperCoordinateStudy({
         );
         return;
       }
+      if (!live.connectionToken || latest.source !== live.source) {
+        setReferenceError("현재 연결 세션의 출처가 확인되지 않아 O/X/Y를 기록하지 않았습니다. 연결을 다시 확인하세요.");
+        return;
+      }
       const sample: PaperReferenceSample = {
         point,
-        pose: { ...currentMeasurement.pose },
-        source: currentMeasurement.source,
-        seq: currentMeasurement.seq,
-        capturedAt: currentMeasurement.receivedAt,
-        ageMsAtCapture: currentMeasurement.ageMs,
-        user: currentMeasurement.user,
-        tool: currentMeasurement.tool,
-        coordinateSystem: `User ${currentMeasurement.user} / Tool ${currentMeasurement.tool}`,
+        pose: { ...latest.pose },
+        source: latest.source,
+        connectionToken: live.connectionToken,
+        seq: latest.seq,
+        capturedAt: latest.receivedAt,
+        ageMsAtCapture: Math.max(0, Date.now() - latest.receivedAt + latest.ageMs),
+        user: latest.user,
+        tool: latest.tool,
+        coordinateSystem: `User ${latest.user} / Tool ${latest.tool}`,
         verifiedCoordinates: coordinatesVerified,
       };
       saveReference(sample);
@@ -1506,7 +1650,8 @@ export function PaperCoordinateStudy({
         upsert({ ...active, drafts: { ...active.drafts, transform: next } });
     },
     onSaveTransform: () => {
-      if (running) return;
+      if (running)
+        return { message: "실행 중에는 관계를 바꿀 수 없습니다.", target: "transform" };
       const values = transformDraft;
       if (
         !frame ||
@@ -1523,13 +1668,19 @@ export function PaperCoordinateStudy({
         setTransformFeedback(
           "원점·축·단위 배율·회전과 선택 이유를 입력하세요.",
         );
-        return;
+        return {
+          message: "원점 X/Y, 축 방향, mm/cm 배율, 회전각과 짧은 선택 이유를 입력하세요.",
+          target: "transform",
+        };
       }
       if (active?.run) {
         setTransformFeedback(
           "이전 실행은 덮어쓰지 않습니다. 7단계에서 이유를 저장하고 새 시도를 만든 뒤 수정하세요.",
         );
-        return;
+        return {
+          message: "기존 실행은 바뀌지 않았습니다. 새 시도를 만든 뒤 관계를 수정하세요.",
+          target: "transform",
+        };
       }
       const testPoints: PaperGridPoint[] = [
         { name: "O", xCm: 0, yCm: 0 },
@@ -1581,6 +1732,11 @@ export function PaperCoordinateStudy({
           distance,
         })),
       });
+      if (!lastSaveSucceededRef.current) {
+        const message = "관계 저장에 실패했습니다. 입력은 유지했습니다. 저장 상태를 확인한 뒤 다시 시도하세요.";
+        setTransformFeedback(message);
+        return { message, target: "transform" };
+      }
       setStage(2);
       if (!retryInputs)
         setPredictionDraft(
@@ -1593,6 +1749,10 @@ export function PaperCoordinateStudy({
           })),
         );
       setTransformFeedback(message);
+      return {
+        message: "좌표 관계를 저장했습니다. 다음은 목표점 좌표를 한 점씩 예측하세요.",
+        target: "predictions",
+      };
     },
     onPredictionChange: (point, field, value) => {
       if (running) return;
@@ -1720,6 +1880,21 @@ export function PaperCoordinateStudy({
     },
     onRunDT: () => void executeRun("dt"),
     onRunPhysical: () => void executeRun("connected"),
+    onPreparationTcpJog: (axis, deltaMm) => void runPreparationTcpJog(axis, deltaMm),
+    onStopPreparationMovement: () => {
+      const wasMoving =
+        practice.snap.busy ||
+        !!practice.snap.measurement?.moving ||
+        tcpJogStatus === "moving";
+      practice.cancelConfirmation();
+      practice.session.stop();
+      setTcpJogStatus(wasMoving ? "failed" : "cancelled");
+      setTcpJogMessage(
+        wasMoving
+          ? "화면 중단 요청을 보냈습니다. 물리 비상정지가 아니며, 새 위치 보고로 정지 여부를 확인하세요."
+          : "확인 대기를 취소했습니다. 이동 명령은 보내지 않았습니다.",
+      );
+    },
     onRecordCurrentLiftHeight: () => {
       if (running) return;
       if (active?.run) {
@@ -1728,18 +1903,29 @@ export function PaperCoordinateStudy({
         );
         return;
       }
+      const live = practice.session.getSnapshot();
+      const latest = live.measurement;
       if (
-        !measurementAvailable ||
-        !currentMeasurement ||
+        practice.hasPendingOperation() ||
+        live.busy ||
+        latest?.moving
+      ) {
+        setPageError("장비 조작 중에는 펜 들기 높이를 기록할 수 없습니다. 정지와 새 위치 보고를 확인하세요.");
+        return;
+      }
+      if (
+        live.connection !== "connected" ||
+        !latest ||
+        !measurementFresh(latest) ||
         !coordinatesVerified
       ) {
         setPageError(
-          "최신 위치와 확인된 좌표계 설정이 필요합니다. 제조사 프로그램에서 펜을 들어 올린 뒤 현재 TCP 보고 좌표를 기록하세요.",
+          "최신 위치와 확인된 좌표계가 필요합니다. 아래 TCP 미세 이동으로 펜을 들어 올린 뒤 새 보고 좌표를 기록하세요.",
         );
         return;
       }
       if (
-        currentMeasurement.source === "hardware" &&
+        latest.source === "hardware" &&
         frame?.source !== "hardware"
       ) {
         setPageError(
@@ -1747,9 +1933,13 @@ export function PaperCoordinateStudy({
         );
         return;
       }
-      if (surfaceZ === null || currentMeasurement.pose.z <= surfaceZ) {
+      if (!live.connectionToken || latest.source !== live.source) {
+        setPageError("현재 연결 세션의 출처가 확인되지 않아 펜 들기 높이를 기록하지 않았습니다. 연결을 다시 확인하세요.");
+        return;
+      }
+      if (surfaceZ === null || latest.pose.z <= surfaceZ) {
         setPageError(
-          "펜 들기 높이는 기록한 종이 표면보다 높아야 합니다. 위치 이동은 제조사 프로그램에서 직접 하세요.",
+          "펜 들기 높이는 기록한 종이 표면보다 높아야 합니다. TCP 미세 이동 후 새 위치를 확인하세요.",
         );
         return;
       }
@@ -1758,14 +1948,15 @@ export function PaperCoordinateStudy({
         return;
       }
       const lift = {
-        z: currentMeasurement.pose.z,
-        source: currentMeasurement.source,
-        seq: currentMeasurement.seq,
-        capturedAt: currentMeasurement.receivedAt,
-        ageMsAtCapture: currentMeasurement.ageMs,
-        user: currentMeasurement.user,
-        tool: currentMeasurement.tool,
-        coordinateSystem: currentSystem,
+        z: latest.pose.z,
+        source: latest.source,
+        connectionToken: live.connectionToken,
+        seq: latest.seq,
+        capturedAt: latest.receivedAt,
+        ageMsAtCapture: Math.max(0, Date.now() - latest.receivedAt + latest.ageMs),
+        user: latest.user,
+        tool: latest.tool,
+        coordinateSystem: `User ${latest.user} / Tool ${latest.tool}`,
       };
       upsert({
         ...active,
@@ -2264,6 +2455,10 @@ export function PaperCoordinateStudy({
 
   async function executeRun(kind: "dt" | "connected") {
     if (running) return;
+    if (practice.hasPendingOperation() || practice.snap.busy) {
+      setPageError("TCP 준비 이동 또는 다른 장비 명령의 확인·실행 중에는 종이 경로를 시작할 수 없습니다.");
+      return;
+    }
     if (!lastSaveSucceededRef.current) {
       setPageError(
         "저장되지 않은 입력이 있어 실행하지 않았습니다. 입력을 유지했습니다. 저장을 다시 시도하세요.",
@@ -3133,21 +3328,32 @@ export function PaperCoordinateStudy({
     });
   else {
     const setup = practice.snap.setup,
-      source = practice.snap.source;
-    if (frame?.source !== source)
+      source = practice.snap.source,
+      connectionToken = practice.snap.connectionToken;
+    if (
+      frame?.source !== source ||
+      !connectionToken ||
+      frame.samples.some((sample) =>
+        sample.source !== source ||
+        sample.connectionToken !== connectionToken ||
+        (setup && (sample.user !== setup.user || sample.tool !== setup.tool)),
+      )
+    )
       physicalBlockers.push({
         message:
-          "현재 연결에서 기록한 O/X/Y 기준점이 필요합니다. 교사 입력은 실장비 기준점으로 사용할 수 없습니다.",
-        target: "connection",
+          "현재 TCP 연결·User/Tool에서 O/X/Y를 모두 다시 기록하세요. 이전 연결·교사 입력은 실장비 기준점으로 사용할 수 없습니다.",
+        target: "references",
       });
     if (
       !liftRecord ||
       liftRecord.source !== source ||
+      !connectionToken ||
+      liftRecord.connectionToken !== connectionToken ||
       liftRecord.ageMsAtCapture === null ||
       liftRecord.ageMsAtCapture > PAPER_SAMPLE_MAX_AGE_MS
     )
       physicalBlockers.push({
-        message: "현재 연결에서 확인한 펜 들기 높이를 기록하세요.",
+        message: "현재 TCP 연결에서 새 제어기 보고를 확인한 펜 들기 높이를 기록하세요.",
         target: "height",
       });
     const ready = practice.session.readiness(true);
@@ -3179,7 +3385,7 @@ export function PaperCoordinateStudy({
       )
         physicalBlockers.push({
           message:
-            "제조사 프로그램에서 O에 펜 끝을 맞춘 뒤 새 현재 위치를 확인하세요.",
+            "이 화면의 TCP 미세 이동으로 펜 끝을 O의 종이 표면에 맞춘 뒤 새 현재 위치를 확인하세요.",
           target: "connection",
         });
       if (previewCommands.some((p) => targetProblem(p, setup)))
@@ -3193,6 +3399,58 @@ export function PaperCoordinateStudy({
   const physicalReason = isMergedPaper(level)
     ? physicalBlockers.map((b) => b.message).join(" · ")
     : legacyPhysicalReason;
+
+  const liveSession = practice.snap;
+  const liveMeasurement = liveSession.measurement;
+  const tcpJogAgeMs = liveMeasurement
+    ? Math.max(0, Date.now() - liveMeasurement.measuredAt)
+    : null;
+  const tcpJogBusy =
+    running ||
+    practice.operationPending ||
+    liveSession.busy ||
+    !!liveMeasurement?.moving;
+  let tcpJogBlocker = "";
+  if (level !== "advanced-paper-hardware") {
+    tcpJogBlocker = "TCP 준비 이동은 2-4 심화2에서만 사용할 수 있습니다.";
+  } else if (hardwareConnected) {
+    tcpJogBlocker = "기존 장비 연결 작업이 끝난 뒤 이 수업의 연결을 확인하세요.";
+  } else if (tcpJogBusy) {
+    tcpJogBlocker = "다른 확인·이동 또는 도형 실행이 끝난 뒤 다시 시도하세요.";
+  } else {
+    tcpJogBlocker = practice.session.readiness(true) ?? "";
+    if (!tcpJogBlocker && !liveMeasurement)
+      tcpJogBlocker = "같은 연결에서 새 TCP 위치를 먼저 읽으세요.";
+    if (
+      !tcpJogBlocker &&
+      liveMeasurement &&
+      !measurementFresh(liveMeasurement)
+    )
+      tcpJogBlocker = "TCP 보고가 오래되었습니다. 현재 위치를 새로 읽으세요.";
+    if (!tcpJogBlocker && liveMeasurement?.moving)
+      tcpJogBlocker = "장비가 움직이는 중입니다. 정지 후 위치를 확인하세요.";
+  }
+  const activeConnectionToken = liveSession.connectionToken;
+  const referenceConnectionCurrent =
+    !!frame &&
+    !!activeConnectionToken &&
+    frame.source === liveSession.source &&
+    frame.samples.length === 3 &&
+    frame.samples.every(
+      (sample) =>
+        sample.connectionToken === activeConnectionToken &&
+        sample.source === liveSession.source,
+    );
+  const liftConnectionCurrent =
+    !!liftRecord &&
+    !!activeConnectionToken &&
+    liftRecord.connectionToken === activeConnectionToken &&
+    liftRecord.source === liveSession.source;
+  const teacherPreparationBlockers = physicalBlockers
+    .filter((blocker) =>
+      ["connection", "references", "height"].includes(blocker.target),
+    )
+    .map((blocker) => blocker.message);
 
   const state: PaperCoordinateStudyViewState = {
     dtBlockers: isMergedPaper(level) ? dtBlockers : undefined,
@@ -3231,16 +3489,47 @@ export function PaperCoordinateStudy({
     planHash,
     preparationSummary: [
       frame
-        ? `O/X/Y ${frame.coordinateSystem} · User ${frame.user} / Tool ${frame.tool} · ${frame.source === "hardware" ? "실장비" : frame.source === "dt" ? "DT" : frame.source === "mock" ? "모의" : "교사 입력"}`
+        ? `O/X/Y ${frame.coordinateSystem} · User ${frame.user} / Tool ${frame.tool} · ${frame.source === "hardware" ? "실장비" : frame.source === "dt" ? "DT" : frame.source === "mock" ? "모의" : "교사 입력"}${referenceConnectionCurrent ? " · 현재 연결 유효" : " · 현재 연결에서 재기록 필요"}`
         : "O/X/Y 기준점 준비 필요",
       liftRecord
-        ? `펜 높이 ${Number(liftRecord.z).toFixed(1)} mm · ${liftRecord.source === "hardware" ? "실장비" : liftRecord.source === "mock" ? "모의" : "교사 입력"}`
+        ? `펜 높이 ${Number(liftRecord.z).toFixed(1)} mm · ${liftRecord.source === "hardware" ? "실장비" : liftRecord.source === "mock" ? "모의" : "교사 입력"}${liftConnectionCurrent ? " · 현재 연결 유효" : " · 현재 연결에서 재기록 필요"}`
         : "펜 들기 높이 준비 필요",
       `허용오차 위치 ±${practice.setupDraft.positionTolerance} mm · 방향 ±${practice.setupDraft.rotationTolerance}°`,
       criteriaMatches
         ? "이번 시도 기준 저장됨"
         : "이번 시도 실행 전 기준 저장 필요",
     ],
+    teacherPreparationReady: teacherPreparationBlockers.length === 0,
+    teacherPreparationBlockers,
+    tcpJog: {
+      mode: liveSession.mode,
+      connection: liveSession.connection,
+      source: liveSession.source,
+      pose: liveMeasurement?.pose ?? null,
+      seq: liveMeasurement?.seq ?? null,
+      ageMs: tcpJogAgeMs,
+      fresh:
+        !!liveMeasurement &&
+        measurementFresh(liveMeasurement) &&
+        !liveMeasurement.moving,
+      user: liveMeasurement?.user ?? null,
+      tool: liveMeasurement?.tool ?? null,
+      appliedUser: liveSession.setup?.user ?? null,
+      appliedTool: liveSession.setup?.tool ?? null,
+      appliedSpeed: liveSession.setup?.speed ?? null,
+      busy: tcpJogBusy,
+      pending: practice.operationPending,
+      stopAvailable:
+        practice.operationPending ||
+        liveSession.busy ||
+        !!liveMeasurement?.moving,
+      canMove: !tcpJogBlocker,
+      blocker: tcpJogBlocker,
+      status: tcpJogStatus,
+      message: tcpJogMessage,
+    },
+    referenceConnectionCurrent,
+    liftConnectionCurrent,
     verificationReasonDraft,
     followupObservationDraft,
     modelDecision,
