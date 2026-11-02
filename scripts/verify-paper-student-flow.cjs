@@ -261,7 +261,9 @@ async function main() {
       console.log(`UI clicked: ${label}`);
     };
     const screen = async (number) => {
-      await view.getByText(`화면 ${number} / 3`, { exact: true }).waitFor();
+      await view
+        .getByText(new RegExp(`^화면 ${number} / 3(?: ·|$)`))
+        .waitFor();
     };
     const assertFlowNavReadable = async () => {
       const items = await view
