@@ -338,6 +338,10 @@ export function PaperCoordinateStudy({
     mismatchedPrediction;
 
   const lastSaveSucceededRef = useRef(true);
+  const pendingInkDraftRef = useRef<{
+    recordId: string;
+    snapshot: string;
+  } | null>(null);
   const saveAll = useCallback(
     (
       nextRecords: PaperTrialRecord[],
@@ -345,18 +349,31 @@ export function PaperCoordinateStudy({
     ) => {
       setSaveState("saving");
       const ok = writeEvidence(STORAGE_KEY, nextRecords);
-      lastSaveSucceededRef.current = ok;
+      const pendingInkDraft = pendingInkDraftRef.current;
+      const pendingInkDraftSaved =
+        !!pendingInkDraft &&
+        nextRecords.some(
+          (record) =>
+            record.id === pendingInkDraft.recordId &&
+            JSON.stringify(record.drafts?.inkReadings ?? null) ===
+              pendingInkDraft.snapshot,
+        );
       if (ok) {
         recordsRef.current = nextRecords;
         setRecords(nextRecords);
+        if (pendingInkDraftSaved) pendingInkDraftRef.current = null;
       }
-      setSaveState(ok ? "saved" : "failed");
+      const fullySaved = ok && (!pendingInkDraft || pendingInkDraftSaved);
+      lastSaveSucceededRef.current = fullySaved;
+      setSaveState(fullySaved ? "saved" : "failed");
       setSaveMessage(
-        ok
+        fullySaved
           ? message
-          : "브라우저 저장에 실패했습니다. 화면을 닫기 전에 기록을 내보내세요.",
+          : ok
+            ? "현재 잉크 입력이 아직 저장되지 않았습니다. 입력을 유지하고 다시 시도하세요."
+            : "브라우저 저장에 실패했습니다. 화면을 닫기 전에 기록을 내보내세요.",
       );
-      return ok;
+      return fullySaved;
     },
     [],
   );
@@ -375,6 +392,33 @@ export function PaperCoordinateStudy({
     },
     [saveAll],
   );
+  const persistPendingInkDraft = (
+    record: PaperTrialRecord,
+    readings: PaperInkReadingDraft[],
+    message = "현재 화면의 잉크 입력을 먼저 저장했습니다.",
+  ) => {
+    const pending = pendingInkDraftRef.current;
+    if (!pending) return true;
+    if (pending.recordId !== record.id) return false;
+
+    const latest =
+      recordsRef.current.find((item) => item.id === record.id) ?? record;
+    pendingInkDraftRef.current = {
+      recordId: record.id,
+      snapshot: JSON.stringify(readings),
+    };
+    upsert(
+      {
+        ...latest,
+        drafts: { ...latest.drafts, inkReadings: readings },
+      },
+      message,
+    );
+    return (
+      lastSaveSucceededRef.current &&
+      pendingInkDraftRef.current?.recordId !== record.id
+    );
+  };
   const createTrial = useCallback(
     (options: {
       targetSet: PaperTargetSet;
@@ -900,7 +944,7 @@ export function PaperCoordinateStudy({
   };
 
   const prepareAiAnalysis = () => {
-    const record = active?.id
+    let record = active?.id
       ? recordsRef.current.find((item) => item.id === active.id)
       : undefined;
     if (
@@ -918,9 +962,20 @@ export function PaperCoordinateStudy({
       setPageError(message);
       return { ok: false as const, message };
     }
+    const analysisRunId = record.run.id;
+    if (pendingInkDraftRef.current) {
+      if (!persistPendingInkDraft(record, inkDraft)) {
+        const message =
+          "잉크 입력 자동 저장에 실패해 분석을 보내지 않았습니다. 화면의 최신 입력을 유지했습니다. 저장 공간을 확인한 뒤 다시 누르세요.";
+        setPageError(message);
+        return { ok: false as const, message, target: "ink" as const };
+      }
+      record =
+        recordsRef.current.find((item) => item.id === record!.id) ?? record;
+    }
     const prepared = preparePaperInkReadings(
       record,
-      record.drafts?.inkReadings ?? inkDraft,
+      inkDraft,
       targetPoints,
       isMergedPaper(level) ? 20 : 10,
       Date.now(),
@@ -943,6 +998,10 @@ export function PaperCoordinateStudy({
         "잉크 입력을 현재 실행·점·기준에 연결해 저장했습니다.",
       );
       if (!lastSaveSucceededRef.current) {
+        pendingInkDraftRef.current = {
+          recordId: record.id,
+          snapshot: JSON.stringify(inkDraft),
+        };
         const message =
           "잉크 관측 저장에 실패해 AI 분석을 보내지 않았습니다. 입력은 유지했습니다. 저장 공간을 확인하고 다시 시도하세요.";
         setPageError(message);
@@ -952,7 +1011,7 @@ export function PaperCoordinateStudy({
     const saved = recordsRef.current.find((item) => item.id === record.id);
     if (
       !saved ||
-      saved.run?.id !== record.run.id ||
+      saved.run?.id !== analysisRunId ||
       saved.run.status !== "completed"
     ) {
       const message =
@@ -981,18 +1040,35 @@ export function PaperCoordinateStudy({
         "작성 중인 입력을 자동 저장했습니다.",
       );
     },
-    onRetrySave: () =>
-      saveAll(recordsRef.current, "저장됨 · 현재 학습 입력을 보존했습니다."),
+    onRetrySave: () => {
+      const current = active?.id
+        ? recordsRef.current.find((item) => item.id === active.id)
+        : undefined;
+      if (
+        current &&
+        pendingInkDraftRef.current &&
+        !persistPendingInkDraft(current, inkDraft)
+      ) {
+        setPageError(
+          "잉크 입력 저장에 실패했습니다. 현재 화면의 입력은 유지되어 있으며 다시 시도하세요.",
+        );
+        return;
+      }
+      saveAll(recordsRef.current, "저장됨 · 현재 학습 입력을 보존했습니다.");
+      if (lastSaveSucceededRef.current) setPageError("");
+    },
     onSavePlanAndContinue: () => saveCurrentPlan(true),
     onSaveRetryPlan: () => saveCurrentPlan(false),
     onContinueToRevision: (hypothesis, diagnosis, inkRows) => {
-      const current = active?.id
+      let current = active?.id
         ? recordsRef.current.find((item) => item.id === active.id)
         : undefined;
       if (!current?.run || current.run.status !== "completed") {
         setPageError("먼저 현재 예측의 DT 또는 허용된 실행을 완료하세요.");
         return { message: "완료된 실행 결과가 필요합니다.", target: "run" };
       }
+      const currentAttemptId = current.id;
+      const currentRunId = current.run.id;
       const currentDiagnosis = diagnosis ?? current.diagnosis ?? null;
       if (!currentDiagnosis || currentDiagnosis.status !== "complete") {
         setPageError("현재 실행의 비교 자료가 아직 완성되지 않았습니다.");
@@ -1003,8 +1079,8 @@ export function PaperCoordinateStudy({
       }
       const shown = (current.aiAnalyses ?? []).some(
         (item) =>
-          item.recordId === current.id &&
-          item.runId === current.run!.id &&
+          item.recordId === currentAttemptId &&
+          item.runId === currentRunId &&
           item.planHash === current.run!.planHash &&
           item.source === current.run!.source &&
           !!item.displayedAt,
@@ -1027,9 +1103,21 @@ export function PaperCoordinateStudy({
           target: "hypothesis",
         };
       }
+      if (
+        pendingInkDraftRef.current &&
+        !persistPendingInkDraft(current, inkRows)
+      ) {
+        const message =
+          "잉크 입력 자동 저장에 실패해 단계 이동을 막았습니다. 화면의 최신 입력을 유지했습니다. 저장 공간을 확인한 뒤 다시 누르세요.";
+        setPageError(message);
+        return { message, target: "ink" };
+      }
+      const persistedCurrent =
+        recordsRef.current.find((item) => item.id === currentAttemptId) ??
+        current;
       const prepared = preparePaperInkReadings(
-        current,
-        current.drafts?.inkReadings ?? inkRows,
+        persistedCurrent,
+        inkRows,
         targetPoints,
         isMergedPaper(level) ? 20 : 10,
         Date.now(),
@@ -1040,14 +1128,14 @@ export function PaperCoordinateStudy({
       }
       upsert(
         {
-          ...current,
+          ...persistedCurrent,
           diagnosis: currentDiagnosis,
           studentHypothesis: hypothesis.trim(),
           status: "reasoned",
           stage: 7,
           inkReadings: prepared.readings.length ? prepared.readings : undefined,
           drafts: {
-            ...current.drafts,
+            ...persistedCurrent.drafts,
             studentHypothesis: undefined,
             inkReadings: undefined,
           },
@@ -1055,6 +1143,10 @@ export function PaperCoordinateStudy({
         "비교 근거와 학생 가설을 저장했습니다. 입력한 잉크 자료는 현재 실행·점·출처에 연결했습니다.",
       );
       if (!lastSaveSucceededRef.current) {
+        pendingInkDraftRef.current = {
+          recordId: currentAttemptId,
+          snapshot: JSON.stringify(inkRows),
+        };
         const message =
           "비교 근거 저장에 실패해 다음 화면으로 이동하지 않았습니다. 입력은 유지했습니다. 저장 상태를 확인하고 다시 시도하세요.";
         setPageError(message);
@@ -1066,7 +1158,7 @@ export function PaperCoordinateStudy({
       return null;
     },
     onFinalizeRevalidation: (decision, reason) => {
-      const latest = active?.id
+      let latest = active?.id
         ? recordsRef.current.find((item) => item.id === active.id)
         : undefined;
       if (
@@ -1081,14 +1173,28 @@ export function PaperCoordinateStudy({
             "실행 완료와 실행 전 기준이 확인되지 않아 최종 판정을 저장하지 않았습니다.",
         };
       }
+      const latestAttemptId = latest.id;
+      const latestRunId = latest.run.id;
       if (!reason.trim()) {
         const message = "최종 판단 근거를 입력해야 저장할 수 있습니다.";
         setPageError(message);
         return { message };
       }
+      if (
+        pendingInkDraftRef.current &&
+        !persistPendingInkDraft(latest, inkDraft)
+      ) {
+        const message =
+          "잉크 입력 자동 저장에 실패해 최종 판정을 막았습니다. 화면의 최신 입력을 유지했습니다. 저장 공간을 확인한 뒤 다시 누르세요.";
+        setPageError(message);
+        return { message };
+      }
+      const persistedLatest =
+        recordsRef.current.find((item) => item.id === latestAttemptId) ??
+        latest;
       const prepared = preparePaperInkReadings(
-        latest,
-        latest.drafts?.inkReadings ?? inkDraft,
+        persistedLatest,
+        inkDraft,
         targetPoints,
         isMergedPaper(level) ? 20 : 10,
         Date.now(),
@@ -1100,15 +1206,19 @@ export function PaperCoordinateStudy({
       if (prepared.changed) {
         upsert(
           {
-            ...latest,
+            ...persistedLatest,
             inkReadings: prepared.readings.length
               ? prepared.readings
               : undefined,
-            drafts: { ...latest.drafts, inkReadings: undefined },
+            drafts: { ...persistedLatest.drafts, inkReadings: undefined },
           },
           "재검증 잉크 입력을 현재 실행에 먼저 저장했습니다.",
         );
         if (!lastSaveSucceededRef.current) {
+          pendingInkDraftRef.current = {
+            recordId: latestAttemptId,
+            snapshot: JSON.stringify(inkDraft),
+          };
           const message =
             "잉크 관측 저장에 실패해 최종 판정을 기록하지 않았습니다. 입력은 유지했습니다. 저장 상태를 확인하고 다시 시도하세요.";
           setPageError(message);
@@ -1116,11 +1226,11 @@ export function PaperCoordinateStudy({
         }
       }
       const saved = recordsRef.current.find(
-        (record) => record.id === latest.id,
+        (record) => record.id === latestAttemptId,
       );
       if (
         !saved ||
-        saved.run?.id !== latest.run.id ||
+        saved.run?.id !== latestRunId ||
         saved.run.status !== "completed"
       ) {
         const message =
@@ -1243,27 +1353,44 @@ export function PaperCoordinateStudy({
         );
         return;
       }
+      let currentActive = active;
+      if (pendingInkDraftRef.current) {
+        if (
+          !currentActive ||
+          pendingInkDraftRef.current.recordId !== currentActive.id ||
+          !persistPendingInkDraft(currentActive, inkDraft)
+        ) {
+          setPageError(
+            "잉크 입력 자동 저장에 실패해 단계 이동을 막았습니다. 현재 화면의 입력을 유지했습니다. 저장 공간을 확인한 뒤 다시 시도하세요.",
+          );
+          return;
+        }
+        currentActive =
+          recordsRef.current.find((item) => item.id === currentActive!.id) ??
+          currentActive;
+      }
       const stageNavigationBlocker = paperStageNavigationRequirement(
         nextStage,
-        (diagnosisOverride ?? active?.diagnosis)?.status === "complete",
-        !!active?.studentHypothesis?.trim(),
+        (diagnosisOverride ?? currentActive?.diagnosis)?.status === "complete",
+        !!currentActive?.studentHypothesis?.trim(),
       );
       const required =
-        nextStage >= 2 && !active?.frame
+        nextStage >= 2 && !currentActive?.frame
           ? "O/X/Y 기준점을 먼저 저장하세요."
-          : nextStage >= 3 && !active?.transform
+          : nextStage >= 3 && !currentActive?.transform
             ? "변환 관계를 먼저 저장하세요."
-            : nextStage >= 4 && !active?.predictions?.length
+            : nextStage >= 4 && !currentActive?.predictions?.length
               ? "좌표 예측을 먼저 저장하세요."
-              : nextStage >= 5 && active?.run?.status !== "completed"
+              : nextStage >= 5 && currentActive?.run?.status !== "completed"
                 ? "현재 예측의 실행을 먼저 완료하세요."
                 : nextStage >= 6 &&
-                    (!active?.run?.verificationCriteria ||
-                      active.run.verificationCriteria.recordId !== active.id ||
-                      active.run.verificationCriteria.frameId !==
-                        active.frame?.id ||
-                      active.run.verificationCriteria.planHash !==
-                        active.run.planHash)
+                    (!currentActive?.run?.verificationCriteria ||
+                      currentActive.run.verificationCriteria.recordId !==
+                        currentActive.id ||
+                      currentActive.run.verificationCriteria.frameId !==
+                        currentActive.frame?.id ||
+                      currentActive.run.verificationCriteria.planHash !==
+                        currentActive.run.planHash)
                   ? "실행 전 확인한 기준이 없는 실행은 검증 완료로 판정할 수 없습니다."
                   : (stageNavigationBlocker?.message ?? "");
       if (required) {
@@ -1272,9 +1399,18 @@ export function PaperCoordinateStudy({
       }
       setPageError("");
       setStage(nextStage);
-      if (active) upsert({ ...active, stage: nextStage });
-      if (nextStage === 6 && active?.run && active.frame && active.planHash) {
-        const analyzed = diagnoseCompletedRecord(active, records);
+      if (currentActive)
+        upsert({ ...currentActive, stage: nextStage });
+      if (
+        nextStage === 6 &&
+        currentActive?.run &&
+        currentActive.frame &&
+        currentActive.planHash
+      ) {
+        const analyzed = diagnoseCompletedRecord(
+          currentActive,
+          recordsRef.current,
+        );
         setDiagnosisOverride(analyzed.diagnosis);
         upsert(analyzed.record, analyzed.message);
       }
@@ -1718,12 +1854,26 @@ export function PaperCoordinateStudy({
         row.point === point ? { ...row, [field]: value } : row,
       );
       setInkDraft(next);
-      if (active)
+      if (active) {
+        pendingInkDraftRef.current = {
+          recordId: active.id,
+          snapshot: JSON.stringify(next),
+        };
         upsert({ ...active, drafts: { ...active.drafts, inkReadings: next } });
+        if (!lastSaveSucceededRef.current) {
+          setPageError(
+            "잉크 입력 자동 저장에 실패했습니다. 화면의 최신 값을 유지했습니다. 저장이 복구되기 전에는 분석·단계 이동·최종 판정을 진행할 수 없습니다.",
+          );
+        } else {
+          setPageError((previous) =>
+            previous.startsWith("잉크 입력 자동 저장에 실패") ? "" : previous,
+          );
+        }
+      }
     },
     onSaveInkReadings: () => {
       if (running) return;
-      const latest = active?.id
+      let latest = active?.id
         ? recordsRef.current.find((item) => item.id === active.id)
         : undefined;
       if (
@@ -1737,9 +1887,20 @@ export function PaperCoordinateStudy({
         );
         return;
       }
+      if (
+        pendingInkDraftRef.current &&
+        !persistPendingInkDraft(latest, inkDraft)
+      ) {
+        setPageError(
+          "잉크 입력 저장에 실패했습니다. 화면의 최신 값을 유지했습니다. 저장 상태를 확인하고 다시 시도하세요.",
+        );
+        return;
+      }
+      latest =
+        recordsRef.current.find((item) => item.id === latest!.id) ?? latest;
       const prepared = preparePaperInkReadings(
         latest,
-        latest.drafts?.inkReadings ?? inkDraft,
+        inkDraft,
         targetPoints,
         isMergedPaper(level) ? 20 : 10,
         Date.now(),
@@ -1766,6 +1927,10 @@ export function PaperCoordinateStudy({
         "학생이 눈금에서 읽은 잉크 좌표를 제어기 관측과 분리해 저장했습니다.",
       );
       if (!lastSaveSucceededRef.current) {
+        pendingInkDraftRef.current = {
+          recordId: latest.id,
+          snapshot: JSON.stringify(inkDraft),
+        };
         setPageError(
           "잉크 관측 저장에 실패했습니다. 입력은 유지했으며 이 자료는 분석·판정에 사용되지 않았습니다.",
         );

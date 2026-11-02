@@ -26,6 +26,8 @@ const requestEvidenceSnapshots = [];
 const errors = [];
 const networkFailures = [];
 let currentPage;
+const screenshotCapture = process.env.PAPER_STUDENT_FLOW_CAPTURE_SCREENSHOTS !== "0";
+const screenshotsCaptured = [];
 fs.mkdirSync(evidenceDir, { recursive: true });
 for (const file of fs.readdirSync(evidenceDir)) {
   if (
@@ -69,18 +71,25 @@ async function main() {
     const recordId = execution[0]?.recordId;
     const runId = execution[0]?.runId;
     const savedRecord = await currentPage.evaluate(
-      ({ expectedRecordId }) => {
-        const key = Object.keys(localStorage).find((value) =>
+      ({ expectedRecordId, expectedRunId }) => {
+        const keys = Object.keys(localStorage).filter((value) =>
           value.endsWith("physical-ai-paper-coordinate-v1"),
         );
-        const rows = key ? JSON.parse(localStorage.getItem(key) || "[]") : [];
-        return rows.find((row) => row.id === expectedRecordId) ?? null;
+        for (const key of keys) {
+          const rows = JSON.parse(localStorage.getItem(key) || "[]");
+          const match = rows.find(
+            (row) =>
+              row.id === expectedRecordId && row.run?.id === expectedRunId,
+          );
+          if (match) return match;
+        }
+        return null;
       },
-      { expectedRecordId: recordId },
+      { expectedRecordId: recordId, expectedRunId: runId },
     );
     assert.ok(
       savedRecord && savedRecord.run?.id === runId,
-      "the exact current run must already be durably saved before the AI request",
+      "the exact current attempt and run must already be durably saved before the AI request",
     );
     assert.ok(
       savedRecord.inkReadings?.length,
@@ -283,8 +292,11 @@ async function main() {
         ),
       );
     };
-    const shot = async (filename) =>
-      page.screenshot({ path: path.join(evidenceDir, filename) });
+    const shot = async (filename) => {
+      if (!screenshotCapture) return;
+      await page.screenshot({ path: path.join(evidenceDir, filename) });
+      screenshotsCaptured.push(filename);
+    };
     const prepareCriteria = async () => {
       const details = view.locator(".pcv-teacher-prep--execution");
       if (!(await details.evaluate((element) => element.open)))
@@ -430,6 +442,7 @@ async function main() {
 
     async function requestMockAnalysis(expectedCount, expectedText) {
       const analysis = view.getByRole("region", { name: "실행자료 AI 분석" });
+      const requestsBefore = requests.length;
       await analysis.evaluate((element) =>
         element.scrollIntoView({
           block: "center",
@@ -446,35 +459,51 @@ async function main() {
         .at(-1)
         .predictions.find((point) => point.name === "P1");
       if (!p1) throw new Error("P1 prediction missing for ink regression");
+      const savedBeforeInvalid = (await records()).at(-1);
+      const savedInkA =
+        savedBeforeInvalid.drafts?.inkReadings?.find(
+          (reading) => reading.point === "P1",
+        )?.xCm ?? String(p1.xCm);
       await input.fill("999");
       await click("실행자료를 GPT에 보내 분석");
       await analysis.getByRole("alert").waitFor({ state: "visible" });
       assert.equal(
         requests.length,
-        expectedCount - 1,
+        requestsBefore,
         "invalid ink input must not be sent",
       );
       assert.match(
         await analysis.getByRole("alert").innerText(),
         /종이 좌표|유효/,
       );
-      await input.fill(String(p1.xCm));
-      // A browser-storage failure must also block transmission and retain UI input.
+      await input.fill(String(savedInkA));
+      const inkB = (Number(savedInkA) + 0.2).toFixed(1);
+      // Save A first, then fail storage while the student edits the visible value to B.
       await setEvidenceWriteFailure(true);
+      await input.fill(inkB);
+      assert.equal(await input.inputValue(), inkB);
+      const recordWithSavedA = (await records()).at(-1);
+      assert.equal(
+        recordWithSavedA.drafts?.inkReadings?.find(
+          (reading) => reading.point === "P1",
+        )?.xCm,
+        String(savedInkA),
+        "failed autosave leaves persisted draft A unchanged while UI shows B",
+      );
       await click("실행자료를 GPT에 보내 분석");
       await analysis.getByRole("alert").waitFor({ state: "visible" });
       assert.equal(
         requests.length,
-        expectedCount - 1,
-        "failed ink persistence must not be sent",
+        requestsBefore,
+        "failed autosave must not send the older persisted draft",
       );
       assert.match(
         await analysis.getByRole("alert").innerText(),
-        /저장에 실패/,
+        /저장에 실패|자동 저장/,
       );
       assert.equal(
         await input.inputValue(),
-        String(p1.xCm),
+        inkB,
         "the uncommitted input stays visible after a save failure",
       );
       await setEvidenceWriteFailure(false);
@@ -507,10 +536,26 @@ async function main() {
         { timeout: 15_000 },
       );
       assert.equal(requests.length, expectedCount);
+      const committedInkB = requestEvidenceSnapshots
+        .at(-1)
+        .inkReadings.find((reading) => reading.point === "P1");
+      assert.equal(
+        committedInkB?.rawX,
+        inkB,
+        "recovery saves the current visible B before analysis, not stored A",
+      );
+      const outgoingExecution = JSON.parse(requests.at(-1).execution);
+      const outgoingP1Ink = outgoingExecution
+        .flatMap((execution) => execution.inkComparisons ?? [])
+        .find((row) => row.point === "P1")?.inkReading;
+      assert.equal(
+        outgoingP1Ink?.rawX,
+        inkB,
+        "the analysis request contains the same saved B measurement",
+      );
       assert.equal(requestEvidenceSnapshots.length, expectedCount);
       return requests.at(-1);
     }
-
     await enterInkReadings(first);
     const firstRequest = await requestMockAnalysis(1, firstMock);
     const firstCondition = JSON.parse(firstRequest.condition);
@@ -562,14 +607,46 @@ async function main() {
       "P3의 X 계산에서 11 cm × 10 mm/cm를 110 mm로 계산해 원점 180 mm에 더해야 한다는 점을 다시 확인하겠습니다.",
     );
     console.log("PASS student hypothesis entered through visible UI");
+    const p1InkB = (await records())[0].inkReadings.find(
+      (reading) => reading.point === "P1",
+    )?.rawX;
+    assert.ok(p1InkB, "the recovered first analysis saved P1 ink B");
+    const p1InkC = (Number(p1InkB) + 0.1).toFixed(1);
+    await setEvidenceWriteFailure(true);
+    await view
+      .getByLabel("P1 잉크 위치 x cm", { exact: true })
+      .fill(p1InkC);
+    await click("수정하고 다시 확인하기로");
+    await screen(2);
+    assert.equal((await records()).length, 1);
+    assert.equal(
+      (await view.getByLabel("P1 잉크 위치 x cm", { exact: true }).inputValue()),
+      p1InkC,
+      "failed autosave blocks stage movement and keeps the visible draft",
+    );
+    assert.match(
+      await view.getByRole("alert").last().innerText(),
+      /자동 저장에 실패해 단계 이동을 막았습니다/,
+    );
+    await setEvidenceWriteFailure(false);
+    await view
+      .getByLabel("P1 잉크 위치 x cm", { exact: true })
+      .fill(String(p1InkB));
+    assert.equal(
+      (await records())[0].drafts?.inkReadings?.find(
+        (reading) => reading.point === "P1",
+      )?.xCm,
+      String(p1InkB),
+      "the restored save uses the current screen value before stage movement",
+    );
+    await click("수정하고 다시 확인하기로");
+    await screen(3);
     assert.equal(
       await view
         .getByRole("button", { name: "생각 저장", exact: true })
         .count(),
       0,
     );
-    await click("수정하고 다시 확인하기로");
-    await screen(3);
     await view
       .getByLabel("추가 관측과 근거", { exact: true })
       .fill("종이 눈금에서 P3의 11 cm 위치를 다시 확인했습니다.");
@@ -735,16 +812,15 @@ async function main() {
       );
     const p2 = all[1].predictions.find((point) => point.name === "P2");
     assert.ok(p2, "P2 independent revalidation prediction exists");
-    await view
-      .getByLabel("P2 잉크 위치 x cm", { exact: true })
-      .fill(String(Number(p2.xCm) + 0.3));
-    await shot("09-final-judgment-input.png");
-    await view.getByLabel("P2 잉크 위치 x cm", { exact: true }).fill("999");
+    const p2InkA =
+      (await records())[1].inkReadings.find((reading) => reading.point === "P2")
+        ?.rawX ?? String(p2.xCm);
     const automaticDtAssessment = (await records())[1].revalidation;
     assert.ok(
       automaticDtAssessment,
       "the DT run may already have a simulation-only assessment without a student final judgment",
     );
+    await view.getByLabel("P2 잉크 위치 x cm", { exact: true }).fill("999");
     await click("최종 판단 저장");
     const invalidFinalAlerts = view
       .getByRole("alert")
@@ -770,14 +846,27 @@ async function main() {
       automaticDtAssessment.checkedAt,
       "invalid input must not replace the assessment already produced by the DT run",
     );
+    const p2InkB = (Number(p2.xCm) + 0.3).toFixed(1);
     await view
       .getByLabel("P2 잉크 위치 x cm", { exact: true })
-      .fill(String(Number(p2.xCm) + 0.3));
+      .fill(String(p2InkA));
     await setEvidenceWriteFailure(true);
+    await view
+      .getByLabel("P2 잉크 위치 x cm", { exact: true })
+      .fill(p2InkB);
+    const p2RecordWithSavedA = (await records())[1];
+    assert.equal(
+      p2RecordWithSavedA.drafts?.inkReadings?.find(
+        (reading) => reading.point === "P2",
+      )?.xCm,
+      String(p2InkA),
+      "failed autosave leaves the previous saved P2 ink value A intact",
+    );
+    await shot("09-final-judgment-input.png");
     await click("최종 판단 저장");
     const failedSaveAlerts = view
       .getByRole("alert")
-      .filter({ hasText: /잉크 관측 저장에 실패/ });
+      .filter({ hasText: /잉크 입력 자동 저장에 실패|잉크 관측 저장에 실패/ });
     await failedSaveAlerts.first().waitFor({ state: "visible" });
     assert.ok(
       (await failedSaveAlerts.count()) >= 1,
@@ -789,8 +878,15 @@ async function main() {
       "storage failure must not commit final judgment",
     );
     assert.equal(
+      (await records())[1].inkReadings.find(
+        (reading) => reading.point === "P2",
+      )?.rawX,
+      String(p2InkA),
+      "failed autosave does not replace saved A with an uncommitted B",
+    );
+    assert.equal(
       await view.getByLabel("P2 잉크 위치 x cm", { exact: true }).inputValue(),
-      String(Number(p2.xCm) + 0.3),
+      p2InkB,
       "final-judgment save failure retains the current draft",
     );
     await setEvidenceWriteFailure(false);
@@ -802,7 +898,7 @@ async function main() {
         !!record.modelDecisionReason &&
         record.inkReadings?.some(
           (row) =>
-            row.point === "P2" && row.rawX === String(Number(p2.xCm) + 0.3),
+            row.point === "P2" && row.rawX === p2InkB,
         ),
     );
     all = all.map((record) => committedPaperRecords.get(record.id) ?? record);
@@ -816,7 +912,7 @@ async function main() {
     );
     assert.equal(
       finalized.inkReadings.find((row) => row.point === "P2").rawX,
-      String(Number(p2.xCm) + 0.3),
+      p2InkB,
     );
     assert.equal(
       finalized.inkReadings.find((row) => row.point === "P2").runId,
@@ -854,9 +950,7 @@ async function main() {
       diagnosisAfter: all[1].diagnosis.pattern,
       previousDisplayedFeedbackLinked:
         linked[0].previouslyDisplayedFeedback[0].text === firstMock,
-      screenshots: fs
-        .readdirSync(evidenceDir)
-        .filter((file) => file.endsWith(".png")),
+      screenshots: screenshotsCaptured,
       errors,
       networkFailures,
     };
