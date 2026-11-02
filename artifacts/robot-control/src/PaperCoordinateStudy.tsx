@@ -1286,6 +1286,12 @@ export function PaperCoordinateStudy({
             "실행 완료와 실행 전 기준이 확인되지 않아 최종 판정을 저장하지 않았습니다.",
         };
       }
+      if (latest.diagnosis?.status !== "complete") {
+        const message =
+          "현재 실행에 연결된 유효한 비교 해석 자료가 없어 최종 판정을 저장하지 않았습니다.";
+        setPageError(message);
+        return { message };
+      }
       const latestAttemptId = latest.id;
       const latestRunId = latest.run.id;
       if (!reason.trim()) {

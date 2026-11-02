@@ -16,9 +16,15 @@ import {
 } from "./paperSceneStore";
 import { paperInkComparisons } from "./paperAiAnalysis";
 import { paperVerificationPointGuide } from "./paperCoordinateStudy";
-import { paperVerificationCriteriaSavedForAttempt } from "./paperCoordinateViewModel";
+import {
+  paperComparableRunPair,
+  paperRetryComparisonReady,
+  paperRetryInitialStep,
+  paperRetryRunJustCompleted,
+  paperVerificationCriteriaSavedForAttempt,
+} from "./paperCoordinateViewModel";
 import { ExecutionAiAnalysis } from "./ExecutionAiAnalysis";
-import type { PaperPointName } from "./paperCoordinateStudy";
+import type { PaperPointName, PaperRunSnapshot } from "./paperCoordinateStudy";
 import {
   paperStudentScreenForStage,
   type PaperCoordinateStudyViewProps,
@@ -146,7 +152,10 @@ export function PaperCoordinateStudyView({
   const [jogStepMm, setJogStepMm] = useState("1");
   const [predictionPointIndex, setPredictionPointIndex] = useState(0);
   const [guidedRetryStep, setGuidedRetryStep] = useState<1 | 2 | 3 | 4>(1);
-  const retryAttemptRef = useRef<string | null>(null);
+  const retryRunStateRef = useRef<{
+    recordId: string | null;
+    status: PaperRunSnapshot["status"] | null;
+  }>({ recordId: null, status: null });
   const journey = state.revisionJourney
     ? {
         ...state.revisionJourney,
@@ -305,29 +314,28 @@ export function PaperCoordinateStudyView({
   }, [state.recordId, state.targetSet, state.targetPoints.length]);
   useEffect(() => {
     if (state.targetSet !== "revalidation") {
-      retryAttemptRef.current = null;
+      retryRunStateRef.current = { recordId: null, status: null };
       setGuidedRetryStep(1);
       return;
     }
-    if (retryAttemptRef.current !== state.recordId) {
-      retryAttemptRef.current = state.recordId;
+    const status = state.run?.status ?? null;
+    const previous = retryRunStateRef.current;
+    if (previous.recordId !== state.recordId) {
+      retryRunStateRef.current = { recordId: state.recordId, status };
       setGuidedRetryStep(
-        state.run?.status === "completed"
-          ? 4
-          : state.activeAttempt?.planHash
-            ? 3
-            : 1,
+        paperRetryInitialStep(status, !!state.activeAttempt?.planHash),
       );
+      return;
     }
-  }, [state.recordId, state.targetSet, state.run?.status, state.activeAttempt?.planHash]);
-  useEffect(() => {
-    if (
-      state.targetSet === "revalidation" &&
-      state.run?.status === "completed" &&
-      guidedRetryStep === 3
-    )
+    retryRunStateRef.current = { recordId: state.recordId, status };
+    if (paperRetryRunJustCompleted(previous.status, status))
       setGuidedRetryStep(4);
-  }, [guidedRetryStep, state.run?.status, state.targetSet]);
+  }, [
+    state.recordId,
+    state.targetSet,
+    state.run?.status,
+    state.activeAttempt?.planHash,
+  ]);
 
   const activeTitle =
     STAGES.find((stage) => stage.id === state.stage)?.title ?? "과제 이해";
@@ -361,6 +369,52 @@ export function PaperCoordinateStudyView({
     element?.scrollIntoView({ block: "center", behavior: "smooth" });
     element?.focus({ preventScroll: true });
   };
+  const focusRunRequirement = (
+    target: import("./paperExecutionGuards").PaperRunBlocker["target"],
+  ) => {
+    if (target === "connection") {
+      actions.onOpenConnection?.();
+      return;
+    }
+    if (target === "dt") {
+      requestAnimationFrame(() => {
+        const panel = root.current?.querySelector<HTMLElement>(
+          '[data-testid="paper-execution-controls"]',
+        );
+        panel?.scrollIntoView({ block: "center", behavior: "smooth" });
+        panel?.focus({ preventScroll: true });
+      });
+      return;
+    }
+    const stage: PaperLessonStage =
+      target === "references" ? 1 : target === "prediction" ? 3 : 4;
+    if (state.targetSet === "revalidation") {
+      setGuidedRetryStep(target === "prediction" ? 2 : 3);
+    } else if (state.stage !== stage) {
+      actions.onStageChange(stage);
+    }
+    requestAnimationFrame(() => {
+      const selectors: Record<
+        import("./paperExecutionGuards").PaperRunBlocker["target"],
+        string
+      > = {
+        references: ".pcv-teacher-prep--references",
+        height: '[aria-label="펜 들기 높이"]',
+        prediction: ".pcv-predictions input",
+        criteria: '[aria-label="실행 전 검증 기준"]',
+        connection: ".pcv-execution-controls",
+        teacher: ".pcv-teacher-setting",
+        dt: '[data-testid="paper-execution-controls"]',
+      };
+      const element = root.current?.querySelector<HTMLElement>(
+        selectors[target],
+      );
+      const details = element?.closest("details");
+      if (details) details.open = true;
+      element?.scrollIntoView({ block: "center", behavior: "smooth" });
+      element?.focus({ preventScroll: true });
+    });
+  };
   const runFlowAction = (
     action: () => { message: string; target?: string } | null,
   ) => {
@@ -368,6 +422,26 @@ export function PaperCoordinateStudyView({
     setFlowGuidance(result);
     if (result?.target)
       requestAnimationFrame(() => focusFlowTarget(result.target));
+  };
+  const returnToRetryComparison = () => {
+    if (state.run?.status !== "completed") {
+      setFlowGuidance({
+        message: "완료된 재실행 자료가 없어 비교 화면을 열 수 없습니다.",
+      });
+      return;
+    }
+    setGuidedRetryStep(3);
+    setFlowGuidance({
+      message:
+        "실행 비교로 돌아왔습니다. 판단과 근거는 저장하지 않고 입력 초안으로 유지했습니다.",
+    });
+    requestAnimationFrame(() => {
+      const comparison = root.current?.querySelector<HTMLElement>(
+        '[data-testid="revalidation-comparison-step"]',
+      );
+      comparison?.scrollIntoView({ block: "start", behavior: "smooth" });
+      comparison?.focus({ preventScroll: true });
+    });
   };
   const persistDraft = (drafts: PaperTrialDrafts) => {
     actions.onPersistDrafts(drafts);
@@ -397,37 +471,7 @@ export function PaperCoordinateStudyView({
   const resolveBlocker = (
     target: import("./paperExecutionGuards").PaperRunBlocker["target"],
   ) => {
-    if (target === "connection") {
-      actions.onOpenConnection?.();
-      return;
-    }
-    if (target === "prediction") {
-      actions.onStageChange(3);
-      return;
-    }
-    if (target === "criteria") {
-      if (state.stage !== 4) actions.onStageChange(4);
-      requestAnimationFrame(() => {
-        const criteria = root.current?.querySelector<HTMLElement>(
-          '[aria-label="실행 전 검증 기준"]',
-        );
-        const details = criteria?.closest("details");
-        if (details) details.open = true;
-        criteria?.scrollIntoView({ block: "center", behavior: "smooth" });
-        criteria?.focus({ preventScroll: true });
-      });
-      return;
-    }
-    const el = root.current?.querySelector<HTMLElement>(
-      target === "height"
-        ? '[aria-label="펜 들기 높이"]'
-        : target === "teacher"
-          ? ".pcv-teacher-setting"
-          : ".pcv-run-panel",
-    );
-    if (el instanceof HTMLDetailsElement) el.open = true;
-    el?.scrollIntoView({ block: "center" });
-    el?.focus();
+    focusRunRequirement(target);
   };
   const blockers = (items: typeof state.dtBlockers, label: string) =>
     items?.length ? (
@@ -452,6 +496,168 @@ export function PaperCoordinateStudyView({
         ))}
       </ul>
     ) : null;
+  const renderExecutionControls = () => {
+    const runPair = paperComparableRunPair(
+      state.activeAttempt?.runHistory,
+      state.run,
+      state.planHash,
+      state.frame?.id,
+      state.targetSet,
+    );
+    const renderRunCard = (
+      title: string,
+      run: PaperRunSnapshot | null,
+    ) => (
+      <article className="pcv-run-evidence-card" aria-label={title} key={title}>
+        <h4>{title}</h4>
+        {run ? (
+          <>
+            <p className="pcv-run-evidence-status">
+              {run.status === "completed"
+                ? "완료"
+                : run.status === "running"
+                  ? "실행 중"
+                  : run.status === "partial"
+                    ? "부분 실행 · 미완료"
+                    : run.status === "cancelled"
+                      ? "중단 · 미완료"
+                      : "실패 · 미완료"}
+              {" · "}
+              {sourceLabel(run.source)}
+            </p>
+            <small>
+              실행 {run.id.slice(0, 8)} · 명령 {run.commands.length}개 · 관측{" "}
+              {run.observations.length}개 · {timeLabel(run.startedAt)}
+            </small>
+            {run.error && (
+              <p className="pcv-run-evidence-error" role="status">
+                {run.error}
+              </p>
+            )}
+            {run.observations.length > 0 && (
+              <ul>
+                {run.observations.map((observation, index) => (
+                  <li
+                    key={`${run.id}-${observation.point}-${index}`}
+                    data-source={observation.source}
+                  >
+                    {observation.point} · {sourceLabel(observation.source)} ·
+                    X {numberLabel(observation.pose.x)} mm · Y{" "}
+                    {numberLabel(observation.pose.y)} mm · Z{" "}
+                    {numberLabel(observation.pose.z)} mm · R{" "}
+                    {numberLabel(observation.pose.r)}°
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        ) : (
+          <p className="pcv-note">이 저장 계획에 연결된 실행 결과가 없습니다.</p>
+        )}
+      </article>
+    );
+    const dtOnlyMessage = dtOnly
+      ? "심화 1은 DT 전용입니다. 실장비 실행 버튼은 이 수준에서 사용할 수 없습니다."
+      : "";
+    return (
+      <section
+        className="pcv-execution-controls"
+        data-testid="paper-execution-controls"
+        aria-label="저장된 계획 실행"
+        tabIndex={-1}
+      >
+        <div className="pcv-execution-controls__heading">
+          <div>
+            <h3>저장된 계획 실행</h3>
+            <p>
+              시도 {state.activeAttempt?.attempt ?? "—"} ·{" "}
+              {state.targetSet === "revalidation" ? "수정 후 재확인" : "첫 예측"}{" "}
+              ·{" "}
+              {state.activeAttempt?.planHash === state.planHash &&
+              !!state.planHash
+                ? "현재 계획과 저장본 일치"
+                : "저장된 예측과 기준을 확인해야 실행 가능"}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="pcv-button pcv-button--quiet"
+            disabled={state.running}
+            onClick={() => focusRunRequirement("criteria")}
+          >
+            실행 준비·기준 열기
+          </button>
+        </div>
+        <div className="pcv-run-panel" aria-live="polite">
+          <span className="pcv-eyebrow">현재 계획의 실행 상태</span>
+          <strong>
+            {state.run
+              ? state.run.status === "completed"
+                ? "실행 완료"
+                : state.run.status === "running"
+                  ? "실행 중"
+                  : state.run.status === "partial"
+                    ? "부분 실행 · 미완료"
+                    : state.run.status === "cancelled"
+                      ? "중단 · 미완료"
+                      : "실패 · 미완료"
+              : "아직 실행 기록 없음"}
+          </strong>
+          <span>
+            {state.run
+              ? `${sourceLabel(state.run.source)} · ${state.run.observations.length}개 관측`
+              : "DT는 로봇 명령을 보내지 않습니다."}
+          </span>
+        </div>
+        {state.error && (
+          <p className="pcv-run-action-message" role="status">
+            {state.error}
+          </p>
+        )}
+        <div className="pcv-button-row pcv-button-row--wrap">
+          <div className="pcv-run-action">
+            <button
+              type="button"
+              className="pcv-button pcv-button--primary"
+              data-testid="paper-run-dt"
+              onClick={actions.onRunDT}
+              disabled={state.running || !state.runAvailable}
+            >
+              {state.running ? "처리 중" : "DT에서 확인"}
+            </button>
+            {blockers(state.dtBlockers, "DT 실행 전 확인")}
+          </div>
+          <div className="pcv-run-action">
+            <button
+              type="button"
+              className="pcv-button pcv-button--outline"
+              data-testid="paper-run-physical"
+              onClick={actions.onRunPhysical}
+              disabled={
+                state.running || dtOnly || !state.physicalAvailable
+              }
+            >
+              {state.currentSource === "mock"
+                ? "모의 브리지에서 시험"
+                : "실장비에서 확인"}
+            </button>
+            {dtOnly ? (
+              <p className="pcv-run-blocker-note">{dtOnlyMessage}</p>
+            ) : (
+              blockers(state.physicalBlockers, "실장비 실행 전 확인")
+            )}
+          </div>
+        </div>
+        <div
+          className="pcv-run-evidence-pair"
+          aria-label="같은 계획의 이전 실행과 현재 실행 비교"
+        >
+          {renderRunCard("이전 실행", runPair.previous)}
+          {renderRunCard("현재 실행", runPair.current)}
+        </div>
+      </section>
+    );
+  };
 
   const renderPaperGrid = () =>
     merged ? null : (
@@ -652,9 +858,10 @@ export function PaperCoordinateStudyView({
     <section className="pcv-alignment">
       <h3>종이 정렬과 기준점 기록</h3>
       <p>
-        교사는 종이를 고정한 뒤 웹의 TCP 미세 이동으로 펜 끝을 O, X, Y에 차례로
-        맞춥니다. 각 점에서 새 제어기 위치를 읽어 기록하세요. TCP/IP 연결에서는
-        제조사 프로그램 이동 안내를 사용하지 않습니다.
+        교사는 종이를 고정하고 안전 상태를 확인한 뒤, 웹 TCP 미세 이동이나 현재
+        장비에서 허용되는 공식 손가이딩(Unlock) 절차로 펜 끝을 O, X, Y에
+        맞춥니다. 위치를 맞춘 뒤에는 장비를 다시 고정하고 손을 뗀 다음, 같은
+        연결에서 새 TCP 보고를 받아 해당 위치를 기록하세요.
       </p>
       {state.level === "advanced-paper-hardware" && (
         <section className="pcv-tcp-jog" aria-label="교사용 TCP 미세 이동">
@@ -774,6 +981,81 @@ export function PaperCoordinateStudyView({
             <small>앱 정지는 물리 비상정지가 아닙니다.</small>
           </div>
         </section>
+      )}
+      {state.level === "advanced-paper-hardware" && (
+        <details className="pcv-details pcv-hand-guiding-guide">
+          <summary>교사용 선택 대안 · MG400 본체 손가이딩(Unlock)</summary>
+          <p>
+            이 안내는 학생 과제가 아니며 웹이 Unlock을 실행하거나 잠금 상태를
+            감지하지 않습니다. 공식 MG400 User Guide V1.7은 장비가 활성화되어 있고
+            프로그램을 실행하지 않을 때 전완부 손가이딩 버튼을 길게 눌러 수동
+            위치를 맞춘 뒤, 버튼을 다시 눌러 잠그는 절차를 설명합니다. 별도
+            Quickstart는 버튼을 눌러 해제/복귀하는 방식으로 설명해 조작 표현이
+            다릅니다. 설치된 컨트롤러·펌웨어와 맞는 매뉴얼을 따르세요.
+          </p>
+          <p>
+            두 문서는 TCP/IP 외부 제어 모드에서 손가이딩을 사용할 수 있는지
+            명시하지 않습니다. 해당 조합의 허용 조건을 확인할 수 없으면 Unlock
+            대안을 사용하지 말고 아래 웹 TCP 미세 이동을 이용하세요. 위치 조정
+            중에는 프로그램이나 경로를 실행하지 마세요.
+          </p>
+          <ol>
+            <li>
+              교사가 로봇 옆에서 작업 공간과 장착 도구를 확인하고, 실행 중인
+              프로그램·경로가 없는 정지 상태를 확인합니다.
+            </li>
+            <li>
+              허용 여부가 확인된 경우에만 해당 장비 매뉴얼의 물리 버튼 절차를
+              따릅니다. MG400 Hardware User Guide는 손가이딩 중 전완부와 장착물을
+              지지하라고 안내합니다.
+            </li>
+            <li>
+              같은 매뉴얼 절차로 잠금 상태로 되돌린 뒤 표시등/장비 상태가
+              손가이딩 종료를 나타내는지 확인하고 손을 뗍니다. 버전별 조작을
+              섞거나 잠금 여부가 불명확한 상태에서 실행하지 마세요.
+              V1.7 안내서의 표시등 표는 파란색 점멸을 손가이딩, 녹색 고정을
+              활성·프로그램 미실행 상태로 설명합니다. Quickstart는 녹색에서
+              파란색 점멸로 바뀌고 잠금 복귀 뒤에만 명령하라고 설명합니다.
+              다른 버전은 해당 장비 매뉴얼의 표시를 따르세요.
+            </li>
+            <li>
+              장비가 안정된 뒤 이 화면에서 같은 연결의 새 TCP 보고를 기다립니다.
+              그 다음에만 ‘현재 위치를 O/X/Y로 기록’을 눌러 기준점을 저장하세요.
+              펜 들기 높이도 새 위치 보고를 받은 뒤 기록해야 합니다. 수동으로
+              움직인 사실이나 이동 전 좌표만으로는 기록이 완료되지 않습니다.
+            </li>
+          </ol>
+          <p>
+            실장비 실행 전에는 기존 연결·User/Tool·장비 준비와 새 시작 위치 확인을
+            다시 완료하세요. 웹은 본체 Unlock 버튼의 상태를 직접 읽지 않으므로,
+            교사가 공식 절차에 따른 잠금 복귀를 확인해야 합니다.
+          </p>
+          <p className="pcv-hand-guiding-guide__sources">
+            <a
+              href="https://download.dobot.cc/DobotStudio-pro/20231116/Dobot%20MG400%20User%20Guide%20V1.7_20231116_en.pdf"
+              target="_blank"
+              rel="noreferrer"
+            >
+              DOBOT MG400 User Guide V1.7
+            </a>
+            {" · "}
+            <a
+              href="https://www.dobot.us/wp-content/uploads/2024/10/MG400-QUICKSTART-GUIDE.pdf"
+              target="_blank"
+              rel="noreferrer"
+            >
+              MG400 Quickstart Guide
+            </a>
+            {" · "}
+            <a
+              href="https://www.dobot.us/download/mg400-hardware-user-guide"
+              target="_blank"
+              rel="noreferrer"
+            >
+              DOBOT MG400 Hardware User Guide
+            </a>
+          </p>
+        </details>
       )}
       <div className="pcv-reference-grid">
         {POINTS.map(renderReferenceEntry)}
@@ -1346,33 +1628,35 @@ export function PaperCoordinateStudyView({
             <p className="pcv-lead">
               예측을 저장한 뒤 선택한 환경의 결과를 살펴봅니다.
             </p>
-            <div className="pcv-run-panel" tabIndex={-1}>
-              <span className="pcv-eyebrow">현재 결과 자료</span>
-              <strong>
-                {state.run
-                  ? state.run.status === "completed"
-                    ? "실행 완료"
-                    : state.run.status === "running"
-                      ? "실행 중"
-                      : state.run.status
-                  : "아직 실행 기록 없음"}
-              </strong>
-              <span>{sourceLabel(state.run?.source)}</span>
-            </div>
-            <div className="pcv-button-row pcv-button-row--wrap">
-              <div className="pcv-run-action">
-                <button
-                  type="button"
-                  className="pcv-button pcv-button--primary"
-                  onClick={actions.onRunDT}
-                  disabled={state.running || !state.runAvailable}
-                >
-                  {state.running ? "처리 중" : "DT에서 확인"}
-                </button>
-                {merged && blockers(state.dtBlockers, "DT 실행 전 확인")}
-              </div>
-              {!dtOnly && (
-                <div className="pcv-run-action">
+            {!conciseFlow && (
+              <>
+                <div className="pcv-run-panel" tabIndex={-1}>
+                  <span className="pcv-eyebrow">현재 결과 자료</span>
+                  <strong>
+                    {state.run
+                      ? state.run.status === "completed"
+                        ? "실행 완료"
+                        : state.run.status === "running"
+                          ? "실행 중"
+                          : state.run.status
+                      : "아직 실행 기록 없음"}
+                  </strong>
+                  <span>{sourceLabel(state.run?.source)}</span>
+                </div>
+                <div className="pcv-button-row pcv-button-row--wrap">
+                  <div className="pcv-run-action">
+                    <button
+                      type="button"
+                      className="pcv-button pcv-button--primary"
+                      onClick={actions.onRunDT}
+                      disabled={state.running || !state.runAvailable}
+                    >
+                      {state.running ? "처리 중" : "DT에서 확인"}
+                    </button>
+                    {merged && blockers(state.dtBlockers, "DT 실행 전 확인")}
+                  </div>
+                  {!dtOnly && (
+                    <div className="pcv-run-action">
                   <button
                     type="button"
                     className="pcv-button pcv-button--outline"
@@ -1385,9 +1669,11 @@ export function PaperCoordinateStudyView({
                   </button>
                   {merged &&
                     blockers(state.physicalBlockers, "실장비 실행 전 확인")}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </>
+            )}
             {merged && (
               <details className="pcv-details pcv-teacher-prep pcv-teacher-prep--execution">
                 <summary>교사용 수업 준비 · 높이, 허용오차와 감독</summary>
@@ -2184,6 +2470,7 @@ export function PaperCoordinateStudyView({
           aria-label="수정 후 재확인 진행률"
         />
       </div>
+    {guidedRetryStep >= 3 && renderExecutionControls()}
       {guidedRetryStep === 1 && (
         <>
           <p className="pcv-guided-instruction">
@@ -2254,7 +2541,11 @@ export function PaperCoordinateStudyView({
         </>
       )}
       {guidedRetryStep === 3 && (
-        <>
+        <div
+          data-testid="revalidation-comparison-step"
+          aria-label="재검증 실행 비교"
+          tabIndex={-1}
+        >
           <p className="pcv-guided-instruction">
             <strong>지금 할 일</strong> ‘DT에서 확인’을 눌러 새 예측을 다시 실행합니다.
             DT는 화면 시뮬레이션이며 실측이 아닙니다.
@@ -2263,6 +2554,14 @@ export function PaperCoordinateStudyView({
           {state.run?.status === "completed" && (
             <>
               {renderStage(5)}
+              {!paperRetryComparisonReady(state.diagnosis?.status) && (
+                <p className="pcv-guided-blocker" role="status">
+                  {state.diagnosis?.status === "invalidated"
+                    ? "비교 자료가 현재 실행과 맞지 않아 무효화되었습니다."
+                    : "이 실행에 연결된 유효한 비교 해석 자료가 없습니다."}{" "}
+                  실행 비교와 관측 연결을 확인하세요. 최종 판단은 저장할 수 없습니다.
+                </p>
+              )}
               <details className="pcv-details pcv-optional-analysis">
                 <summary>추가 AI 분석 보기 · 필요한 경우에만 열기</summary>
                 {renderStage(6)}
@@ -2281,75 +2580,94 @@ export function PaperCoordinateStudyView({
               새 DT 실행이 완료되면 결과 비교와 최종 판단이 열립니다.
             </p>
           )}
-        </>
+        </div>
       )}
-      {guidedRetryStep === 4 && state.run?.status === "completed" && (
-        <section
-          className="pcv-final-judgment"
-          aria-label="재검증에 대한 학생 판단"
-        >
-          <h3>새 실행을 보고 최종 판단</h3>
-          <p>
-            {state.revalidationScope ??
-              "저장된 기준과 독립 검증점으로 판정합니다. DT·모의 자료는 실물 검증 완료가 아닙니다."}
-          </p>
-          <label className="pcv-field">
-            <span>모델 판단</span>
-            <select
-              aria-label="재검증 후 모델 판단"
-              value={state.modelDecision}
-              onChange={(event) => {
-                const decision = event.target.value as "revise" | "retain";
-                actions.onModelDecisionChange(decision);
-              }}
-            >
-              <option value="revise">다시 수정 필요</option>
-              <option value="retain">현재 모델 유지</option>
-            </select>
-          </label>
-          <label className="pcv-field">
-            <span>판단 근거</span>
-            <textarea
-              aria-label="재검증 판단 근거"
-              rows={2}
-              maxLength={240}
-              value={finalDecisionReason}
-              placeholder="예: P2 잉크 차이가 기준 안에 있어 유지"
-              onChange={(event) => {
-                setFinalDecisionReason(event.target.value);
-                actions.onModelDecisionReasonChange(event.target.value);
-              }}
-            />
-          </label>
-          <div className="pcv-flow-footer">
+      {guidedRetryStep === 4 &&
+        state.run?.status === "completed" &&
+        !paperRetryComparisonReady(state.diagnosis?.status) && (
+          <section className="pcv-guided-blocker" role="status">
+            <p>
+              현재 실행의 유효한 비교 기록이 없어 최종 판단은 저장되지
+              않았습니다. 실행 비교 단계에서 자료와 관측 연결을 확인하세요.
+            </p>
             <button
               type="button"
               className="pcv-button pcv-button--quiet"
-              onClick={() => setGuidedRetryStep(3)}
+              onClick={returnToRetryComparison}
             >
-              이전: 실행 비교
+              실행 비교로 이동
             </button>
-            <button
-              type="button"
-              className="pcv-button pcv-button--primary"
-              onClick={() =>
-                runFlowAction(() =>
-                  actions.onFinalizeRevalidation(
-                    state.modelDecision,
-                    finalDecisionReason,
-                  ),
-                )
-              }
-              disabled={state.running || !finalDecisionReason.trim()}
-            >
-              최종 판단 저장
-            </button>
-          </div>
-          {state.activeAttempt?.revalidation?.scope && (
-            <p role="status">{state.activeAttempt.revalidation.scope}</p>
-          )}
-        </section>
-      )}
+          </section>
+        )}
+      {guidedRetryStep === 4 &&
+        state.run?.status === "completed" &&
+        paperRetryComparisonReady(state.diagnosis?.status) && (
+          <section
+            className="pcv-final-judgment"
+            aria-label="재검증에 대한 학생 판단"
+          >
+            <h3>새 실행을 보고 최종 판단</h3>
+            <p>
+              {state.revalidationScope ??
+                "저장된 기준과 독립 검증점으로 판정합니다. DT·모의 자료는 실물 검증 완료가 아닙니다."}
+            </p>
+            <label className="pcv-field">
+              <span>모델 판단</span>
+              <select
+                aria-label="재검증 후 모델 판단"
+                value={state.modelDecision}
+                onChange={(event) => {
+                  const decision = event.target.value as "revise" | "retain";
+                  actions.onModelDecisionChange(decision);
+                }}
+              >
+                <option value="revise">다시 수정 필요</option>
+                <option value="retain">현재 모델 유지</option>
+              </select>
+            </label>
+            <label className="pcv-field">
+              <span>판단 근거</span>
+              <textarea
+                aria-label="재검증 판단 근거"
+                rows={2}
+                maxLength={240}
+                value={finalDecisionReason}
+                placeholder="예: P2 잉크 차이가 기준 안에 있어 유지"
+                onChange={(event) => {
+                  setFinalDecisionReason(event.target.value);
+                  actions.onModelDecisionReasonChange(event.target.value);
+                }}
+              />
+            </label>
+            <div className="pcv-flow-footer">
+              <button
+                type="button"
+                className="pcv-button pcv-button--quiet"
+                onClick={returnToRetryComparison}
+              >
+                이전: 실행 비교
+              </button>
+              <button
+                type="button"
+                className="pcv-button pcv-button--primary"
+                onClick={() =>
+                  runFlowAction(() =>
+                    actions.onFinalizeRevalidation(
+                      state.modelDecision,
+                      finalDecisionReason,
+                    ),
+                  )
+                }
+                disabled={state.running || !finalDecisionReason.trim()}
+              >
+                최종 판단 저장
+              </button>
+            </div>
+            {state.activeAttempt?.revalidation?.scope && (
+              <p role="status">{state.activeAttempt.revalidation.scope}</p>
+            )}
+          </section>
+        )}
       {flowGuidance && (
         <p className="pcv-navigation-guidance" role="alert">
           {flowGuidance.message}
@@ -2542,6 +2860,7 @@ export function PaperCoordinateStudyView({
             comparisonGuide.instruction,
             comparisonGuide.completion,
           )}
+          {renderExecutionControls()}
           {renderStage(state.stage)}
           <div className="pcv-flow-footer">
             <button

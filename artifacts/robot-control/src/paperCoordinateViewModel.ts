@@ -30,6 +30,49 @@ export type PaperStudentScreen = 1 | 2 | 3;
 export function paperStudentScreenForStage(stage: number): PaperStudentScreen {
   return stage <= 3 ? 1 : stage <= 6 ? 2 : 3;
 }
+export function paperRetryInitialStep(
+  status: PaperRunSnapshot["status"] | null,
+  hasPlanHash: boolean,
+): 1 | 3 | 4 {
+  if (status === "completed") return 4;
+  return hasPlanHash ? 3 : 1;
+}
+
+export function paperRetryRunJustCompleted(
+  previous: PaperRunSnapshot["status"] | null,
+  current: PaperRunSnapshot["status"] | null,
+): boolean {
+  return previous !== "completed" && current === "completed";
+}
+
+export function paperComparableRunPair(
+  history: readonly PaperRunSnapshot[] | undefined,
+  current: PaperRunSnapshot | null | undefined,
+  planHash: string,
+  frameId: string | null | undefined,
+  targetSet: PaperTargetSet,
+): {
+  previous: PaperRunSnapshot | null;
+  current: PaperRunSnapshot | null;
+} {
+  if (!planHash || !frameId) return { previous: null, current: null };
+  const belongsToCurrentPlan = (run: PaperRunSnapshot) =>
+    run.planHash === planHash &&
+    run.frameId === frameId &&
+    run.targetSet === targetSet;
+  const previous =
+    [...(history ?? [])].reverse().find(belongsToCurrentPlan) ?? null;
+  return {
+    previous,
+    current: current && belongsToCurrentPlan(current) ? current : null,
+  };
+}
+
+export function paperRetryComparisonReady(
+  status: PaperDiagnosis["status"] | null | undefined,
+): boolean {
+  return status === "complete";
+}
 export type PaperStageNavigationBlocker = {
   target: "diagnosis" | "hypothesis";
   message: string;
