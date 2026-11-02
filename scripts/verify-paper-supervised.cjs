@@ -3,7 +3,7 @@ require('./isolated-ui-fixtures.cjs');
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {installMockBridge}=require('./mg400-mock-socket.cjs');
 const fixture=`<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>
-body{margin:0;font-family:Arial;color:#123;background:#f8fafc}.test-layout{display:grid;grid-template-columns:1fr 1fr;height:calc(100vh - 70px);gap:12px}.test-robot{position:relative;min-width:0}.paper-coordinate-host{height:100%;overflow:auto;min-width:0}.test-label{padding:8px;font-size:13px;background:#e0e7ff}
+ body{margin:0;font-family:Arial;color:#123;background:#f8fafc}.test-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);height:calc(100vh - 70px);gap:12px}.test-robot{position:relative;min-width:0}.paper-coordinate-host{height:100%;overflow:auto;min-width:0}.test-label{padding:8px;font-size:13px;background:#e0e7ff}@media(max-width:650px){.test-layout{height:auto;display:flex;flex-direction:column}.test-robot{height:52vh;min-height:360px}.paper-coordinate-host{height:auto;min-height:460px}}
 </style></head><body><div id="root"></div><script type="module">
 import React from 'react';import {createRoot} from 'react-dom/client';
 import {PaperCoordinateStudy} from '/src/PaperCoordinateStudy.tsx';
@@ -32,7 +32,7 @@ createRoot(document.getElementById('root')).render(<PracticeProvider><Screen/></
  const shots=process.env.DIAG_SHOTS||path.resolve(__dirname,'../../diagnosis-qa');fs.mkdirSync(shots,{recursive:true});
  const prefix=webgl?'3d-':'';
  try{
- async function open(config){const context=await browser.newContext({viewport:{width:1280,height:720}});await context.addInitScript(c=>window.__case=c,config);await context.route('**/api/**',r=>r.fulfill({json:{}}));const mock=await installMockBridge(context);await context.route('**/__supervised',r=>r.fulfill({contentType:'text/html',body:fixture}));const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('http://localhost/__supervised');await page.getByRole('region',{name:'종이 좌표 변환 학습'}).waitFor();return {context,mock,page,errors};}
+  async function open(config,viewport={width:1280,height:720}){const context=await browser.newContext({viewport});await context.addInitScript(c=>window.__case=c,config);await context.route('**/api/**',r=>r.fulfill({json:{}}));const mock=await installMockBridge(context);await context.route('**/__supervised',r=>r.fulfill({contentType:'text/html',body:fixture}));const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('http://localhost/__supervised');await page.getByRole('region',{name:'종이 좌표 변환 학습'}).waitFor();return {context,mock,page,errors};}
  for(const [model,execution,expected] of [[15,0,/대입·계산 차이/],[0,0,/회전/],[15,15,/예측과 실행 일치/]]){
   const {context,page,errors}=await open({rotation:15,model,execution});
   assert.match(await page.locator('.square-type-badge').innerText(),expected);
@@ -40,6 +40,30 @@ createRoot(document.getElementById('root')).render(<PracticeProvider><Screen/></
   else {assert.equal(await page.getByTestId('paper-rotation-summary').count(),0);assert.equal(await page.getByTestId('paper-rotation-3d').count(),0);}
   await page.screenshot({path:path.join(shots,prefix+'rotation-'+model+'-'+execution+'.png')});assert.deepEqual(errors,[]);await context.close();
  }
+  if(webgl&&process.env.PAPER_LABEL_LAYOUT==='1'){
+   const {context,page,errors}=await open({rotation:20,model:0,execution:0});
+   const assertLabelsFit=async()=>{
+    const canvas=await page.locator('.revision-robot-canvas').boundingBox();
+    const boxes=await page.locator('.paper-point-label,.paper-reference-label').evaluateAll(els=>els.map(el=>{const r=el.getBoundingClientRect();return {name:el.textContent,left:r.left,top:r.top,right:r.right,bottom:r.bottom};}));
+    assert.equal(boxes.length,7,'four target names and three O/X/Y names remain selectable');
+    for(const box of boxes)assert.ok(box.left>=canvas.x-1&&box.top>=canvas.y-1&&box.right<=canvas.x+canvas.width+1&&box.bottom<=canvas.y+canvas.height+1,`${box.name} label stays inside the 3D viewport`);
+    for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++)assert.ok(!(boxes[i].left<boxes[j].right&&boxes[i].right>boxes[j].left&&boxes[i].top<boxes[j].bottom&&boxes[i].bottom>boxes[j].top),`${boxes[i].name} and ${boxes[j].name} labels do not overlap`);
+    return boxes;
+   };
+   await page.getByTestId('paper-rotation-3d').waitFor();
+   assert.equal((await page.getByTestId('paper-rotation-3d').innerText()).trim(),'-20.0°');
+   await page.getByRole('button',{name:'장면에서 P4 선택',exact:true}).click();
+   assert.match(await page.getByRole('region',{name:'장면 고정 정보'}).innerText(),/P4 상세/);
+   assert.ok((await assertLabelsFit()).every(box=>/^P[1-4]|^[OXY]$/.test(box.name)),'scene labels show names only, not long coordinate text');
+   const canvas=page.locator('.revision-robot-canvas canvas'),wide=await canvas.boundingBox();
+   await page.mouse.move(wide.x+wide.width/2,wide.y+wide.height/2);await page.mouse.down();await page.mouse.move(wide.x+wide.width/2+45,wide.y+wide.height/2+28,{steps:4});await page.mouse.up();await page.mouse.wheel(0,-120);
+   await page.waitForTimeout(350);await assertLabelsFit();await page.screenshot({path:path.join(shots,'3d-paper-labels-p4-minus20-wide.png')});
+   await page.setViewportSize({width:390,height:844});await page.waitForTimeout(350);await assertLabelsFit();
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'narrow layout does not overflow horizontally');
+   await page.screenshot({path:path.join(shots,'3d-paper-labels-p4-minus20-narrow.png')});
+   assert.deepEqual(errors,[]);await context.close();
+   console.log('PASS: P4 selected at −20.0°, point labels remain short, inside the viewport and non-overlapping after camera orbit/zoom at 1280×720 and 390×844.');
+  }
  if(process.env.PAPER_ROTATION_ONLY==='1'){console.log('PASS: 3D angle arc, diagnosis and disappearance after match.');return;}
  {
   const {context,page}=await open({outside:20,noHeight:true});

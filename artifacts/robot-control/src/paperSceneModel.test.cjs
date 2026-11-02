@@ -21,6 +21,23 @@ test('mismatch highlights use the recorded diagnosis only for the displayed curr
  const series=[{label:'첫 실행',dashed:false,points:[{label:'P1',x:220,y:-60}]}];assert.deepEqual(m.paperMismatchPoints(d,series),['P1']);
  d.run.frameId='old';assert.deepEqual(m.paperMismatchPoints(d,series),[]);d.run.frameId=frame.id;d.diagnosis.status='invalidated';assert.deepEqual(m.paperMismatchPoints(d,series),[]);
 });
+test('fixed scene readout separates selected prediction, this-run observation and source',()=>{
+ const d=data();d.displayPose={x:350,y:0,z:60,r:0};d.displaySource='dt';
+ d.targetPoints.push({name:'P4',xCm:0,yCm:20});d.predictions.push({name:'P4',robotX:'160.5',robotY:'48'});
+ d.run={frameId:frame.id,status:'completed',source:'dt',observations:[{point:'P4',pose:{x:161,y:48,z:60,r:0},source:'dt'}]};
+ const readout=m.paperSceneReadout(d,1,3,null);
+ assert.equal(readout.selectedName,'P4');assert.deepEqual(readout.prediction,{x:160.5,y:48});
+ assert.deepEqual(readout.observation,{x:161,y:48,source:'dt',runSource:'dt',runStatus:'completed'});
+ assert.deepEqual(readout.currentPose,{x:350,y:0,z:60,r:0});assert.equal(readout.rotationDegrees,null);
+ assert.equal(m.paperSceneSourceText(readout.observation.source),'DT 시뮬레이션 · 실측 아님');
+});
+test('fixed scene readout preserves selected O/X/Y source and does not invent absent observations',()=>{
+ const d=data();const origin=m.paperSceneReadout(d,1,null,'O');
+ assert.equal(origin.selectedName,'O');assert.deepEqual(origin.referenceObservation,{x:200,y:-60,source:'teacher'});
+ d.run={frameId:frame.id,status:'failed',source:'dt',observations:[]};
+ const missing=m.paperSceneReadout(d,1,0,null);
+ assert.equal(missing.observation,null);assert.deepEqual(missing.prediction,{x:200,y:-60});
+});
 test('point selection and camera reset are display-only and clear on leaving the owner',()=>{
  const d=data(),before=JSON.stringify(d);store.publishPaperScene('advanced',d);store.selectPaperPoint('P2','scene');assert.equal(rev.revisionSceneSnapshot().point,1);
  const key=store.paperSceneSnapshot().cameraKey;store.requestPaperCamera();assert.equal(store.paperSceneSnapshot().cameraKey,key+1);assert.equal(JSON.stringify(d),before);

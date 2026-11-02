@@ -3,7 +3,7 @@ import { Html, Line } from "@react-three/drei";
 import { DoubleSide } from "three";
 import { CoordinateStudyCamera } from "./CoordinateStudyCamera";
 import { shapeWorldPoint } from "./shapeKinematics";
-import { PAPER_COLORS as C, paperCorners, paperGrid, paperMismatchPoints, paperPoint, paperSceneSeries, paperSeriesSegments, paperFrameSource, validPaperPoint, paperSceneRotation, type PaperScenePoint } from "./paperSceneModel";
+import { PAPER_COLORS as C, paperCorners, paperGrid, paperMismatchPoints, paperPoint, paperSceneReadout, paperSceneRotation, paperSceneSeries, paperSeriesSegments, paperFrameSource, paperSceneSourceText, validPaperPoint, type PaperScenePoint } from "./paperSceneModel";
 import { requestPaperCamera, selectPaperPoint, usePaperScene } from "./paperSceneStore";
 import "./paperScene.css";
 
@@ -26,8 +26,48 @@ export function PaperSceneToolbar(){
   return <div className="paper-scene-toolbar"><span>{data.frame?"종이 20×20 cm · 1 cm 눈금":"위치 미확인 · 반투명 종이는 배치 예시"}<small>{measured?"원래 색: 현재 보고 위치":"원래 색: 현재 위치 고정 · 파란 고스트: DT 예측 이동 · 실측 아님"}</small></span><button type="button" onClick={requestPaperCamera}>↺ 종이 시점</button></div>;
 }
 export function PaperSceneCaption(){
-  const {data}=usePaperScene();if(!data)return null;
-  return <div className="paper-scene-caption"><PaperSceneLegend/><small>{data.frame?`${paperFrameSource(data)} · 기록된 O→X / O→Y 방향`:`O/X/Y 기록 ${data.samples.length}/3 · 종이의 실제 위치·방향은 아직 미확인`}<br/>종이 x·y축과 로봇 X·Y축은 서로 다를 수 있습니다. 선은 점 사이의 비교선이며 잉크 궤적이 아닙니다.</small></div>;
+  const {data,point,reference,phase,robotDisplay}=usePaperScene();if(!data)return null;
+  const readout=paperSceneReadout(data,phase,point,reference),number=(value:number)=>Number.isFinite(value)?(Math.round(value*100)/100).toFixed(2):"—";
+  const xy=(value:{x:number;y:number}|null)=>value?`X ${number(value.x)} · Y ${number(value.y)} mm`:"자료 없음";
+  const pose=data.displayPose;
+  const observed=readout.observation,referenceObservation=readout.referenceObservation;
+  const runStatus=observed?.runStatus==="completed"?"완료된 실행":observed?.runStatus==="running"?"진행 중 · 부분 관측":"완료되지 않은 실행";
+  return <div className="paper-scene-caption">
+    <div className="paper-scene-readout" role="region" aria-label="장면 고정 정보">
+      {robotDisplay.current&&pose&&<section className="paper-scene-readout__card paper-scene-readout__card--current" data-testid="paper-current-label">
+        <h3>현재 위치 · 고정</h3>
+        <b>X {number(pose.x)} · Y {number(pose.y)} · Z {number(pose.z)} mm · R {number(pose.r)}°</b>
+        <small>고스트 이동 전 고정 위치 · DT 기준 · 실측 아님</small>
+      </section>}
+      {robotDisplay.preview&&<section className="paper-scene-readout__card paper-scene-readout__card--preview" data-testid="paper-preview-label">
+        <h3>{data.running?"예측 이동 중":"예상 이동 위치"}</h3>
+        <b>{readout.selectedName??"선택한 점"} · {xy(readout.prediction)}</b>
+        <small>파란 고스트 · DT · 실측 아님</small>
+      </section>}
+      <section className="paper-scene-readout__card paper-scene-readout__card--point" aria-live="polite">
+        <h3>{readout.selectedName?`${readout.selectedName} 상세`:"선택한 점"}</h3>
+        {readout.selectedName?.startsWith("P")?<>
+          <p><span>학생 예측</span><b>{xy(readout.prediction)}</b></p>
+          <p><span>이번 실행 관측</span><b>{observed?xy(observed):"아직 없음"}</b></p>
+          {observed&&<small>{paperSceneSourceText(observed.source)} · {runStatus}</small>}
+        </>:referenceObservation?<>
+          <p><span>기준점 좌표</span><b>{xy(referenceObservation)}</b></p>
+          <small>{paperSceneSourceText(referenceObservation.source)}</small>
+        </>:<small>도면이나 점 표식에서 P1–P4 또는 O/X/Y를 선택하세요.</small>}
+      </section>
+      <section className="paper-scene-readout__card paper-scene-readout__card--axes">
+        <h3>회전 · 원점 · 축</h3>
+        <b className="paper-scene-readout__angle" data-testid={readout.rotationDegrees===null?undefined:"paper-rotation-3d"}>
+          {readout.rotationDegrees===null?"회전 자료 없음":`${readout.rotationDegrees.toFixed(1)}°`}
+        </b>
+        <small>{readout.rotationDegrees===null?"기록된 실행의 회전 판정이 있을 때 표시":"경로 · 종이 x축 기준"}</small>
+        <p><strong>O</strong> 원점 · 종이 x+/y+ · 로봇 X+/Y+</p>
+        <small>종이 축과 로봇 축 방향은 서로 다를 수 있습니다.</small>
+      </section>
+    </div>
+    <PaperSceneLegend/>
+    <small>{data.frame?`${paperFrameSource(data)} · 기록된 O→X / O→Y 방향`:`O/X/Y 기록 ${data.samples.length}/3 · 종이의 실제 위치·방향은 아직 미확인`}<br/>점 이름은 장면에, 좌표·회전·축 설명은 아래 고정 영역에 표시합니다. 선은 점 사이의 비교선이며 잉크 궤적이 아닙니다.</small>
+  </div>;
 }
 /** Shared measured-frame geometry, placed at the recorded paper Z (never changes robot pose). */
 export function PaperSceneOverlay(){
@@ -54,27 +94,22 @@ export function PaperSceneOverlay(){
     {rotation&&<group name="paper-observed-rotation">
       <Line points={rotation.arc.map(raised)} color="#b45309" lineWidth={4} depthTest={false} renderOrder={220}/>
       {[rotation.arc[0],rotation.arc.at(-1)!].map((p,i)=><Line key={i} points={[raised(rotation.start),raised(p)]} color="#b45309" lineWidth={2} dashed depthTest={false} renderOrder={220}/>)}
-      <Html position={raised(rotation.label)} zIndexRange={[17,0]}><span className="paper-angle-label" data-testid="paper-rotation-3d">{rotation.relativeAngle.toFixed(1)}°<small>경로 · 종이 x축</small></span></Html>
     </group>}
     {series.map(s=><group key={s.label}>
       {paperSeriesSegments(s.points).map((segment,i)=><Line key={i} points={segment.map(wp)} color={s.color} lineWidth={s.label==="목표점"?2:3} dashed={s.dashed} dashSize={5} gapSize={4} transparent depthTest={false} renderOrder={200}/>)}
       {s.points.filter(validPaperPoint).map(p=><mesh key={p.label} position={wp(p)} renderOrder={210}><sphereGeometry args={[s.label==="목표점"?3.8:2.7,12,8]}/><meshBasicMaterial color={s.color} transparent depthTest={false}/></mesh>)}
     </group>)}
-    {frame&&data.targetPoints.map(p=>{const pos=paperPoint(frame,p.xCm,p.yCm),bad=mismatch.includes(p.name),last=series.slice(1).filter(s=>s.points.some(v=>v.label===p.name&&validPaperPoint(v))).at(-1),value=last?.points.find(v=>v.label===p.name);return <Html key={p.name} position={raised(pos)} center zIndexRange={[16,0]}><button type="button" className={`paper-point-label${bad?" paper-mismatch-pulse":""}`} style={{borderColor:bad?C.mismatch:C.target}} aria-label={`장면에서 ${p.name} 선택`} aria-pressed={selected(p.name)} onClick={()=>selectPaperPoint(p.name,"scene")}>{p.name}{selected(p.name)&&value&&validPaperPoint(value)&&<small>{last?.dashed?"예측":"관측"} ({Math.round(value.x*100)/100}, {Math.round(value.y*100)/100}) mm</small>}</button></Html>;})}
+    {frame&&data.targetPoints.map(p=>{const pos=paperPoint(frame,p.xCm,p.yCm),bad=mismatch.includes(p.name);return <Html key={p.name} position={raised(pos)} center zIndexRange={[16,0]}><button type="button" data-point={p.name} className={`paper-point-label${bad?" paper-mismatch-pulse":""}`} style={{borderColor:bad?C.mismatch:C.target}} aria-label={`장면에서 ${p.name} 선택`} aria-pressed={selected(p.name)} onClick={()=>selectPaperPoint(p.name,"scene")}>{p.name}</button></Html>;})}
     {mismatch.map(label=>{const target=series[0]?.points.find(p=>p.label===label),observed=data.run?.observations.find(p=>p.point===label);return target&&validPaperPoint(target)&&observed?<Line key={label} points={[wp(target),wp(observed.pose)]} color={C.mismatch} lineWidth={4} transparent depthTest={false} renderOrder={215}/>:null;})}
     {references.map(r=>{
-      const sample=data.samples.find(s=>s.point===r.name);
-      const p=frame?raised(paperPoint(frame,r.x,r.y)):sample?shapeWorldPoint({...sample.pose,z:sample.pose.z+2}):raised(paperPoint(null,r.x,r.y));
-      return <group key={r.name}><mesh position={p}><sphereGeometry args={[3,12,8]}/><meshBasicMaterial color={C.reference} depthTest={false}/></mesh><Html position={p} zIndexRange={[15,0]}><button key={sample?.capturedAt??r.name} type="button" className={`paper-reference-label${sample?" paper-mismatch-pulse":""}`} aria-label={`장면에서 ${r.name} 기준점 선택`} aria-pressed={reference===r.name} onClick={()=>selectPaperPoint(r.name,"scene")}>{r.name}{sample?" ✓":" ?"}</button></Html></group>;
+       const sample=data.samples.find(s=>s.point===r.name);
+       const p=frame?raised(paperPoint(frame,r.x,r.y)):sample?shapeWorldPoint({...sample.pose,z:sample.pose.z+2}):raised(paperPoint(null,r.x,r.y));
+       return <group key={r.name}><mesh position={p}><sphereGeometry args={[3,12,8]}/><meshBasicMaterial color={C.reference} depthTest={false}/></mesh><Html position={p} zIndexRange={[15,0]}><button type="button" className="paper-reference-label" aria-label={`장면에서 ${r.name} 기준점 선택`} aria-pressed={reference===r.name} onClick={()=>selectPaperPoint(r.name,"scene")}>{r.name}</button></Html></group>;
     })}
-    <Html position={raised(paperPoint(frame,20,0))} zIndexRange={[14,0]}><span className="paper-axis-label">종이 x+ · 20 cm</span></Html>
-    <Html position={raised(paperPoint(frame,0,20))} zIndexRange={[14,0]}><span className="paper-axis-label">종이 y+ · 20 cm</span></Html>
     {!frame&&<Html position={raised(center)} center><b className="paper-unknown">위치 미확인<br/><small>배치 예시 · O/X/Y 기록 필요</small></b></Html>}
     {/* World-aligned robot axes outside the sheet; independent of paper rotation. */}
     <Line points={[[centerWorld[0]-160,centerWorld[1]+4,centerWorld[2]+145],[centerWorld[0]-100,centerWorld[1]+4,centerWorld[2]+145]]} color={C.reference} lineWidth={2}/>
     <Line points={[[centerWorld[0]-160,centerWorld[1]+4,centerWorld[2]+145],[centerWorld[0]-160,centerWorld[1]+4,centerWorld[2]+85]]} color={C.reference} lineWidth={2}/>
-    <Html position={[centerWorld[0]-100,centerWorld[1]+4,centerWorld[2]+145]}><span className="paper-axis-label">로봇 X+</span></Html>
-    <Html position={[centerWorld[0]-160,centerWorld[1]+4,centerWorld[2]+85]}><span className="paper-axis-label">로봇 Y+</span></Html>
   </group>;
 }
 

@@ -51,6 +51,63 @@ export function paperSceneRotation(data: PaperSceneData, series: RevisionSeries[
   const shown=series.some(s=>!s.dashed&&s.label!=="목표점"&&s.points.length===data.run?.observations.length&&s.points.every(p=>data.run!.observations.some(o=>o.point===p.label&&o.pose.x===p.x&&o.pose.y===p.y)));
   return shown ? paperRotationVisual(data.frame,data.targetPoints,data.run) : null;
 }
+
+export function paperSceneSourceText(source: string | null | undefined) {
+  if (source === "hardware") return "실장비 · 제어기 TCP 보고값";
+  if (source === "mock") return "모의 브리지 · 실측 아님";
+  if (source === "dt") return "DT 시뮬레이션 · 실측 아님";
+  if (source === "teacher") return "교사 입력 · 측정값 아님";
+  return "출처 확인 필요";
+}
+
+export function paperSceneReadout(
+  data: PaperSceneData,
+  phase: RevisionPhase,
+  point: number | null,
+  reference: string | null,
+) {
+  const selectedName = reference ?? (point === null ? null : `P${point + 1}`);
+  const prediction = selectedName?.startsWith("P")
+    ? data.predictions.find(item => item.name === selectedName)
+    : undefined;
+  const predictionX = prediction ? number(prediction.robotX) : null;
+  const predictionY = prediction ? number(prediction.robotY) : null;
+  const observation = selectedName?.startsWith("P")
+    ? data.run?.observations?.find(item => item.point === selectedName)
+    : undefined;
+  const referenceObservation = selectedName && /^[OXY]$/.test(selectedName)
+    ? data.samples.find(item => item.point === selectedName)
+    : undefined;
+  const series = paperSceneSeries(data, phase);
+  const rotation = paperSceneRotation(data, series);
+
+  return {
+    selectedName,
+    currentPose: data.displayPose ?? null,
+    currentSource: data.displaySource ?? null,
+    prediction: predictionX !== null && predictionY !== null
+      ? { x: predictionX, y: predictionY }
+      : null,
+    observation: observation && Number.isFinite(observation.pose.x) && Number.isFinite(observation.pose.y)
+      ? {
+          x: observation.pose.x,
+          y: observation.pose.y,
+          source: observation.source ?? data.run?.source ?? null,
+          runSource: data.run?.source ?? null,
+          runStatus: data.run?.status ?? null,
+        }
+      : null,
+    referenceObservation: referenceObservation
+      ? {
+          x: referenceObservation.pose.x,
+          y: referenceObservation.pose.y,
+          source: referenceObservation.source ?? data.frame?.source ?? null,
+        }
+      : null,
+    rotationDegrees: rotation?.relativeAngle ?? null,
+  };
+}
+
 export function paperSeriesSegments(points: JourneyPoint[]) {
   const pairs=points.slice(1).map((p,i)=>[points[i],p]);
   if(points.length===4&&points.every(validPaperPoint)) pairs.push([points[3],points[0]]);

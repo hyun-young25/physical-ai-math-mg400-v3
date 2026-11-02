@@ -3,8 +3,10 @@ import { selectRevisionPoint, useRevisionScene, revisionSceneSnapshot } from "./
 import { useSquareVisual } from "./useSquareVisual";
 import type { PaperSceneData } from "./paperSceneModel";
 
-type Snapshot = { owner:string|null; data:PaperSceneData|null; point:number|null; reference:string|null; selectionOrigin:"scene"|"lesson"; selectionVersion:number; revisionSelectionVersion:number; cameraKey:number };
-let state:Snapshot = {owner:null,data:null,point:null,reference:null,selectionOrigin:"lesson",selectionVersion:0,revisionSelectionVersion:0,cameraKey:0};
+type RobotDisplayState = { current:boolean; preview:boolean };
+type Snapshot = { owner:string|null; data:PaperSceneData|null; point:number|null; reference:string|null; selectionOrigin:"scene"|"lesson"; selectionVersion:number; revisionSelectionVersion:number; cameraKey:number; robotDisplay:RobotDisplayState };
+const EMPTY_ROBOT_DISPLAY:RobotDisplayState = {current:false,preview:false};
+let state:Snapshot = {owner:null,data:null,point:null,reference:null,selectionOrigin:"lesson",selectionVersion:0,revisionSelectionVersion:0,cameraKey:0,robotDisplay:EMPTY_ROBOT_DISPLAY};
 const listeners=new Set<()=>void>();
 const set=(next:Snapshot)=>{state=next;listeners.forEach(fn=>fn());};
 const subscribe=(fn:()=>void)=>{listeners.add(fn);return()=>{listeners.delete(fn);};};
@@ -17,9 +19,14 @@ export function publishPaperScene(owner:string,data:PaperSceneData) {
   if(fresh) selectRevisionPoint(0);
   set({...state,owner,data,point:fresh?null:state.point,reference:fresh?null:data.level==="advanced-paper-dt"?state.reference:changed?.point??state.reference,
     revisionSelectionVersion:fresh?revisionSceneSnapshot().selectionVersion:state.revisionSelectionVersion,
-    selectionOrigin:fresh||frameChanged?"lesson":state.selectionOrigin,cameraKey:state.cameraKey+(fresh?1:0)});
+    selectionOrigin:fresh||frameChanged?"lesson":state.selectionOrigin,cameraKey:state.cameraKey+(fresh?1:0),
+    robotDisplay:fresh?EMPTY_ROBOT_DISPLAY:state.robotDisplay});
 }
-export function clearPaperScene(owner:string) {if(state.owner===owner)set({...state,owner:null,data:null,point:null,reference:null,selectionOrigin:"lesson"});}
+export function clearPaperScene(owner:string) {if(state.owner===owner)set({...state,owner:null,data:null,point:null,reference:null,selectionOrigin:"lesson",robotDisplay:EMPTY_ROBOT_DISPLAY});}
+export function publishPaperRobotDisplay(owner:string|null, next:RobotDisplayState) {
+  if(!owner||owner!==state.owner||state.robotDisplay.current===next.current&&state.robotDisplay.preview===next.preview)return;
+  set({...state,robotDisplay:next});
+}
 /** Selection and camera requests are ephemeral: no robot API or persistence here. */
 export function selectPaperPoint(label:string,origin:"scene"|"lesson"="lesson") {
   if (!state.data) return;
