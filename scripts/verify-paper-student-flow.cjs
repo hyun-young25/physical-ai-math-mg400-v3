@@ -65,6 +65,7 @@ async function main() {
     });
 
     await page.goto(origin, { waitUntil: "domcontentloaded" });
+    await page.setViewportSize({width:1280,height:720});
     await page.addStyleTag({ content: "html, body, * { scroll-behavior: auto !important; }" });
     await page.getByLabel("학생 아이디").fill(`demo-paper-flow-${Date.now()}`);
     await page.getByRole("button", { name: "학습 시작", exact: true }).click({ noWaitAfter: true });
@@ -115,6 +116,16 @@ async function main() {
     const screen = async number => {
       await view.getByText(`화면 ${number} / 3`, { exact: true }).waitFor();
     };
+    const assertFlowNavReadable = async () => {
+      const items=await view.getByRole("navigation",{name:"종이 좌표 학습 세 화면"})
+        .getByRole("listitem").evaluateAll(rows=>rows.map(row=>{
+          const title=row.querySelector("strong"),rect=row.getBoundingClientRect(),style=title?getComputedStyle(title):null;
+          return {width:rect.width,height:rect.height,wordBreak:style?.wordBreak,overflowWrap:style?.overflowWrap};
+        }));
+      assert.equal(items.length,3);
+      assert.ok(items.every(item=>item.width>=80&&item.height<120),"three screen titles must fit the learning panel without vertical character wrapping");
+      assert.ok(items.every(item=>item.wordBreak==="keep-all"&&item.overflowWrap==="normal"));
+    };
     const shot = async filename => page.screenshot({ path: path.join(evidenceDir, filename) });
     const prepareCriteria = async () => {
       const details=view.locator(".pcv-teacher-prep--execution");
@@ -128,6 +139,10 @@ async function main() {
     assert.match(await view.innerText(), /실측 아님/);
     await screen(1);
     assert.equal(await view.getByRole("navigation", { name: "종이 좌표 학습 세 화면" }).getByRole("listitem").count(), 3);
+    await assertFlowNavReadable();
+    await page.setViewportSize({width:390,height:844});
+    await assertFlowNavReadable();
+    await page.setViewportSize({width:1280,height:720});
     assert.equal(await view.getByRole("button", { name: "다음 단계" }).count(), 0,
       "the simplified flow must not require repeated seven-step navigation");
     await shot("01-paper-student-entry.png");

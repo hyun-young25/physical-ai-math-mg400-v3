@@ -316,6 +316,42 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     return null;
   };
 
+  const diagnoseCompletedRecord = (record:PaperTrialRecord, priorRecords:PaperTrialRecord[]) => {
+    const run=record.run,frame=record.frame,planHash=record.planHash;
+    if(!run||run.status!=="completed"||!frame||!planHash)return {record,diagnosis:record.diagnosis??null,message:""};
+    const invalid=validatePaperRunForDiagnosis(run,frame,planHash,targetPoints);
+    if(invalid) {
+      const diagnosis:PaperDiagnosis={
+        method:"rule-based",source:run.source,status:"invalidated",candidate:invalid,evidence:[],predictionEvidence:[],firstMismatch:null,
+        question:"어떤 새 관측이 있어야 이 결과를 비교할 수 있을까요?",
+        why:"현재 기준점과 저장된 예측에 연결된 관측만 사용합니다.",tutorSource:"default question",
+      };
+      return {record:{...record,diagnosis,status:"incomplete" as const,stage:isMergedPaper(record.level)&&record.targetSet==="revalidation"?7 as const:6 as const},
+        diagnosis,message:invalid};
+    }
+    const toleranceMm=run.verificationCriteria?.positionToleranceMm??record.diagnosisToleranceMm??practice.setupDraft.positionTolerance;
+    const initial=diagnosePaperRun(run,frame,planHash,{transform:record.transform,toleranceMm,targets:targetPoints,
+      detectOriginMissing:isMergedPaper(record.level),support:attemptSupport});
+    const repeated=priorRecords.filter(item=>item.id!==record.id
+      &&(!isPaperRectangle(record.level)||(item.level===record.level&&item.taskVersion===record.taskVersion))
+      &&item.diagnosis?.pattern===initial.pattern).length;
+    const diagnosis=diagnosePaperRun(run,frame,planHash,{transform:record.transform,toleranceMm,repeated,targets:targetPoints,
+      detectOriginMissing:isMergedPaper(record.level),support:attemptSupport});
+    let diagnosed:PaperTrialRecord={...record,diagnosis,status:"diagnosed",stage:isMergedPaper(record.level)&&record.targetSet==="revalidation"?7:6,
+      diagnosisToleranceMm:toleranceMm};
+    const parent=priorRecords.find(item=>item.id===record.parentAttemptId);
+    const inkRows=paperInkComparisons(diagnosed,targetPoints);
+    const inkWithinTolerance=inkRows.length===targetPoints.length&&inkRows.every(row=>
+      row.inkReading?.status==="measured"&&row.inkReading.recordId===record.id&&row.inkReading.runId===run.id
+      &&row.targetVsInkMm?.distance!==null&&row.targetVsInkMm?.distance!==undefined
+      &&row.targetVsInkMm.distance<=(run.verificationCriteria?.positionToleranceMm??0));
+    const independentRevalidation=!!parent&&(record.targetSet==="revalidation"
+      ||(!isPaperRectangle(record.level)&&record.frame?.id!==parent.frame?.id));
+    const assessment=independentRevalidation?paperRevalidationAssessment(diagnosed,parent,targetPoints,inkWithinTolerance):null;
+    if(assessment)diagnosed={...diagnosed,status:assessment.result==="physical-verified"?"revalidated":"diagnosed",revalidation:assessment};
+    return {record:diagnosed,diagnosis,message:assessment?.scope??"실행 자료 비교를 저장했습니다."};
+  };
+
   const actions: PaperCoordinateStudyViewActions = {
     onBack,
     onAllowMismatchedHardware: value => { if(!running && level==="advanced-paper-hardware") setAllowMismatchedHardware(value); },
@@ -429,41 +465,9 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
       setStage(nextStage);
       if (active) upsert({ ...active, stage: nextStage });
       if (nextStage === 6 && active?.run && active.frame && active.planHash) {
-        const invalid = validatePaperRunForDiagnosis(active.run, active.frame, active.planHash,targetPoints);
-        if (invalid) {
-          const invalidDiagnosis: PaperDiagnosis = {
-            method: "rule-based", source: active.run.source, status: "invalidated",
-            candidate: invalid, evidence: [], predictionEvidence: [], firstMismatch: null,
-            question: "어떤 새 관측이 있어야 이 결과를 비교할 수 있을까요?",
-            why: "이 단계는 현재 기준점과 저장된 예측에 연결된 관측만 사용합니다.",
-            tutorSource: "default question",
-          };
-          setDiagnosisOverride(invalidDiagnosis);
-        } else {
-          const criteria = active.run.verificationCriteria;
-          const toleranceMm = criteria?.positionToleranceMm ?? active.diagnosisToleranceMm ?? practice.setupDraft.positionTolerance;
-          const initial = diagnosePaperRun(active.run,active.frame,active.planHash,{transform:active.transform,toleranceMm,targets:targetPoints,detectOriginMissing:isMergedPaper(level),support:attemptSupport});
-          const repeated = records.filter(r=>r.id!==active.id
-            && (!isPaperRectangle(level) || (r.level===level && r.taskVersion===active.taskVersion))
-            && r.diagnosis?.pattern===initial.pattern).length;
-          const enriched = diagnosePaperRun(active.run,active.frame,active.planHash,{transform:active.transform,toleranceMm,repeated,targets:targetPoints,detectOriginMissing:isMergedPaper(level),support:attemptSupport});
-          let diagnosed: PaperTrialRecord = {...active,diagnosis:enriched,status:"diagnosed",stage:6,diagnosisToleranceMm:toleranceMm};
-          const parent = records.find(r=>r.id===active.parentAttemptId);
-          const inkRows = paperInkComparisons(diagnosed,targetPoints);
-          const inkWithinTolerance = inkRows.length===targetPoints.length && inkRows.every(row =>
-            row.inkReading?.status==="measured" && row.inkReading.recordId===active.id && row.inkReading.runId===active.run!.id
-            && row.targetVsInkMm?.distance!==null && row.targetVsInkMm?.distance!==undefined
-            && row.targetVsInkMm.distance <= (criteria?.positionToleranceMm ?? 0));
-          const isIndependentRevalidation = !!parent && (
-            diagnosed.targetSet === "revalidation"
-            || (!isPaperRectangle(level) && diagnosed.frame?.id !== parent.frame?.id)
-          );
-          const assessment = isIndependentRevalidation
-            ? paperRevalidationAssessment(diagnosed,parent,targetPoints,inkWithinTolerance) : null;
-          if (assessment) diagnosed={...diagnosed,status:assessment.result==="physical-verified"?"revalidated":"diagnosed",revalidation:assessment};
-          setDiagnosisOverride(enriched);
-          upsert(diagnosed,assessment?.scope??"진단 근거와 실제 제공 질문을 저장했습니다.");
-        }
+        const analyzed=diagnoseCompletedRecord(active,records);
+        setDiagnosisOverride(analyzed.diagnosis);
+        upsert(analyzed.record,analyzed.message);
       }
     },
     onLevelChange: nextLevel => {
@@ -905,11 +909,17 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
           pose: { ...item.pose }, command: { ...item.pose }, kind: "dt",
         }));
         const completedRun = { ...runningRecord, status: "completed" as const, endedAt: completedAt, observations };
-        upsert({
+        const completedRecord:PaperTrialRecord={
           ...active, runHistory:priorRuns, inkReadings:undefined, run: completedRun, status: "observed", stage: runStage,
           dtRunPlanHash: planHash, diagnosis: undefined, dataSource: "dt",
-        }, "DT 경로 완료를 저장했습니다. 이 자료는 실측이 아닙니다.");
-        setPageError("DT 완료 · 실측 아님. 화면의 가상 경로가 종료됐습니다. 실장비 검증으로 표시하지 않습니다.");
+        };
+        const analyzed=diagnoseCompletedRecord(completedRecord,recordsRef.current);
+        setDiagnosisOverride(analyzed.diagnosis);
+        upsert(analyzed.record,`${analyzed.message} DT 자료 · 실측 아님.`);
+        setStage(analyzed.record.stage??runStage);
+        setPageError(analyzed.diagnosis?.status==="invalidated"
+          ?`DT 이동은 완료됐지만 현재 계획과 연결해 비교할 수 없습니다. ${analyzed.diagnosis.candidate}`
+          :"DT 완료 · 실측 아님. 비교 근거를 같은 화면에 저장했습니다.");
       } catch (error) {
         const failedRun = { ...runningRecord, status: "failed" as const, endedAt: Date.now(), error: error instanceof Error ? error.message : "DT 실행 실패" };
         upsert({ ...active, runHistory:priorRuns, inkReadings:undefined, run: failedRun, status: "incomplete", stage: runStage });
@@ -1018,12 +1028,18 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
         const completed = { ...runningRecord, status: "completed" as const, endedAt, observations: observed };
         const check = validatePaperRunForDiagnosis(completed, active.frame, planHash,targetPoints);
         const complete = !check && observed.length === points.length;
-        upsert({
-          ...active, runHistory:priorRuns, inkReadings:undefined,
-          run: complete ? completed : { ...completed, status: "partial" as const, error: check ?? "새 TCP 보고 좌표 꼭짓점 누락" },
-          status: complete ? "observed" : "incomplete", stage: runStage,
-          ...(liveSource === "hardware" && complete ? { dataSource: "hardware" as const } : { dataSource: "mock" as const }),
-        }, complete ? "같은 계획의 모든 새 TCP 보고 좌표 응답을 기록했습니다." : "실행은 완료로 인정되지 않았습니다. 새 측정 근거가 부족합니다.");
+        const baseRecord:PaperTrialRecord={
+          ...active,runHistory:priorRuns,inkReadings:undefined,
+          run:complete?completed:{...completed,status:"partial",error:check??"새 TCP 보고 좌표 꼭짓점 누락"},
+          status:complete?"observed":"incomplete",stage:runStage,
+          ...(liveSource==="hardware"&&complete?{dataSource:"hardware" as const}:{dataSource:"mock" as const}),
+        };
+        if(complete) {
+          const analyzed=diagnoseCompletedRecord(baseRecord,recordsRef.current);
+          setDiagnosisOverride(analyzed.diagnosis);
+          upsert(analyzed.record,`${analyzed.message} ${liveSource==="hardware"?"제어기 TCP 보고 좌표":"모의 브리지 자료"}를 같은 실행에 연결했습니다.`);
+          setStage(analyzed.record.stage??runStage);
+        } else upsert(baseRecord,"실행은 완료로 인정되지 않았습니다. 새 측정 근거가 부족합니다.");
         setPageError(complete
           ? liveSource === "mock" ? "모의 브리지 회신을 저장했습니다. 실측이 아니며 실제 로봇 증거로 사용할 수 없습니다." : "제어기 TCP 보고 좌표 응답을 저장했습니다. 잉크 접촉 측정은 아닙니다."
           : `실행 결과가 불완전합니다. ${check ?? "모든 목표점의 새 응답이 모두 필요합니다."}`);
