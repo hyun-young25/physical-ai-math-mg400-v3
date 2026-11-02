@@ -233,6 +233,7 @@ export type PaperCoordinateStudyViewState = {
     source: "hardware" | "mock" | null;
     pose: { x: number; y: number; z: number; r: number } | null;
     seq: number | null;
+    measuredAt: number | null;
     ageMs: number | null;
     fresh: boolean;
     user: number | null;

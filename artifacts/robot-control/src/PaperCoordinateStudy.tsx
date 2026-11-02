@@ -518,11 +518,6 @@ export function PaperCoordinateStudy({
         dataSource: options.frame?.source ?? "teacher",
         createdAt: timeIso(),
         updatedAt: timeIso(),
-      baselineLengthTolerance: {
-        toleranceMm: PAPER_BASELINE_LENGTH_TOLERANCE_DEFAULT_MM,
-        appliedAt: Date.now(),
-        scope: "xy-baseline-length-only",
-      },
         baselineLengthTolerance: {
           toleranceMm: PAPER_BASELINE_LENGTH_TOLERANCE_DEFAULT_MM,
           appliedAt: Date.now(),
@@ -3646,6 +3641,125 @@ export function PaperCoordinateStudy({
 
   const liveSession = practice.snap;
   const liveMeasurement = liveSession.measurement;
+  const baselineLengthMetrics = paperBaselineLengthMetrics(
+    samples,
+    baselineLengthToleranceMm,
+  );
+  const liftCapture = (() => {
+    const result = (
+      message: string,
+      nextAction: "connection" | "references" | "tcp-jog" | "revision" | "none",
+      nextLabel: string,
+      canRecord = false,
+    ) => ({ canRecord, message, nextAction, nextLabel });
+    if (running || liveSession.busy || practice.operationPending)
+      return result(
+        "장비 또는 학습 실행이 진행 중이어서 지금 기록할 수 없습니다.",
+        "connection",
+        "연결·준비 상태 확인",
+      );
+    if (active?.run)
+      return result(
+        "이 시도에는 이미 실행 기록이 있습니다. 이전 기록은 보존됩니다.",
+        "revision",
+        "수정 이유 작성 후 새 시도",
+      );
+    if (
+      liveSession.connection !== "connected" ||
+      !liveSession.source ||
+      !liveSession.connectionToken
+    )
+      return result(
+        "현재 연결에서 받은 위치 보고가 없습니다.",
+        "connection",
+        "연결·준비 열기",
+      );
+    if (!liveMeasurement)
+      return result(
+        "현재 연결의 TCP 위치 보고가 아직 없습니다. 이 버튼은 위치를 읽거나 로봇을 움직이지 않습니다.",
+        "connection",
+        "연결 화면에서 현재 위치 보고 확인",
+      );
+    if (liveMeasurement.error)
+      return result(
+        "장비 보고에 오류 상태가 있습니다. 연결·준비 화면에서 오류를 확인하고 정지 상태를 만든 뒤 새 위치를 읽으세요.",
+        "connection",
+        "연결·준비 열기",
+      );
+    if (liveMeasurement.moving)
+      return result(
+        "장비가 움직이는 중이므로 위치를 기록할 수 없습니다. 이동 종료 후 새 보고를 확인하세요.",
+        "connection",
+        "연결·준비 열기",
+      );
+    if (!measurementFresh(liveMeasurement))
+      return result(
+        `현재 위치 보고가 오래되었습니다${tcpJogAgeMs === null ? "" : ` (${Math.round(tcpJogAgeMs / 1000)}초)`}. 새 위치 보고가 필요합니다.`,
+        "connection",
+        "연결 화면에서 현재 위치 보고 확인",
+      );
+    if (
+      !liveSession.setup ||
+      !liveSession.setup.verified.coordinates ||
+      !coordinatesVerified
+    )
+      return result(
+        "현재 연결의 User/Tool 및 좌표계를 확인하지 않았습니다.",
+        "connection",
+        "연결·준비 열기",
+      );
+    if (!active)
+      return result(
+        "기록할 현재 시도가 없습니다. 기존 시도를 선택하거나 새 시도를 시작하세요.",
+        "revision",
+        "새 시도 준비",
+      );
+    if (
+      !frame ||
+      frame.samples.length !== 3 ||
+      frame.source !== liveSession.source ||
+      frame.samples.some(
+        (sample) =>
+          sample.source !== liveSession.source ||
+          sample.connectionToken !== liveSession.connectionToken ||
+          sample.user !== liveSession.setup!.user ||
+          sample.tool !== liveSession.setup!.tool,
+      )
+    )
+      return result(
+        "현재 연결·User/Tool에서 기록한 O/X/Y 실장비 기준점이 없습니다. 교사 입력이나 이전 연결 기록은 실측 기준점으로 사용할 수 없습니다.",
+        "references",
+        "O/X/Y 기준점 기록으로 이동",
+      );
+    const surface = surfaceZ;
+    if (surface === null)
+      return result(
+        "O/X/Y에서 종이 표면 Z를 계산할 수 없습니다. 기준점 기록을 확인하세요.",
+        "references",
+        "기준점 기록 확인",
+      );
+    if (liveMeasurement.pose.z <= surface)
+      return result(
+        `현재 보고 Z ${liveMeasurement.pose.z.toFixed(2)} mm는 종이 표면 Z ${surface.toFixed(2)} mm보다 높지 않습니다. 교사가 위치를 맞추고 새 보고를 확인하세요.`,
+        "tcp-jog",
+        "웹 TCP 미세 이동으로 위치 맞추기",
+      );
+    if (
+      liveMeasurement.user !== liveSession.setup.user ||
+      liveMeasurement.tool !== liveSession.setup.tool
+    )
+      return result(
+        `현재 보고 User ${liveMeasurement.user}/Tool ${liveMeasurement.tool}가 적용 설정 User ${liveSession.setup.user}/Tool ${liveSession.setup.tool}과 다릅니다.`,
+        "connection",
+        "연결·준비 열기",
+      );
+    return result(
+      `기록 가능 · 현재 보고 Z ${liveMeasurement.pose.z.toFixed(2)} mm · ${liveMeasurement.source === "hardware" ? "실장비 제어기 보고" : "모의 응답 · 실측 아님"} · seq ${liveMeasurement.seq} · User ${liveMeasurement.user} / Tool ${liveMeasurement.tool}. 기록 버튼은 로봇을 이동시키지 않습니다.`,
+      "references",
+      "기준점·실행 전 조건 확인",
+      true,
+    );
+  })();
   const tcpJogAgeMs = liveMeasurement
     ? Math.max(0, Date.now() - liveMeasurement.measuredAt)
     : null;
@@ -3715,6 +3829,13 @@ export function PaperCoordinateStudy({
       ? (records.find((record) => record.id === active.parentAttemptId) ?? null)
       : null,
     activeAttempt: active ?? null,
+    baselineLengthToleranceMm,
+    baselineLengthToleranceAppliedAt:
+      active?.baselineLengthTolerance?.appliedAt ?? null,
+    baselineLengthToleranceDraft,
+    baselineLengthMetrics,
+    liftCapture,
+    liftRecordFeedback,
     rotationAllowed: rotationAllowed && !isPaperDT(level),
     pathConcept: active?.pathConcept,
     records,
@@ -3751,6 +3872,7 @@ export function PaperCoordinateStudy({
       source: liveSession.source,
       pose: liveMeasurement?.pose ?? null,
       seq: liveMeasurement?.seq ?? null,
+      measuredAt: liveMeasurement?.measuredAt ?? null,
       ageMs: tcpJogAgeMs,
       fresh:
         !!liveMeasurement &&
