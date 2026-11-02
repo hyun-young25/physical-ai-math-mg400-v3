@@ -15,8 +15,12 @@ export const PAPER_RECTANGLE_TITLES = {
 export const isPaperRectangle = (level:PaperCoordinateLevel) => level==="advanced-paper-quarter"||level==="advanced-paper-rotated"||level==="advanced-paper-dt"||level==="advanced-paper-hardware";
 export function paperTaskTargets(level:PaperCoordinateLevel,set:PaperTargetSet):PaperGridPoint[] {
   if(!isPaperRectangle(level))return PAPER_TARGETS[set];
-  if(level==="advanced-paper-dt"||level==="advanced-paper-hardware")return [[0,0],[11,0],[11,15],[0,15]].map(([xCm,yCm],i)=>({name:"P"+(i+1),xCm,yCm}));
-  return [[2,2],[8,2],[8,6],[2,6]].map(([xCm,yCm],i)=>({name:"P"+(i+1),xCm,yCm}));
+  if(level==="advanced-paper-dt"||level==="advanced-paper-hardware") {
+    const points=set==="revalidation"?[[2,3],[9,3],[9,12],[2,12]]:[[0,0],[11,0],[11,15],[0,15]];
+    return points.map(([xCm,yCm],i)=>({name:"P"+(i+1),xCm,yCm}));
+  }
+  const points=set==="revalidation"?[[3,3],[7,3],[7,5],[3,5]]:[[2,2],[8,2],[8,6],[2,6]];
+  return points.map(([xCm,yCm],i)=>({name:"P"+(i+1),xCm,yCm}));
 }
 export { PAPER_PATTERN_LABELS } from "./paperDiagnosisLabel";
 export const paperFeedbackKey=(c:Pick<FeedbackContext,"condition"|"answers"|"execution">)=>JSON.stringify(["paper",c.condition,c.answers,c.execution]);

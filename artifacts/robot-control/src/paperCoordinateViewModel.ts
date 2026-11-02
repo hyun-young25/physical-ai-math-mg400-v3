@@ -1,6 +1,6 @@
 import type { SquareVisual } from "./squareComparisonVisual";
 import type { paperTransformEstimate } from "./paperRectangleTask";
-import type { PaperTrialRecord, PaperReferenceSource, PaperDiagnosis, PaperEvidenceSource, PaperFrame, PaperGridPoint, PaperPointName, PaperPredictionPoint, PaperReferenceSample, PaperRunSnapshot, PaperStudentTransform, PaperTargetSet, PaperCoordinateLevel, PaperAiAnalysisRecord } from "./paperCoordinateStudy";
+import type { PaperTrialRecord, PaperReferenceSource, PaperDiagnosis, PaperEvidenceSource, PaperFrame, PaperGridPoint, PaperPointName, PaperPredictionPoint, PaperReferenceSample, PaperRunSnapshot, PaperStudentTransform, PaperTargetSet, PaperCoordinateLevel, PaperAiAnalysisRecord, PaperInkReadingDraft, PaperVerificationCriteria } from "./paperCoordinateStudy";
 import type { LearningAiController } from "./LearningAiFeedback";
 
 export type PaperLessonStage = 1 | 2 | 3 | 4 | 5 | 6 | 7;
@@ -21,6 +21,7 @@ export type PaperCoordinateStudyViewState = {
   attempt: number | null;
   analysisReady: boolean;
   revalidationScope: string | null;
+  revalidationResult?: "physical-verified" | "simulation-only" | "incomplete";
   stage: PaperLessonStage;
   level: PaperCoordinateLevel;
   targetSet: PaperTargetSet;
@@ -56,9 +57,16 @@ export type PaperCoordinateStudyViewState = {
   positionTolerance: number;
   rotationTolerance: number;
   convertedReadings: Array<{ point: string; source: PaperEvidenceSource; seq: number | null; measuredAt: number; xCm: number | null; yCm: number | null }>;
-  inkReadings: Array<{ point: string; xCm: number | null; yCm: number | null }>;
+  inkReadings: PaperInkReadingDraft[];
+  verificationCriteria?: PaperVerificationCriteria;
+  verificationCriteriaMatches: boolean;
+  planHash: string;
+  verificationReasonDraft: string;
   diagnosis: PaperDiagnosis | null;
   studentHypothesis: string;
+  followupObservationDraft: string;
+  modelDecision: "revise" | "retain";
+  modelDecisionReasonDraft: string;
   revisionReason: string;
   saveState: "ready" | "saving" | "saved" | "failed";
   saveMessage: string;
@@ -87,11 +95,17 @@ export type PaperCoordinateStudyViewActions = {
   onRecordCurrentLiftHeight: () => void;
   onLiftHeightChange: (value: string) => void;
   onToleranceChange: (field: "positionTolerance" | "rotationTolerance", value: string) => void;
-  onInkReadingChange: (point: string, axis: "xCm" | "yCm", value: string) => void;
+  onVerificationReasonChange: (value: string) => void;
+  onSaveVerificationCriteria: () => void;
+  onInkReadingChange: (point: string, field: "xCm" | "yCm" | "status" | "reason", value: string) => void;
   onSaveInkReadings: () => void;
   onSaveHypothesis: (value: string) => void;
+  onFollowupObservationChange: (value: string) => void;
+  onModelDecisionChange: (value: "revise" | "retain") => void;
+  onModelDecisionReasonChange: (value: string) => void;
+  onSaveFollowupObservation: (value: string) => void;
   onAiAnalysisDisplayed: (analysis: PaperAiAnalysisRecord) => void;
-  onRevise: (reason: string) => void;
+  onRevise: (input: { reason: string; decision: "revise" | "retain"; decisionReason: string; followupObservation: string }) => void;
   onChooseNewTarget: () => void;
   onMovePaper: (reason:string) => void;
 };

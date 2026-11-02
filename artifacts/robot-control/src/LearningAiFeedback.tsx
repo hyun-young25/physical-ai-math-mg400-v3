@@ -49,6 +49,21 @@ export function useLearningAi(context:FeedbackContext,editVersion="") {
   const version=feedbackVersion(context)+editVersion+mode;
   const currentVersion=()=>feedbackVersion(current.current)+editing.current+currentMode.current;
   const problemKey=feedbackProblemKey(context);
+  const buildRequestInput=(snapshot:FeedbackContext, rawQuestion:string)=>{
+    const safeSnapshot=sanitizeFeedbackContext(snapshot);
+    const problem=feedbackProblemKey(safeSnapshot);
+    const question=privateText(rawQuestion.trim()).slice(0,1000);
+    const prior=currentMode.current==="trial"?trialHistory.current.filter(row=>feedbackProblemKey(row.prediction)===problem):delivered(snapshot);
+    const priorMessages=messagesFor(prior.filter(row=>!row.feedback?.failureReason));
+    for(const message of automatic.providedMessages())if(!priorMessages.some(row=>row.id===message.id))priorMessages.push(message);
+    priorMessages.sort((a,b)=>(Date.parse(a.at??"")||0)-(Date.parse(b.at??"")||0));
+    const conversation=priorMessages.slice(-8).map(({role,text,source})=>({role,text:privateText(text).slice(0,1000),...(source?{source}:{})}));
+    const input={...safeSnapshot,question,conversation,attempts:Math.min(1000,safeSnapshot.attempts),
+      history:feedbackHistoryEnvelope(safeSnapshot,
+        priorMessages.filter(m=>m.role==="tutor").slice(-3).map(m=>m.text),
+        prior.slice(-2).map(x=>({answers:x.prediction.answers,reason:x.prediction.reason})))};
+    return {safeSnapshot,problem,question,prior,priorMessages,conversation,input};
+  };
   const cancel=()=>{
     const a=active.current;if(!a)return;
     a.abort.abort();active.current=null;
@@ -69,16 +84,12 @@ export function useLearningAi(context:FeedbackContext,editVersion="") {
     cancel();
     ready.current=null;
     trialReady.current=null;
-    const safeSnapshot=sanitizeFeedbackContext(snapshot);
-    const problem=feedbackProblemKey(safeSnapshot);
-    if(trigger==="retry"&&!question&&lastQuestion.current?.problem===problem)question=lastQuestion.current.text;
-    question=privateText(question.trim()).slice(0,1000);
+    const requestProblem=feedbackProblemKey(sanitizeFeedbackContext(snapshot));
+    if(trigger==="retry"&&!question&&lastQuestion.current?.problem===requestProblem)question=lastQuestion.current.text;
+    const built=buildRequestInput(snapshot,question);
+    const {safeSnapshot,problem,priorMessages,conversation,input}=built;
+    question=built.question;
     lastQuestion.current={problem,text:question};
-    const prior=currentMode.current==="trial"?trialHistory.current.filter(row=>feedbackProblemKey(row.prediction)===problem):delivered(snapshot);
-    const priorMessages=messagesFor(prior.filter(row=>!row.feedback?.failureReason));
-    for(const message of automatic.providedMessages())if(!priorMessages.some(row=>row.id===message.id))priorMessages.push(message);
-    priorMessages.sort((a,b)=>(Date.parse(a.at??"")||0)-(Date.parse(b.at??"")||0));
-    const conversation=priorMessages.slice(-8).map(({role,text,source})=>({role,text:privateText(text).slice(0,1000),...(source?{source}:{})}));
     if(currentMode.current==="trial") {
       const feedback:LearningFeedback={provider:"rules",status:"unconfigured",createdAt:new Date().toISOString(),
         text:trialTutorFeedback({...safeSnapshot,question,conversation})};
@@ -90,10 +101,6 @@ export function useLearningAi(context:FeedbackContext,editVersion="") {
     const row:Activity={...learningRecordContext("math"),id:crypto.randomUUID(),task:safeSnapshot.task,
       at:new Date().toISOString(),prediction:structuredClone(safeSnapshot),feedbackStatus:"displayed",trigger,
       ...(question?{question}:{}),conversation:structuredClone(conversation)};
-    const input={...safeSnapshot,question,conversation,attempts:Math.min(1000,safeSnapshot.attempts),
-      history:feedbackHistoryEnvelope(safeSnapshot,
-        priorMessages.filter(m=>m.role==="tutor").slice(-3).map(m=>m.text),
-        prior.slice(-2).map(x=>({answers:x.prediction.answers,reason:x.prediction.reason})))};
     const abort=new AbortController();active.current={key,abort,row};
     setState({key,pending:true,question,id:row.id});
     const timer=setTimeout(()=>abort.abort(),12000);
@@ -135,7 +142,8 @@ export function useLearningAi(context:FeedbackContext,editVersion="") {
   messages.sort((a,b)=>(Date.parse(a.at??"")||Number.MAX_SAFE_INTEGER)-(Date.parse(b.at??"")||Number.MAX_SAFE_INTEGER));
   const executionAvailable=hasFeedbackExecution(context.execution);
   const incorrect=/incorrect|"matched"\s*:\s*false/.test(context.judgment);
-  return {id,context,problemKey,version,messages,request,storageFailed:storageFailed||automatic.storageFailed,mode,
+  return {id,context,problemKey,version,messages,request,previewRequest:(question:string)=>buildRequestInput(current.current,question).input,
+    storageFailed:storageFailed||automatic.storageFailed,mode,
     unread:automatic.unread,preview:automatic.preview,
     acknowledge:()=>{
        const autoDisplayed=automatic.acknowledge();

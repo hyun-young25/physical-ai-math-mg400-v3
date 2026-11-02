@@ -60,6 +60,40 @@ export type PaperPoseObservation = {
   kind: "controller-tcp" | "mock-bridge" | "dt";
 };
 
+export type PaperVerificationCriteria = {
+  recordId: string;
+  frameId: string;
+  planHash: string;
+  targetSet: PaperTargetSet;
+  modelConstructionPoints: string[];
+  independentVerificationPoints: string[];
+  positionToleranceMm: number;
+  rotationToleranceDeg: number;
+  rationale: string;
+  confirmedAt: number;
+};
+
+export type PaperInkReading = {
+  recordId: string;
+  runId: string;
+  frameId: string;
+  point: string;
+  unit: "cm";
+  source: "student-manual-ink";
+  status: "measured" | "unreadable" | "outside-range" | "not-measured";
+  xCm: number | null;
+  yCm: number | null;
+  rawX: string;
+  rawY: string;
+  reason: string;
+  recordedAt: number;
+};
+
+export type PaperInkReadingDraft = Pick<PaperInkReading, "point" | "status" | "reason"> & {
+  xCm: string;
+  yCm: string;
+};
+
 export type PaperRunSnapshot = {
   id: string;
   planHash: string;
@@ -72,6 +106,8 @@ export type PaperRunSnapshot = {
   startSequence: number | null;
   commands: Array<{ point: string; pose: LessonPose }>;
   observations: PaperPoseObservation[];
+  /** Immutable criteria confirmed by the learner before this run starts. */
+  verificationCriteria?: PaperVerificationCriteria;
   error?: string;
 };
 
@@ -131,17 +167,23 @@ export type PaperTrialRecord = {
   predictions?: PaperPredictionPoint[];
   planHash?: string;
   run?: PaperRunSnapshot;
+  runHistory?: PaperRunSnapshot[];
   dtRunPlanHash?: string;
-  inkReadings?: Array<{ point: string; xCm: number | null; yCm: number | null; recordedAt: number }>;
+  inkReadings?: PaperInkReading[];
   diagnosis?: PaperDiagnosis;
   aiAnalyses?: PaperAiAnalysisRecord[];
   studentHypothesis?: string;
+  followupObservation?: { recordId: string; runId: string; source: "student-report"; text: string; recordedAt: number };
+  modelDecision?: "revise" | "retain";
+  modelDecisionReason?: string;
   revisionReason?: string;
   revalidationTarget?: PaperTargetSet | null;
   invalidatedRunIds?: string[];
   liftHeight?: { z: number; source: PaperReferenceSource; seq: number | null; capturedAt: number; ageMsAtCapture: number | null; user: number; tool: number; coordinateSystem: string };
   predictionModelComparison?: Array<{ point: string; dx: number; dy: number; distance: number }>;
-  revalidation?: { parentAttemptId: string; runId: string; source: PaperEvidenceSource; checkedAt: number; scope: string };
+  revalidation?: { parentAttemptId: string; runId: string; source: PaperEvidenceSource; checkedAt: number; scope: string;
+    result: "physical-verified" | "simulation-only" | "incomplete"; tcpWithinTolerance?: boolean; inkWithinTolerance?: boolean };
+  verificationCriteria?: PaperVerificationCriteria;
   diagnosisToleranceMm?: number;
 };
 
@@ -275,6 +317,15 @@ export function validatePaperRunForDiagnosis(run: PaperRunSnapshot, frame: Paper
     return "기준점과 실행 관측은 같은 출처여야 합니다.";
   if (!targets || run.observations.length !== targets.length || run.commands.length !== targets.length)
     return "모든 목표점에 새 회신이 있어야 비교할 수 있습니다.";
+  const criteria = run.verificationCriteria;
+  if (criteria && (criteria.frameId !== run.frameId || criteria.planHash !== run.planHash
+    || criteria.targetSet !== run.targetSet || criteria.confirmedAt > run.startedAt
+    || !Number.isFinite(criteria.positionToleranceMm) || criteria.positionToleranceMm <= 0
+    || !Number.isFinite(criteria.rotationToleranceDeg) || criteria.rotationToleranceDeg <= 0
+    || !criteria.rationale.trim()
+    || JSON.stringify(criteria.independentVerificationPoints) !== JSON.stringify(targets.map(point => point.name))
+    || criteria.independentVerificationPoints.some(point => criteria.modelConstructionPoints.includes(point))))
+    return "실행 전에 확인한 독립 검증 기준과 현재 실행이 일치하지 않습니다.";
   let previousSeq = run.startSequence ?? -1;
   for (let i = 0; i < run.observations.length; i++) {
     const o = run.observations[i], c = run.commands[i];
@@ -390,8 +441,41 @@ export function paperRevalidationScope(record: PaperTrialRecord, parent?: PaperT
     || (record.targetSet===parent.targetSet && record.frame.id===parent.frame?.id)
     || validatePaperRunForDiagnosis(record.run,record.frame,record.planHash,targets)
     || record.diagnosis?.pattern!=="match") return null;
-  return record.run.source==="hardware" ? "제어기 보고 위치 기반 재검증 · 잉크 별도 확인"
-    : record.run.source==="mock" ? "모의 브리지 재검증 완료 · 실측 아님" : "DT 재검증 완료 · 실측 아님";
+  return record.run.source==="hardware" ? "실장비 재검증 후보 · TCP와 잉크 기준 판정 대기"
+    : record.run.source==="mock" ? "모의 재실행 자료 · 실측 재검증 아님" : "DT 재실행 자료 · 실측 재검증 아님";
+}
+
+export function paperRevalidationAssessment(
+  record: PaperTrialRecord,
+  parent: PaperTrialRecord | undefined,
+  targets: PaperGridPoint[],
+  inkWithinTolerance: boolean,
+): NonNullable<PaperTrialRecord["revalidation"]> | null {
+  const run = record.run;
+  const criteria = run?.verificationCriteria;
+  const scope = paperRevalidationScope(record, parent, targets);
+  if (!scope || !run || !criteria || criteria.recordId !== record.id
+    || criteria.frameId !== record.frame?.id || criteria.planHash !== run.planHash) return null;
+  const tcpWithinTolerance = run.observations.every((observation, index) => {
+    const target = frameTransformPoint(record.frame!, targets[index]);
+    const distance = Math.hypot(observation.pose.x - target.x, observation.pose.y - target.y);
+    const rotation = angleDifference(observation.pose.r, target.r);
+    return distance <= criteria.positionToleranceMm && rotation <= criteria.rotationToleranceDeg;
+  });
+  if (run.source !== "hardware") return {
+    parentAttemptId: parent!.id, runId: run.id, source: run.source, checkedAt: Date.now(), scope,
+    result: "simulation-only", tcpWithinTolerance, inkWithinTolerance,
+  };
+  if (!tcpWithinTolerance || !inkWithinTolerance) return {
+    parentAttemptId: parent!.id, runId: run.id, source: run.source, checkedAt: Date.now(),
+    scope: "실물 재검증 미완료 · TCP 또는 잉크 기준을 충족하지 않았습니다.",
+    result: "incomplete", tcpWithinTolerance, inkWithinTolerance,
+  };
+  return {
+    parentAttemptId: parent!.id, runId: run.id, source: run.source, checkedAt: Date.now(),
+    scope: "실장비 TCP와 독립 잉크 측정이 사전 기준 안에 있습니다.",
+    result: "physical-verified", tcpWithinTolerance, inkWithinTolerance,
+  };
 }
 
 export function getPaperFrameAngleDegrees(frame: PaperFrame): number {

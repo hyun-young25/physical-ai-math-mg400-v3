@@ -64,12 +64,21 @@ test("paper follow-up history stays valid and retains displayed feedback, revisi
     transform:{originX:"180",originY:"-60",axisDirection:"x+",millimetersPerCentimeter:"10",explanation:"처음 풀이의 식"},
     predictions:[{name:"P3",xCm:6,yCm:7,robotX:"310",robotY:"90"}],
     studentHypothesis:"P3의 대입값을 다시 살펴봄",revisionReason:"축별 계산을 다시 적어 수정",
+    followupObservation:{recordId:"paper-attempt-1",runId:"dt-run-2",text:"P3 눈금 6.0 cm를 다시 읽음",source:"student-manual-ink"},
+    modelDecision:"revise",modelDecisionReason:"회전항을 식에 반영할 필요가 있음",
+    verificationCriteria:{recordId:"paper-attempt-1",positionToleranceMm:2,rotationToleranceDeg:2,
+      rationale:"실행 전 독립 확인점 기준",independentVerificationPoints:["P1","P2","P3","P4"]},
     revalidation:{parentAttemptId:"paper-attempt-1",runId:"dt-run-2",source:"dt",scope:"same-task"},
     previouslyDisplayedFeedback:[{mode:"gpt",provider:"openai",status:"provided",source:"dt",text:"X 좌표에 어떤 값을 대입했나요?"}],
     frame:{id:"frame-1",source:"teacher",coordinateSystem:"User 0 / Tool 0",user:0,tool:0,capturedAt:10,samples:[{point:"O",pose:{x:180,y:-60,z:60,r:0}}]},
     run:{id:"dt-run-2",planHash:"plan-2",source:"dt",status:"completed",startedAt:10,endedAt:12,
+      verificationCriteria:{recordId:"paper-attempt-1",positionToleranceMm:2,rationale:"실행 전 독립 확인점 기준"},
       commands:[{point:"P3",pose:{x:290,y:90,z:60,r:0}}],
       observations:[{point:"P3",source:"dt",kind:"dt",seq:null,measuredAt:12,pose:{x:290,y:90,z:60,r:0}}]},
+    runHistory:[{id:"prevalidation-dt",planHash:"plan-2",frameId:"frame-1",source:"dt",status:"completed",
+      commands:[{point:"P3",pose:{x:290,y:90,z:60,r:0}}],observations:[{point:"P3",pose:{x:290,y:90,z:60,r:0},source:"dt"}]}],
+    inkReadings:[{recordId:"paper-attempt-1",runId:"dt-run-2",point:"P3",unit:"cm",source:"student-manual-ink",
+      status:"measured",rawX:"6.0",rawY:"7.0",xCm:6,yCm:7}],
     diagnosis:{method:"rule-based",status:"complete",candidate:"대입·계산 차이",firstMismatch:"P3",question:"어떤 수를 대입했나요?",why:"예측 좌표와 목표 좌표 비교",evidence:[{point:"P3",distance:20}]},
     unusedDiagnosticPayload:"x".repeat(4200),
   };
@@ -84,6 +93,11 @@ test("paper follow-up history stays valid and retains displayed feedback, revisi
   assert.equal(attempts[0].run.observations[0].pose.x,290);
   assert.equal(attempts[0].run.status,"completed");
   assert.equal(attempts[0].studentHypothesis,"P3의 대입값을 다시 살펴봄");
+  assert.equal(attempts[0].followupObservation.text,"P3 눈금 6.0 cm를 다시 읽음");
+  assert.equal(attempts[0].modelDecisionReason,"회전항을 식에 반영할 필요가 있음");
+  assert.equal(attempts[0].run.verificationCriteria.positionToleranceMm,2);
+  assert.equal(attempts[0].runHistory[0].id,"prevalidation-dt");
+  assert.equal(attempts[0].inkReadings[0].source,"student-manual-ink");
 });
 test("unsaved answer and explanation edits are current context, not a new verdict or overwritten prediction",()=>{
   const record=structuredClone(original);

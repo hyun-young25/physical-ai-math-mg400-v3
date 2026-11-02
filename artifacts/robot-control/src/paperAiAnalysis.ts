@@ -3,6 +3,8 @@ import { frameTransformPoint } from "./paperCoordinateStudy";
 import type { PaperDiagnosis, PaperGridPoint, PaperTrialRecord } from "./paperCoordinateStudy";
 
 type PointDelta = { dx: number; dy: number; distance: number } | null;
+const rotationDelta = (a: number | undefined, b: number | undefined) =>
+  a === undefined || b === undefined ? null : Math.abs(((b - a + 540) % 360) - 180);
 
 function delta(a: { x: number; y: number } | null, b: { x: number; y: number } | null): PointDelta {
   if (!a || !b) return null;
@@ -31,7 +33,10 @@ export function linkedPaperAttempts(current: PaperTrialRecord, records: PaperTri
 export function paperAnalysisReady(current: PaperTrialRecord | null, currentPlanHash: string, diagnosis: PaperDiagnosis | null) {
   const run = current?.run;
   return !!current?.frame && !!run && run.status === "completed" && !!diagnosis && diagnosis.status === "complete"
-    && current.planHash === currentPlanHash && run.planHash === currentPlanHash && run.frameId === current.frame.id;
+    && current.planHash === currentPlanHash && run.planHash === currentPlanHash && run.frameId === current.frame.id
+    && !!run.verificationCriteria && run.verificationCriteria.recordId === current.id
+    && run.verificationCriteria.frameId === run.frameId && run.verificationCriteria.planHash === run.planHash
+    && run.verificationCriteria.confirmedAt <= run.startedAt;
 }
 
 export function paperRunComparisons(current: PaperTrialRecord, targets: PaperGridPoint[]) {
@@ -49,7 +54,10 @@ export function paperRunComparisons(current: PaperTrialRecord, targets: PaperGri
       commandRobotMm: command,
       controllerReportedMm: observation?.pose ?? null,
       targetVsCommandMm: delta({ x: transformed.x, y: transformed.y }, command),
+      targetVsControllerReportedMm: delta({ x: transformed.x, y: transformed.y }, observation?.pose ?? null),
       commandVsReportedMm: delta(command, observation?.pose ?? null),
+      targetVsControllerReportedRotationDeg: rotationDelta(transformed.r, observation?.pose.r),
+      commandVsReportedRotationDeg: rotationDelta(command?.r, observation?.pose.r),
       observation: observation ? {
         source: observation.source,
         kind: observation.kind,
@@ -57,6 +65,42 @@ export function paperRunComparisons(current: PaperTrialRecord, targets: PaperGri
         measuredAt: observation.measuredAt,
         ageMs: observation.ageMs,
       } : null,
+    };
+  });
+}
+
+/** Convert student-read ink through the measured O/X/Y frame, never the student's model. */
+export function paperInkComparisons(current: PaperTrialRecord, targets: PaperGridPoint[]) {
+  const frame = current.frame;
+  const run = current.run;
+  if (!frame || !run) return [];
+  return targets.map(target => {
+    const reading = current.inkReadings?.find(item => item.point === target.name
+      && item.recordId === current.id && item.runId === run.id && item.frameId === frame.id
+      && item.unit === "cm" && item.source === "student-manual-ink");
+    const targetRobot = frameTransformPoint(frame, target);
+    const reported = run.observations.find(item => item.point === target.name
+      && item.source === run.source && item.kind === (run.source === "hardware" ? "controller-tcp" : run.source === "mock" ? "mock-bridge" : "dt"));
+    const measured = reading?.status === "measured" && Number.isFinite(reading.xCm) && Number.isFinite(reading.yCm)
+      ? frameTransformPoint(frame, { xCm: reading.xCm!, yCm: reading.yCm! }) : null;
+    return {
+      point: target.name,
+      runId: run.id,
+      recordId: current.id,
+      frameId: frame.id,
+      paperUnit: "cm",
+      robotUnit: "mm",
+      targetRobotMm: { x: targetRobot.x, y: targetRobot.y },
+      controllerReportedMm: reported ? { x: reported.pose.x, y: reported.pose.y } : null,
+      inkReading: reading ?? null,
+      inkAsMeasuredFrameRobotMm: measured ? { x: measured.x, y: measured.y } : null,
+      targetVsCommandMm: paperRunComparisons(current, targets).find(item => item.point === target.name)?.targetVsCommandMm ?? null,
+      targetVsControllerReportedMm: delta({ x: targetRobot.x, y: targetRobot.y }, reported?.pose ?? null),
+      targetVsControllerReportedRotationDeg: rotationDelta(targetRobot.r, reported?.pose.r),
+      targetVsInkMm: delta({ x: targetRobot.x, y: targetRobot.y }, measured),
+      controllerReportedVsInkMm: delta(reported?.pose ?? null, measured),
+      criterionPositionToleranceMm: run.verificationCriteria?.positionToleranceMm ?? null,
+      criterionRotationToleranceDeg: run.verificationCriteria?.rotationToleranceDeg ?? null,
     };
   });
 }
@@ -81,6 +125,9 @@ function linkedSummary(record: PaperTrialRecord) {
     transform: record.transform,
     predictions: record.predictions,
     studentHypothesis: record.studentHypothesis,
+    followupObservation: record.followupObservation,
+    modelDecision: record.modelDecision,
+    modelDecisionReason: record.modelDecisionReason,
     revisionReason: record.revisionReason,
     revalidation: record.revalidation,
     previouslyDisplayedFeedback: displayedFeedback,
@@ -103,7 +150,15 @@ function linkedSummary(record: PaperTrialRecord) {
       endedAt: run.endedAt,
       commands: run.commands,
       observations: run.observations,
+      verificationCriteria: run.verificationCriteria ?? null,
     } : null,
+    runHistory: (record.runHistory ?? []).map(previousRun => ({
+      id: previousRun.id, planHash: previousRun.planHash, frameId: previousRun.frameId,
+      source: previousRun.source, status: previousRun.status, startedAt: previousRun.startedAt,
+      endedAt: previousRun.endedAt ?? null, commands: previousRun.commands,
+      observations: previousRun.observations, verificationCriteria: previousRun.verificationCriteria ?? null,
+    })),
+    inkReadings: record.inkReadings ?? [],
     diagnosis: record.diagnosis ? {
       method: record.diagnosis.method,
       status: record.diagnosis.status,
@@ -157,6 +212,9 @@ export function paperFeedbackContext(current: PaperTrialRecord, records: PaperTr
       savedPredictedRobotCoordinates: current.predictions ?? [],
       studentHypothesis: current.studentHypothesis ?? "",
       revisionReason: current.revisionReason ?? "",
+      modelDecision: current.modelDecision ?? null,
+      modelDecisionReason: current.modelDecisionReason ?? "",
+      followupObservation: current.followupObservation ?? null,
       pathConcept: current.pathConcept ?? null,
     }),
     reason: [
@@ -183,6 +241,9 @@ export function paperFeedbackContext(current: PaperTrialRecord, records: PaperTr
       firstMismatch: diagnosis?.firstMismatch ?? null,
       question: diagnosis?.question ?? null,
       why: diagnosis?.why ?? null,
+      toleranceMm: run?.verificationCriteria?.positionToleranceMm ?? diagnosis?.toleranceMm ?? null,
+      rotationToleranceDeg: run?.verificationCriteria?.rotationToleranceDeg ?? null,
+      verificationCriteria: run?.verificationCriteria ?? null,
       interpretation: "규칙 기반 수치 비교이며 학생의 인지 원인을 확정하거나 채점한 결과가 아닙니다.",
     }),
     execution: JSON.stringify(run ? [{
@@ -198,11 +259,24 @@ export function paperFeedbackContext(current: PaperTrialRecord, records: PaperTr
       commands: run.commands,
       observations: run.observations,
       comparisons,
-      inkReadings: current.inkReadings ?? [],
+      inkReadings: (current.inkReadings ?? []).filter(reading => reading.recordId === current.id && reading.runId === run.id && reading.frameId === current.frame?.id),
+      inkComparisons: paperInkComparisons(current, targets),
+      verificationCriteria: run.verificationCriteria ?? null,
       diagnosisMethod: diagnosis?.method ?? "rule-based",
       linkedPreviousAttemptId: current.parentAttemptId,
       revisionReason: current.revisionReason ?? null,
       revalidation: current.revalidation ?? null,
+      followupObservation: current.followupObservation?.runId === run.id ? current.followupObservation : null,
+      modelDecision: current.modelDecision ?? null,
+      modelDecisionReason: current.modelDecisionReason ?? null,
+      sameAttemptEarlierRuns: (current.runHistory ?? []).filter(previousRun => previousRun.planHash === run.planHash
+        && previousRun.frameId === run.frameId).map(previousRun => ({
+        recordId: current.id, runId: previousRun.id, planHash: previousRun.planHash,
+        frameId: previousRun.frameId, source: previousRun.source, status: previousRun.status,
+        startedAt: previousRun.startedAt, endedAt: previousRun.endedAt ?? null,
+        commands: previousRun.commands, observations: previousRun.observations,
+        verificationCriteria: previousRun.verificationCriteria ?? null,
+      })),
     }] : []),
     support: current.support === "challenge" ? "challenge" : "guided",
     attempts: chain.length,

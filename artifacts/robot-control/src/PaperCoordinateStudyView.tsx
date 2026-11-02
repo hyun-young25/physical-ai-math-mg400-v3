@@ -6,6 +6,7 @@ import { PAPER_RECTANGLE_TITLES,isPaperRectangle } from "./paperRectangleTask";
 import { useEffect, useId, useState, useLayoutEffect, useRef } from "react";
 import { PaperSceneMap } from "./PaperScene";
 import { publishPaperScene, clearPaperScene, selectPaperPoint, usePaperScene } from "./paperSceneStore";
+import { paperInkComparisons } from "./paperAiAnalysis";
 import { ExecutionAiAnalysis } from "./ExecutionAiAnalysis";
 import type { PaperPointName } from "./paperCoordinateStudy";
 import type { PaperCoordinateStudyViewProps, PaperLessonStage } from "./paperCoordinateViewModel";
@@ -69,6 +70,8 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
   const rectangle=isPaperRectangle(state.level),merged=isMergedPaper(state.level),dtOnly=isPaperDT(state.level),grid=merged?20:10;
   const [hypothesisDraft, setHypothesisDraft] = useState(state.studentHypothesis);
   const [revisionDraft, setRevisionDraft] = useState(state.revisionReason);
+  const [followupDraft, setFollowupDraft] = useState(state.followupObservationDraft);
+  const [decisionReasonDraft, setDecisionReasonDraft] = useState(state.modelDecisionReasonDraft);
   const journey=state.revisionJourney ? {...state.revisionJourney,
     draftRevisionReason:state.stage===7?revisionDraft:undefined} : null;
   const root=useRef<HTMLElement>(null), scene=usePaperScene();
@@ -122,6 +125,8 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
 
   useEffect(() => setHypothesisDraft(state.studentHypothesis), [state.studentHypothesis]);
   useEffect(() => setRevisionDraft(state.revisionReason), [state.revisionReason]);
+  useEffect(() => setFollowupDraft(state.followupObservationDraft), [state.followupObservationDraft]);
+  useEffect(() => setDecisionReasonDraft(state.modelDecisionReasonDraft), [state.modelDecisionReasonDraft]);
 
   const activeTitle = STAGES.find(stage => stage.id === state.stage)?.title ?? "과제 이해";
   const sampleFor = (point: PaperPointName) => state.samples.find(sample => sample.point === point);
@@ -348,6 +353,18 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
                 onChange={event => actions.onToleranceChange("rotationTolerance", event.target.value)} /></label>
             </div>
           </details>
+          <section className="pcv-callout" aria-label="실행 전 검증 기준">
+            <h3>이번 실행의 독립 검증 기준</h3>
+            <p>기준점 O/X/Y는 모델 구성에 사용합니다. 이번 확인점 {state.targetPoints.map(point=>point.name).join("·")}은 모델 구성점과 분리해 판정합니다. 실행 후 이 기준은 바뀌지 않습니다.</p>
+            {state.verificationCriteriaMatches && state.verificationCriteria
+              ? <p role="status">저장된 기준: 위치 ±{state.verificationCriteria.positionToleranceMm} mm · 방향 ±{state.verificationCriteria.rotationToleranceDeg}° · {state.verificationCriteria.rationale}</p>
+              : <p>현재 설정을 저장하고 실행 전에 기준을 확인해야 합니다: 위치 ±{state.positionTolerance} mm · 방향 ±{state.rotationTolerance}°.</p>}
+            <label className="pcv-field"><span>허용오차를 선택한 근거</span><textarea rows={2} value={state.verificationReasonDraft}
+              onChange={event=>actions.onVerificationReasonChange(event.target.value)} disabled={!!state.run&&state.run.status!=="running"} /></label>
+            <button type="button" className="pcv-button pcv-button--quiet" onClick={actions.onSaveVerificationCriteria}
+              disabled={state.running||!!state.run}>이 시도의 실행 전 기준 저장</button>
+          </section>
+          {!state.runAvailable&&state.stage===4&&<p className="pcv-alert" role="status">실행 전 검증 기준과 독립 검증점을 저장해야 DT 실행이 열립니다.</p>}
           <p className="pcv-note">DT는 가상 자료이며 실측이 아닙니다. 실장비 결과는 컨트롤러 TCP 보고 좌표 보고 위치입니다. 이것만으로 펜 접촉이나 잉크 위치를 확인할 수 없습니다.</p>
           {!merged&&!state.physicalAvailable && state.physicalUnavailableReason && <p className="pcv-callout pcv-callout--compact" role="status">{state.physicalUnavailableReason}</p>}
           {state.running && <p className="pcv-feedback" role="status">결과를 기다리는 중입니다.</p>}
@@ -383,10 +400,18 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
                 const reading = state.inkReadings.find(item => item.point === point.name);
                 return <fieldset className="pcv-ink-row" key={point.name} {...rowProps(point.name)}>
                   <legend><span className="pcv-point-tag">{point.name}</span> 눈금에서 읽은 위치</legend>
-                  <label><span>x · cm</span><input type="number" step="any" inputMode="decimal" value={reading?.xCm ?? ""}
+                  <label><span>측정 상태</span><select aria-label={`${point.name} 잉크 측정 상태`} value={reading?.status??"not-measured"}
+                    onChange={event=>actions.onInkReadingChange(point.name,"status",event.target.value)}>
+                    <option value="measured">읽을 수 있음</option><option value="unreadable">눈금 판독 불가</option>
+                    <option value="outside-range">종이 범위 밖</option><option value="not-measured">측정하지 않음</option>
+                  </select></label>
+                  <label><span>x · cm</span><input type="text" inputMode="decimal" value={reading?.xCm ?? ""}
                     aria-label={`${point.name} 잉크 위치 x cm`} onChange={event => actions.onInkReadingChange(point.name, "xCm", event.target.value)} /></label>
-                  <label><span>y · cm</span><input type="number" step="any" inputMode="decimal" value={reading?.yCm ?? ""}
+                  <label><span>y · cm</span><input type="text" inputMode="decimal" value={reading?.yCm ?? ""}
                     aria-label={`${point.name} 잉크 위치 y cm`} onChange={event => actions.onInkReadingChange(point.name, "yCm", event.target.value)} /></label>
+                  <label className="pcv-field"><span>측정 상태/판독 이유</span><input value={reading?.reason??""}
+                    aria-label={`${point.name} 잉크 측정 이유`} onChange={event=>actions.onInkReadingChange(point.name,"reason",event.target.value)} /></label>
+                  <small>학생 수기 기록 · cm · 실행 {state.run?.id??"없음"} · 기준 {state.frame?.id??"없음"}</small>
                 </fieldset>;
               })}
               <button type="button" className="pcv-button pcv-button--primary" onClick={actions.onSaveInkReadings} disabled={state.running}>잉크 읽기 저장</button>
@@ -398,7 +423,9 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
         return <>
           <p className="pcv-lead">예측, 제어기 보고 위치, 종이에서 읽은 잉크 좌표를 구분해서 살펴봅니다.</p>
           {renderPaperGrid()}
-          {state.revalidationScope && <p className="pcv-success" role="status">{state.revalidationScope}</p>}
+          {state.revalidationScope && <p className={state.revalidationResult === "physical-verified" ? "pcv-success" : "pcv-note"} role="status">
+            {state.revalidationScope}
+          </p>}
           <PaperDiagnosisVisual state={state} cause={hypothesisDraft} onCauseChange={setHypothesisDraft} onSaveCause={()=>actions.onSaveHypothesis(hypothesisDraft)}/>
           {state.diagnosis ? <section className="pcv-interpretation" aria-label="비교 해석">
             <div className="pcv-interpretation-head"><StatusPill tone={state.diagnosis.status === "complete" ? "good" : "warn"}>{state.diagnosis.status === "complete" ? "비교 자료 준비됨" : state.diagnosis.status === "invalidated" ? "자료 다시 확인 필요" : "비교 미완료"}</StatusPill>
@@ -413,6 +440,13 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
               <EvidenceRows title="제어기 보고와 명령 차이" rows={state.diagnosis.evidence} />
               <EvidenceRows title="종이 목표 대비 보고 위치 차이" rows={state.diagnosis.taskEvidence??[]} />
               <EvidenceRows title="내 변환식 대비 명령 좌표 차이" rows={state.diagnosis.predictionEvidence} />
+              {state.recordId && (()=>{const record=state.records.find(item=>item.id===state.recordId);return record
+                ? paperInkComparisons(record,state.targetPoints).map(row=><p key={row.point}>
+                  {row.point} · 목표−제어기 보고 {row.targetVsControllerReportedMm?.distance?.toFixed(2)??"—"} mm ·
+                  목표−잉크 {row.targetVsInkMm?.distance?.toFixed(2)??"미측정"} mm ·
+                  제어기−잉크 {row.controllerReportedVsInkMm?.distance?.toFixed(2)??"미측정"} mm
+                </p>):null;})()}
+              <p>허용오차: 위치 ±{state.run?.verificationCriteria?.positionToleranceMm??"—"} mm · 방향 ±{state.run?.verificationCriteria?.rotationToleranceDeg??"—"}° (실행 전 고정)</p>
               <p>첫 차이 지점: {state.diagnosis.firstMismatch ?? "없음"}</p>
               <p>판정 방식: {state.diagnosis.method} · 질문 출처: {state.diagnosis.tutorSource}</p>
             </details>
@@ -434,11 +468,18 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
         return <>
           <p className="pcv-lead">비교에서 발견한 점을 바탕으로 설명이나 좌표를 다시 살펴보고, 필요하면 새 조건으로 확인합니다.</p>
           {state.diagnosis && <div className="pcv-interpretation pcv-interpretation--compact"><StatusPill tone="warn">가능한 해석</StatusPill><p>{state.diagnosis.candidate}</p><p className="pcv-note">{state.diagnosis.question}</p></div>}
+          <label className="pcv-field"><span>AI 질문을 본 뒤 추가로 확인한 관측과 근거</span><textarea rows={3} value={followupDraft}
+            onChange={event=>{setFollowupDraft(event.target.value);actions.onFollowupObservationChange(event.target.value);}} /></label>
+          <button type="button" className="pcv-button pcv-button--quiet" onClick={()=>actions.onSaveFollowupObservation(followupDraft)}>추가 관측 저장</button>
+          <label className="pcv-field"><span>모델 판단</span><select value={state.modelDecision} onChange={event=>actions.onModelDecisionChange(event.target.value as "revise"|"retain")}>
+            <option value="revise">모델 수정</option><option value="retain">현재 모델 유지</option></select></label>
+          <label className="pcv-field"><span>유지 또는 수정 판단의 근거</span><textarea rows={2} value={decisionReasonDraft}
+            onChange={event=>{setDecisionReasonDraft(event.target.value);actions.onModelDecisionReasonChange(event.target.value);}} /></label>
           <label className="pcv-field"><span>어떤 피드백을 보고, 계산의 어느 부분을 바꾸나요?</span><textarea aria-label="무엇을 다시 살펴볼까요?" rows={4} value={revisionDraft}
             placeholder="받은 질문과 연결해, 바꿀 식·좌표와 그 이유를 적어 주세요."
             onChange={event => setRevisionDraft(event.target.value)} /></label>
           <div className="pcv-button-row pcv-button-row--wrap">
-            <button type="button" className="pcv-button pcv-button--primary" onClick={() => actions.onRevise(revisionDraft)} disabled={state.running}>이유와 수정 기록</button>
+            <button type="button" className="pcv-button pcv-button--primary" onClick={() => actions.onRevise({reason:revisionDraft,decision:state.modelDecision,decisionReason:decisionReasonDraft,followupObservation:followupDraft})} disabled={state.running}>이유와 수정 기록</button>
             {!rectangle&&<button type="button" className="pcv-button pcv-button--outline" onClick={actions.onChooseNewTarget} disabled={state.running}>다른 목표로 이어가기</button>}
           </div>
           <div className="pcv-callout pcv-callout--compact">

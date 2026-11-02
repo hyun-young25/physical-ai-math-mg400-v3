@@ -112,18 +112,9 @@ export function ExecutionAiAnalysis({ ai, scopeKey, attemptLabel, sourceLabel, a
         </div>
       )}
       <details className="execution-ai-evidence">
-        <summary>요청에 포함되는 같은 시도의 근거 확인</summary>
-        <p>과제: {attemptLabel} · 출처: {sourceLabel}</p>
-        <pre>{JSON.stringify({
-          condition: JSON.parse(ai.context.condition),
-          answers: JSON.parse(ai.context.answers),
-          reason: ai.context.reason,
-          initialPrediction: JSON.parse(ai.context.initialPrediction),
-          linkedHistory: JSON.parse(ai.context.history),
-          ruleDiagnosis: JSON.parse(ai.context.judgment),
-          execution: JSON.parse(ai.context.execution),
-          previouslyDisplayedConversation: ai.messages.map(({ role, text, source }) => ({ role, text, source })),
-        }, null, 2)}</pre>
+        <summary>실제 전송 전 근거 미리보기</summary>
+        <p>표시된 JSON은 분석 버튼이 같은 실행에서 구성하는 정제된 분석 입력입니다. 서버가 관리하는 방문 식별자와 요청 종류는 개인정보 보호를 위해 여기서 제외되며, 서버도 이 입력을 다시 개인정보 제거합니다.</p>
+        <pre>{JSON.stringify(ai.previewRequest(question), null, 2)}</pre>
       </details>
     </section>
   );

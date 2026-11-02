@@ -51,7 +51,8 @@ export function sanitizeFeedbackContext(context:FeedbackContext):FeedbackContext
 
 const paperHistoryKeys=[
   "recordId","parentAttemptId","attempt","taskVersion","level","targetSet","status","dataSource",
-  "transform","predictions","studentHypothesis","revisionReason","revalidation","previouslyDisplayedFeedback",
+  "transform","predictions","studentHypothesis","followupObservation","modelDecision","modelDecisionReason",
+  "revisionReason","revalidation","previouslyDisplayedFeedback","inkReadings",
 ] as const;
 const pickKeys=(row:Record<string,unknown>,keys:readonly string[]):Record<string,unknown>=>{
   return Object.fromEntries(keys.filter(key=>row[key]!==undefined).map(key=>[key,row[key]]));
@@ -75,7 +76,8 @@ function compactPaperHistoryAttempt(value:unknown) {
   return {
     ...pickKeys(row,paperHistoryKeys),
     ...(frame?{frame:{...pickKeys(frame,["id","source","coordinateSystem","user","tool","capturedAt","samples"])}}:{}),
-    ...(run?{run:{...pickKeys(run,["id","planHash","source","status","startedAt","endedAt","commands","observations"])}}:{}),
+    ...(run?{run:{...pickKeys(run,["id","planHash","frameId","source","status","startedAt","endedAt","commands","observations","verificationCriteria"])}}:{}),
+    ...(Array.isArray(row.runHistory)?{runHistory:row.runHistory.slice(-2)}:{}),
     ...(diagnosis?{diagnosis:{...pickKeys(diagnosis,["method","status","candidate","evidence","predictionEvidence","taskEvidence","firstMismatch","question","why"])}}:{}),
   };
 }

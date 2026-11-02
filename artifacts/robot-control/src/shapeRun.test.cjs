@@ -50,7 +50,10 @@ function mountArm() {
     useMemo(factory,deps){const index=cursor++,old=slots[index];if(!old||changed(old.deps,deps))slots[index]={value:factory(),deps};return slots[index].value;},
     useEffect:effect,useLayoutEffect:effect,
   };
-  const inquiry={ready:true,observed:false,checked:false,reviewed:false,draft:{},reviewDraft:{},record:null,fields:[],interrupt(){},
+  const inquiry={ready:true,observed:false,checked:false,reviewed:false,draft:{},reviewDraft:{},record:null,fields:[],
+    getCurrentRecord(){return this.record;},
+    recordExecution(record,execution){record.runs??=[];record.runs.push(execution);this.record=record;},
+    interrupt(){},
     begin(){
       if(!this.ready)return false;
       this.record ??= {id:'saved-prediction',prediction:{},runs:[],reflections:[]};
@@ -73,6 +76,9 @@ function mountArm() {
     './ShapeLessonSteps':{ShapeLessonSteps:'ShapeLessonSteps'},
     './LessonCoursePath':{LessonCoursePath:'LessonCoursePath'},
     './PaperCoordinateStudy':{PaperCoordinateStudy:'PaperCoordinateStudy'},
+    './paperDigitalTwinPlayback':{startPaperDigitalTwinPlayback(){
+      throw new Error('paper DT playback is outside the shape-run harness');
+    }},
     './shapeLearning':shapeLearning,
     './measurementFeedback':{},'./shapeRun':helpers,react,'react/jsx-runtime':{jsx,jsxs:jsx,Fragment:'Fragment'},
     './learningEvidenceStorage':{...load('learningEvidenceStorage.ts'),downloadEvidence:(name,records)=>downloads.push({name,records:clone(records)})},

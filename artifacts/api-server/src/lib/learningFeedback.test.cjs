@@ -143,11 +143,13 @@ test("actual model request redacts identifiers but retains paper math and displa
   const paper=context({task:"paper-coordinate",trigger:"hint",question:"이번 풀이와 앞 시도 피드백을 비교해 주세요",
     condition:JSON.stringify({name:"민감한 이름",studentId:"STU-2026-77",visitId:"VISIT-SECRET",
       targetPaperCm:[{name:"A",xCm:3,yCm:2}],units:{paper:"cm",robot:"mm"},
-      frame:{coordinateSystem:"User 0 / Tool 0",samples:[{point:"O",pose:{x:180,y:-60,z:80,r:0}}]}}),
+       frame:{coordinateSystem:"User 0 / Tool 0",samples:[{point:"O",pose:{x:180,y:-60,z:80,r:0}}]},
+       verificationCriteria:{positionToleranceMm:2,rotationToleranceDeg:2,rationale:"독립 확인점은 2 mm 이내"}}),
     answers:JSON.stringify({savedStudentTransform:{originX:"180",originY:"-60",axisDirection:"y-",
       millimetersPerCentimeter:"10",rotationDegrees:"0",explanation:"이름: 김가을, X=원점X+10×종이x"},
       studentHypothesis:"학번: QA-12345; 축 방향을 다시 검토함",
-      revisionReason:"연락처: 010-1234-5678; 1 cm는 10 mm"}),
+       revisionReason:"연락처: 010-1234-5678; 1 cm는 10 mm",
+       followupObservation:{text:"종이 눈금의 3.2 cm를 다시 읽음"},modelDecision:"revise",modelDecisionReason:"잉크와 TCP 차이"}),
     reason:"이메일 qa-person@example.com; 기준점 O와 X축을 다시 확인함",
     initialPrediction:JSON.stringify({points:[{name:"A",robotX:210,robotY:-40}]}),
     history:JSON.stringify([{taskVersion:"v4-paper-merged",attempt:1,studentId:"OTHER-STUDENT",
@@ -155,7 +157,13 @@ test("actual model request redacts identifiers but retains paper math and displa
         text:"시험용 대체 안내: 원점X+10×x를 확인하세요."}],
       revisionReason:"원점 좌표를 식에 다시 반영",run:{source:"dt",status:"completed"}}]),
     judgment:JSON.stringify({method:"rule-based",candidate:"원점 후보",pattern:"translation"}),
-    execution:JSON.stringify([{source:"dt",status:"completed",observations:[{point:"A",pose:{x:210,y:-40},measuredAt:1234}]}])});
+     execution:JSON.stringify([{recordId:"attempt-current",runId:"hardware-run",source:"hardware",status:"completed",
+       verificationCriteria:{positionToleranceMm:2,rotationToleranceDeg:2,rationale:"독립 확인점"},
+       observations:[{point:"A",kind:"controller-tcp",pose:{x:210,y:-40},measuredAt:1234}],
+       inkReadings:[{recordId:"attempt-current",runId:"hardware-run",frameId:"frame-1",point:"A",unit:"cm",
+         source:"student-manual-ink",status:"measured",xCm:3.2,yCm:2.1,rawX:"3.20",rawY:"2.10",recordedAt:1235}],
+       inkComparisons:[{point:"A",targetVsInkMm:{dx:2,dy:1,distance:2.24},controllerReportedVsInkMm:{dx:1,dy:2,distance:2.24}}],
+       sameAttemptEarlierRuns:[{recordId:"attempt-current",runId:"dt-prerequisite",source:"dt",status:"completed"}]}])});
   await generateFeedback(paper,{key:"test-only",fetcher:async(_url,options)=>{
     body=JSON.parse(options.body);
     return {ok:true,status:200,json:async()=>({choices:[{message:{content:"모의 API 응답"}}]})};
@@ -173,6 +181,13 @@ test("actual model request redacts identifiers but retains paper math and displa
   assert.match(answers.savedStudentTransform.explanation,/X=원점X\+10×종이x/);
   assert.match(answers.studentHypothesis,/축 방향을 다시 검토함/);
   assert.match(answers.revisionReason,/1 cm는 10 mm/);
+  assert.match(answers.followupObservation.text,/3\.2 cm/);
+  assert.equal(answers.modelDecision,"revise");
+  assert.match(answers.modelDecisionReason,/잉크와 TCP 차이/);
+  assert.match(sent.execution,/student-manual-ink/);
+  assert.match(sent.execution,/targetVsInkMm/);
+  assert.match(sent.execution,/sameAttemptEarlierRuns/);
+  assert.match(sent.execution,/positionToleranceMm/);
   assert.equal(history[0].previouslyDisplayedFeedback[0].text,"시험용 대체 안내: 원점X+10×x를 확인하세요.");
   assert.equal(history[0].revisionReason,"원점 좌표를 식에 다시 반영");
   assert.equal(history[0].run.source,"dt");
