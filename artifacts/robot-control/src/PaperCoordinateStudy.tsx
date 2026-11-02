@@ -23,7 +23,7 @@ import {
 import type {
   PaperCoordinateLevel, PaperRectangleLevel, PaperDiagnosis, PaperEvidenceSource, PaperFrame, PaperGridPoint, PaperPointName,
   PaperPoseObservation, PaperPredictionPoint, PaperReferenceSample, PaperRunSnapshot, PaperStudentTransform,
-  PaperTargetSet, PaperTrialRecord, PaperInkReading, PaperInkReadingDraft, PaperVerificationCriteria,
+  PaperTargetSet, PaperTrialRecord, PaperInkReading, PaperInkReadingDraft, PaperVerificationCriteria, PaperTrialDrafts,
 } from "./paperCoordinateStudy";
 import type { PaperCoordinateStudyViewActions } from "./paperCoordinateViewModel";
 import { LearningAiFeedback, useLearningAi } from "./LearningAiFeedback";
@@ -198,22 +198,22 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
   }, [upsert,supportMode,rotationAllowed]);
 
   const initialized=useRef(false);
-  useEffect(()=>{if(!initialized.current&&!activeId&&isPaperDT(level)){initialized.current=true;createTrial({targetSet:"initial",level,parentAttemptId:null});}},[activeId,level,createTrial]);
+  useEffect(()=>{if(!initialized.current&&!activeId&&isMergedPaper(level)){initialized.current=true;createTrial({targetSet:"initial",level,parentAttemptId:null});}},[activeId,level,createTrial]);
 
   useEffect(() => {
     if (!active) return;
     setStage((active.stage as PaperLessonStage) ?? (active.frame ? 2 : 1));
     setLevel(active.level);
-    setTransformDraft(active.transform ?? blankTransform(active.level));
-    setPredictionDraft(active.predictions ?? paperTaskTargets(active.level,active.targetSet).map(point => ({ ...point, robotX: "", robotY: "", robotZ: "", robotR: "" })));
-    setInkDraft(active.inkReadings?.map(reading => ({ point: reading.point, xCm: reading.rawX, yCm: reading.rawY, status:reading.status, reason:reading.reason }))
+    setTransformDraft(active.drafts?.transform ?? active.transform ?? blankTransform(active.level));
+    setPredictionDraft(active.drafts?.predictions ?? active.predictions ?? paperTaskTargets(active.level,active.targetSet).map(point => ({ ...point, robotX: "", robotY: "", robotZ: "", robotR: "" })));
+    setInkDraft(active.drafts?.inkReadings ?? active.inkReadings?.map(reading => ({ point: reading.point, xCm: reading.rawX, yCm: reading.rawY, status:reading.status, reason:reading.reason }))
       ?? paperTaskTargets(active.level,active.targetSet).map(point => ({ point: point.name, xCm: "", yCm: "", status:"not-measured" as const, reason:"" })));
-    setHypothesisDraft(active.studentHypothesis ?? "");
-    setRevisionDraft(active.revisionReason ?? "");
-    setVerificationReasonDraft(active.verificationCriteria?.rationale ?? "");
-    setFollowupObservationDraft(active.followupObservation?.text ?? "");
-    setModelDecision(active.modelDecision ?? "revise");
-    setModelDecisionReasonDraft(active.modelDecisionReason ?? "");
+    setHypothesisDraft(active.drafts?.studentHypothesis ?? active.studentHypothesis ?? "");
+    setRevisionDraft(active.drafts?.revisionReason ?? active.revisionReason ?? "");
+    setVerificationReasonDraft(active.drafts?.verificationReason ?? active.verificationCriteria?.rationale ?? "");
+    setFollowupObservationDraft(active.drafts?.followupObservation ?? active.followupObservation?.text ?? "");
+    setModelDecision(active.drafts?.modelDecision ?? active.modelDecision ?? "revise");
+    setModelDecisionReasonDraft(active.drafts?.modelDecisionReason ?? active.modelDecisionReason ?? "");
     setLiftDraft(active.liftHeight ? String(active.liftHeight.z) : "");
   }, [active?.id]);
 
@@ -261,10 +261,139 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     }
   };
 
+  const saveCurrentPlan = (advance: boolean): { message: string; target?: "references" | "transform" | "predictions" | "run" } | null => {
+    if (running) return {message:"실행 중에는 계획을 바꿀 수 없습니다.",target:"run"};
+    if (!active?.frame) {
+      setPageError("교사용 수업 준비에서 O/X/Y 기준점을 먼저 확인·저장하세요.");
+      return {message:"교사용 수업 준비에서 기준점 O/X/Y를 확인해야 합니다.",target:"references"};
+    }
+    const values=transformDraft;
+    if (!values.axisDirection || !values.explanation.trim()
+      || ![values.originX,values.originY,values.millimetersPerCentimeter,values.rotationDegrees].every(value=>value.trim()&&Number.isFinite(Number(value)))
+      || Number(values.millimetersPerCentimeter)<=0) {
+      setPageError("원점·축 방향·단위 배율·회전과 선택 이유를 확인하세요.");
+      return {message:"원점, 축 방향, 단위 배율, 회전과 선택 이유를 입력하세요.",target:"transform"};
+    }
+    if (!paperConceptValid(active.pathConcept)) {
+      setPageError("직선 경로 명령과 닫힌 경로의 ΔX·ΔY 합을 확인하세요.");
+      return {message:"직선 경로 명령과 닫힌 경로의 ΔX·ΔY 합을 확인하세요.",target:"predictions"};
+    }
+    const valuesForPlan=draftTargets.map(point=>({...point,robotZ:"",robotR:""}));
+    if (valuesForPlan.length!==targetPoints.length
+      || valuesForPlan.some(point=>![point.robotX,point.robotY].every(value=>value.trim()&&Number.isFinite(Number(value))))) {
+      setPageError("모든 목표점의 X·Y 예측을 입력하세요.");
+      return {message:"모든 목표점의 X·Y 예측을 입력하세요. 학생 답은 자동으로 채우지 않습니다.",target:"predictions"};
+    }
+    if (active.run) {
+      setPageError("이전 실행은 보존됩니다. 새 수정을 하려면 현재 시도에서 수정 이유를 저장해 다음 시도를 만드세요.");
+      return {message:"기존 실행을 덮어쓰지 않습니다. 이 시도는 읽기 전용입니다.",target:"run"};
+    }
+    const hash=`${makePaperPlanHash(active.frame.id,active.targetSet,values,valuesForPlan)}|lift:${liftHeight??"unset"}`;
+    const modelComparison=comparePaperPredictionToFrame(active.frame,valuesForPlan);
+    let retryCriteria:PaperVerificationCriteria|undefined;
+    if(!advance&&active.targetSet==="revalidation") {
+      const parent=recordsRef.current.find(record=>record.id===active.parentAttemptId);
+      const prior=parent?.verificationCriteria;
+      if(prior&&prior.frameId===active.frame.id&&prior.rationale.trim()) {
+        retryCriteria={
+          ...prior,recordId:active.id,frameId:active.frame.id,planHash:hash,targetSet:active.targetSet,
+          modelConstructionPoints:["O","X","Y"],...classifyPaperVerificationPoints(targetPoints),confirmedAt:Date.now(),
+        };
+      }
+    }
+    upsert({
+      ...active, transform:values, predictions:valuesForPlan, planHash:hash,
+      predictionModelComparison:modelComparison, status:"prediction", stage:advance?4:7,
+      run:undefined, diagnosis:undefined, verificationCriteria:retryCriteria,
+      dtRunPlanHash:undefined, drafts:{...active.drafts,transform:undefined,predictions:undefined},
+    }, "관계와 좌표 예측을 한 번에 저장했습니다.");
+    setTransformDraft(values);
+    setPredictionDraft(valuesForPlan);
+    setPageError("");
+    setTransformFeedback("저장됨 · 이 예측이 이번 실행의 기준입니다.");
+    setPredictionFeedback("저장됨 · 실행 전 예측을 고정했습니다.");
+    if(advance)setStage(4);
+    return null;
+  };
+
   const actions: PaperCoordinateStudyViewActions = {
     onBack,
     onAllowMismatchedHardware: value => { if(!running && level==="advanced-paper-hardware") setAllowMismatchedHardware(value); },
     onOpenConnection: () => practice.setPanelOpen(true),
+    onPersistDrafts: drafts => {
+      if (!active || active.run?.status==="running") return;
+      upsert({...active,drafts:{...active.drafts,...drafts}},"작성 중인 입력을 자동 저장했습니다.");
+    },
+    onRetrySave: () => saveAll(recordsRef.current,"저장됨 · 현재 학습 입력을 보존했습니다."),
+    onSavePlanAndContinue: () => saveCurrentPlan(true),
+    onSaveRetryPlan: () => saveCurrentPlan(false),
+    onContinueToRevision: (hypothesis, diagnosis, inkRows) => {
+      if(!active?.run||active.run.status!=="completed") {
+        setPageError("먼저 현재 예측의 DT 또는 허용된 실행을 완료하세요.");
+        return {message:"완료된 실행 결과가 필요합니다.",target:"run"};
+      }
+      if(!diagnosis||diagnosis.status!=="complete") {
+        setPageError("현재 실행의 비교 자료가 아직 완성되지 않았습니다.");
+        return {message:"현재 실행의 비교 자료를 먼저 확인하세요.",target:"run"};
+      }
+      const shown=(active.aiAnalyses??[]).some(item=>item.recordId===active.id&&item.runId===active.run!.id
+        &&item.planHash===active.run!.planHash&&item.source===active.run!.source&&!!item.displayedAt);
+      if(!shown) {
+        setPageError("현재 실행 자료에 대한 분석 응답을 먼저 화면에 표시하세요.");
+        return {message:"화면 2에서 ‘실행자료 분석’을 직접 요청하고 응답을 확인해야 합니다.",target:"analysis"};
+      }
+      if(!hypothesis.trim()) {
+        setPageError("관측 근거를 보고 학생의 설명 후보를 적어 주세요.");
+        return {message:"학생의 원인 후보를 적어야 다음 화면으로 이동할 수 있습니다.",target:"hypothesis"};
+      }
+      const inkTouched=inkRows.some(row=>row.status!=="not-measured"||!!row.xCm.trim()||!!row.yCm.trim()||!!row.reason.trim());
+      let savedInk:PaperInkReading[]|undefined;
+      if(inkTouched) {
+        const now=Date.now(),maxPaperCm=isMergedPaper(level)?20:10;
+        let invalid:string|null=null;
+        savedInk=targetPoints.map(target=>{
+          const row=inkRows.find(item=>item.point===target.name)??{point:target.name,xCm:"",yCm:"",status:"not-measured" as const,reason:""};
+          const parsedX=row.xCm.trim()?Number(row.xCm):null,parsedY=row.yCm.trim()?Number(row.yCm):null;
+          if(row.status==="measured"&&(parsedX===null||parsedY===null||!Number.isFinite(parsedX)||!Number.isFinite(parsedY)||parsedX<0||parsedX>maxPaperCm||parsedY<0||parsedY>maxPaperCm))
+            invalid=`${target.name}: 유효한 종이 좌표를 입력하거나 측정 불가 사유를 선택하세요.`;
+          if(row.status!=="measured"&&!row.reason.trim())invalid=`${target.name}: 읽지 못했거나 측정하지 않은 이유를 입력하세요.`;
+          return {recordId:active.id,runId:active.run!.id,frameId:active.frame!.id,point:target.name,unit:"cm" as const,
+            source:"student-manual-ink" as const,status:row.status,xCm:row.status==="measured"?parsedX:null,yCm:row.status==="measured"?parsedY:null,
+            rawX:row.xCm,rawY:row.yCm,reason:row.reason.trim(),recordedAt:now};
+        });
+        if(invalid){setPageError(invalid);return {message:invalid,target:"ink"};}
+      }
+      upsert({...active,diagnosis,studentHypothesis:hypothesis.trim(),status:"reasoned",stage:7,
+        ...(savedInk?{inkReadings:savedInk}:{}),
+        drafts:{...active.drafts,studentHypothesis:undefined,inkReadings:savedInk?undefined:active.drafts?.inkReadings}},
+        "비교 근거와 학생 가설을 저장했습니다. 입력한 잉크 자료는 현재 실행·점·출처에 연결했습니다.");
+      setHypothesisDraft(hypothesis.trim());
+      setPageError("");
+      setStage(7);
+      return null;
+    },
+    onFinalizeRevalidation: (decision, reason) => {
+      if(!active||active.targetSet!=="revalidation"||active.run?.status!=="completed"||!active.run.verificationCriteria) {
+        setPageError("완료된 새 실행과 그 실행 전에 저장한 기준이 필요합니다.");
+        return {message:"실행 완료와 실행 전 기준이 확인되지 않아 최종 판정을 저장하지 않았습니다."};
+      }
+      const parent=recordsRef.current.find(record=>record.id===active.parentAttemptId);
+      const rows=paperInkComparisons(active,targetPoints);
+      const inkWithin=rows.length===targetPoints.length&&rows.every(row=>row.inkReading?.status==="measured"
+        &&row.inkReading.recordId===active.id&&row.inkReading.runId===active.run!.id
+        &&row.targetVsInkMm?.distance!=null&&row.targetVsInkMm.distance<=active.run!.verificationCriteria!.positionToleranceMm);
+      const assessment=paperRevalidationAssessment(active,parent,targetPoints,inkWithin);
+      if(!assessment) {
+        setPageError("독립 검증점과 이전 시도 연결을 확인할 수 없습니다. 이 결과를 완료로 표시하지 않았습니다.");
+        return {message:"시도 연결 또는 독립 검증 조건이 부족해 판정을 저장하지 않았습니다."};
+      }
+      upsert({...active,modelDecision:decision,modelDecisionReason:reason.trim(),revalidation:assessment,
+        status:assessment.result==="physical-verified"?"revalidated":"diagnosed",
+        drafts:{...active.drafts,modelDecision:undefined,modelDecisionReason:undefined}},
+        assessment.result==="physical-verified"?"독립 실장비 재검증 판정을 저장했습니다.":"판정을 저장했습니다. DT·모의 자료는 실물 검증 완료가 아닙니다.");
+      setPageError("");
+      return null;
+    },
     onResetRetry: () => {
       if (!active || !isMergedPaper(level) || active.run || running) return;
       setResetRetryId(active.id);
@@ -378,7 +507,14 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
       saveReference(sample);
       setReferenceError("교사 입력 좌표입니다. 실측이 아니며 실장비 실행 기준점으로 사용할 수 없습니다.");
     },
-    onTransformChange: currentTransform,
+    onTransformChange: (field,value) => {
+      if (running || active?.run) return;
+      const next={...transformDraft,[field]:value};
+      setTransformDraft(next);
+      setTransformFeedback("");
+      setDiagnosisOverride(null);
+      if(active)upsert({...active,drafts:{...active.drafts,transform:next}});
+    },
     onSaveTransform: () => {
       if (running) return;
       const values = transformDraft;
@@ -412,10 +548,9 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     onPredictionChange: (point, field, value) => {
       if (running) return;
       setPredictionFeedback("");
-      setPredictionDraft(previous => {
-        const current = previous.length ? previous : targetPoints.map(target => ({ ...target, robotX: "", robotY: "", robotZ: "", robotR: "" }));
-        return current.map(item => item.name === point ? { ...item, [field]: value } : item);
-      });
+      const current=draftTargets.map(item=>item.name===point?{...item,[field]:value}:item);
+      setPredictionDraft(current);
+      if(active&&!active.run)upsert({...active,drafts:{...active.drafts,predictions:current}});
     },
     onSavePrediction: () => {
       if (running) return;
@@ -441,7 +576,10 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
         ? "예측을 저장했습니다. 일부 점에서 학생 입력과 기준점 기반 관계가 다릅니다. 원인을 미리 판단하지 않고 실행·관측 후 비교합니다."
         : "예측을 저장했습니다. 이 저장본이 실행 계획의 기준이며 이후 입력이 바뀌면 새 시도로 다시 확인합니다.");
     },
-    onVerificationReasonChange: value => setVerificationReasonDraft(value),
+    onVerificationReasonChange: value => {
+      setVerificationReasonDraft(value);
+      if(active&&!active.run)upsert({...active,drafts:{...active.drafts,verificationReason:value}});
+    },
     onSaveVerificationCriteria: () => {
       if (running) return;
       if (!active?.frame || !active.planHash || !samePlan || !predictionsComplete) {
@@ -519,10 +657,10 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
       setPageError("허용오차를 바꿨습니다. 기존 장비 준비 확인은 무효화되었습니다. 실장비 전에는 연결·준비 절차를 다시 완료하세요.");
     },
     onInkReadingChange: (point, field, value) => {
-      setInkDraft(previous => {
-        const rows = previous.length ? previous : targetPoints.map(target => ({ point: target.name, xCm:"", yCm:"", status:"not-measured" as const, reason:"" }));
-        return rows.map(row => row.point === point ? { ...row, [field]: value } : row);
-      });
+      const rows=inkDraft.length?inkDraft:targetPoints.map(target=>({point:target.name,xCm:"",yCm:"",status:"not-measured" as const,reason:""}));
+      const next=rows.map(row=>row.point===point?{...row,[field]:value}:row);
+      setInkDraft(next);
+      if(active)upsert({...active,drafts:{...active.drafts,inkReadings:next}});
     },
     onSaveInkReadings: () => {
       if (running) return;
@@ -559,9 +697,18 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
       upsert({ ...active, inkReadings: readings, status, stage: 5 }, "학생이 눈금에서 읽은 잉크 좌표를 제어기 관측과 분리해 저장했습니다.");
       setPageError("");
     },
-    onFollowupObservationChange: value => setFollowupObservationDraft(value),
-    onModelDecisionChange: value => setModelDecision(value),
-    onModelDecisionReasonChange: value => setModelDecisionReasonDraft(value),
+    onFollowupObservationChange: value => {
+      setFollowupObservationDraft(value);
+      if(active)upsert({...active,drafts:{...active.drafts,followupObservation:value}});
+    },
+    onModelDecisionChange: value => {
+      setModelDecision(value);
+      if(active)upsert({...active,drafts:{...active.drafts,modelDecision:value}});
+    },
+    onModelDecisionReasonChange: value => {
+      setModelDecisionReasonDraft(value);
+      if(active)upsert({...active,drafts:{...active.drafts,modelDecisionReason:value}});
+    },
     onSaveFollowupObservation: value => {
       if (!active?.run || active.run.status !== "completed" || !value.trim()) {
         setPageError("현재 완료된 실행에서 확인한 추가 관측과 근거를 적어 주세요."); return;
@@ -592,37 +739,46 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
       const reason = input.reason;
       if (!active?.frame || !active.run || active.run.status !== "completed" || !active.studentHypothesis?.trim()) {
         setPageError("같은 시도의 새 실행 결과와 원인 가설을 저장한 뒤 수정할 수 있습니다.");
-        return;
+        return {message:"완료된 실행과 학생 가설이 필요합니다.",target:"hypothesis"};
       }
       const shown = (active.aiAnalyses ?? []).some(item => item.recordId === active.id && item.runId === active.run!.id
         && item.planHash === active.run!.planHash && item.source === active.run!.source && !!item.displayedAt);
-      if (!shown) { setPageError("같은 실행의 AI 질문이 화면에 표시된 뒤 모델을 판단할 수 있습니다."); return; }
-      if (!reason.trim() || !input.decisionReason.trim() || !input.followupObservation.trim()
-        || !active.followupObservation || active.followupObservation.runId !== active.run.id
-        || active.followupObservation.text !== input.followupObservation.trim()) {
-        setPageError("추가 관측, 모델 유지·수정 판단 근거, 재실행 이유를 현재 시도에 저장하세요."); return;
+      if (!shown) { setPageError("같은 실행의 AI 질문이 화면에 표시된 뒤 모델을 판단할 수 있습니다."); return {message:"같은 실행의 분석 응답을 먼저 확인하세요.",target:"analysis"}; }
+      if (!reason.trim() || !input.decisionReason.trim() || !input.followupObservation.trim()) {
+        setPageError("추가 관측, 모델 유지·수정 판단 근거, 재실행 이유를 현재 시도에 저장하세요."); return {message:"추가 관측, 모델 판단 근거와 수정 이유를 모두 입력하세요.",target:"hypothesis"};
       }
       const parent = upsert({
-        ...active, revisionReason: reason.trim(), modelDecision:input.decision,
+        ...active,
+        followupObservation:{recordId:active.id,runId:active.run.id,source:"student-report",text:input.followupObservation.trim(),recordedAt:Date.now()},
+        revisionReason: reason.trim(), modelDecision:input.decision,
         modelDecisionReason:input.decisionReason.trim(), status: input.decision === "retain" ? "reasoned" : "revised",
         stage: 7, revalidationTarget: "revalidation",
+        drafts:{...active.drafts,followupObservation:undefined,revisionReason:undefined,modelDecision:undefined,modelDecisionReason:undefined},
       }, "수정 이유와 이전 시도의 연결을 저장했습니다.");
       const carried = paperRetryInputs(parent, parent.level, parent.frame, paperTaskTargets(parent.level,"revalidation"));
       const child = createTrial({
         targetSet: "revalidation", level: parent.level, parentAttemptId: parent.id,
         frame: parent.frame, referenceSamples: parent.referenceSamples,
-        transform: carried?.transform ?? transformDraft, liftHeight: parent.liftHeight,
+        transform: carried?.transform ?? parent.transform ?? transformDraft, liftHeight: parent.liftHeight,
       });
-      // A new snapshot contains the student's last inputs, but no run or plan
-      // approval. The existing prediction-save and execution gates still apply.
-      const nextStage = carried ? 3 : 2;
-      upsert({...child,...(carried??{}),stage:nextStage});
-      if (carried) { setPredictionDraft(carried.predictions); setFocusRetryId(child.id); }
+      // Keep the revalidation in the third student screen. It has a new attempt
+      // identity, no copied run/criteria, and requires a new plan and pre-run
+      // criteria before the explicit DT/hardware action can be enabled.
+      const retryTargets=paperTaskTargets(parent.level,"revalidation");
+      const nextStage:PaperLessonStage=7;
+      const retryPredictions=carried?.predictions??retryTargets.map(point=>({...point,robotX:"",robotY:"",robotZ:"",robotR:""}));
+      upsert({...child,...(carried??{}),stage:nextStage,planHash:undefined,run:undefined,
+        verificationCriteria:undefined,dtRunPlanHash:undefined,diagnosis:undefined,
+        pathConcept:parent.pathConcept,
+        drafts:{transform:carried?.transform??parent.transform??transformDraft,predictions:retryPredictions}});
+      if (carried) setFocusRetryId(child.id);
       setRevisionDraft(reason.trim());
-      setTransformDraft(carried?.transform ?? transformDraft);
+      setTransformDraft(carried?.transform ?? parent.transform ?? transformDraft);
+      setPredictionDraft(retryPredictions);
+      setInkDraft(retryTargets.map(point=>({point:point.name,xCm:"",yCm:"",status:"not-measured" as const,reason:""})));
       setStage(nextStage);
-      setPageError(carried ? "직전 입력을 이어받았습니다. 차이를 확인하고 예측을 다시 저장하세요. 관계식은 2단계에서 수정할 수 있습니다."
-        : `새 시도 ${child.attempt}가 이전 시도 ${parent.attempt}와 연결됐습니다. 새 목표점을 예측하세요.`);
+      setPageError(`새 시도 ${child.attempt}가 이전 시도 ${parent.attempt}와 연결됐습니다. 화면 3에서 새 예측·사전 기준을 확인한 뒤 원하는 실행 버튼을 누르세요.`);
+      return null;
     },
     onChooseNewTarget: () => {
       if (active?.targetSet === "revalidation") { setStage(3); return; }
@@ -664,6 +820,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
       setPageError("현재 기준점·변환식·예측이 같은 저장본인지 확인하세요. 바뀐 계획에는 새 예측이 필요합니다.");
       return;
     }
+    const runStage:PaperLessonStage=isMergedPaper(level)&&active.targetSet==="revalidation"?7:4;
     if (liftHeight === null || !Number.isFinite(liftHeight) || surfaceZ === null || liftHeight <= surfaceZ) {
       setPageError("기록한 종이 표면보다 높은 펜 들기 Z를 정하세요. 실장비 높이는 제조사 프로그램에서 사람이 확인한 위치만 기록하세요.");
       return;
@@ -729,7 +886,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
         || criteria.planHash !== planHash || criteria.targetSet !== active.targetSet
         || criteria.confirmedAt > now || !criteria.rationale.trim()
         || !paperVerificationPointsMatch(criteria,targetPoints)) {
-        setPageError("이 시도의 독립 검증점과 허용오차를 실행 전에 확인·저장해야 합니다."); setStage(4); return;
+        setPageError("이 시도의 독립 검증점과 허용오차를 실행 전에 확인·저장해야 합니다."); setStage(runStage); return;
       }
       const runningRecord: PaperRunSnapshot = {
         id: crypto.randomUUID(), planHash, frameId: active.frame.id, targetSet: active.targetSet,
@@ -738,8 +895,8 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
         verificationCriteria: criteria,
       };
       upsert({ ...active, runHistory:priorRuns, inkReadings:undefined,
-        run: runningRecord, status: "running", stage: 4, diagnosis: undefined, dataSource: "dt" });
-      setRunning(true); setPageError(""); setStage(4);
+        run: runningRecord, status: "running", stage: runStage, diagnosis: undefined, dataSource: "dt" });
+      setRunning(true); setPageError(""); setStage(runStage);
       try {
         await runDigitalTwin(commands);
         const completedAt = Date.now();
@@ -749,13 +906,13 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
         }));
         const completedRun = { ...runningRecord, status: "completed" as const, endedAt: completedAt, observations };
         upsert({
-          ...active, runHistory:priorRuns, inkReadings:undefined, run: completedRun, status: "observed", stage: 4,
+          ...active, runHistory:priorRuns, inkReadings:undefined, run: completedRun, status: "observed", stage: runStage,
           dtRunPlanHash: planHash, diagnosis: undefined, dataSource: "dt",
         }, "DT 경로 완료를 저장했습니다. 이 자료는 실측이 아닙니다.");
         setPageError("DT 완료 · 실측 아님. 화면의 가상 경로가 종료됐습니다. 실장비 검증으로 표시하지 않습니다.");
       } catch (error) {
         const failedRun = { ...runningRecord, status: "failed" as const, endedAt: Date.now(), error: error instanceof Error ? error.message : "DT 실행 실패" };
-        upsert({ ...active, runHistory:priorRuns, inkReadings:undefined, run: failedRun, status: "incomplete", stage: 4 });
+        upsert({ ...active, runHistory:priorRuns, inkReadings:undefined, run: failedRun, status: "incomplete", stage: runStage });
         setPageError(failedRun.error ?? "DT 실행을 완료하지 못했습니다.");
       } finally { setRunning(false); }
       return;
@@ -810,7 +967,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
       || criteria.planHash !== planHash || criteria.targetSet !== active.targetSet
       || criteria.confirmedAt > Date.now() || !criteria.rationale.trim()
       || !paperVerificationPointsMatch(criteria,targetPoints)) {
-      setPageError("이 시도의 독립 검증점과 허용오차를 실행 전에 확인·저장해야 합니다."); setStage(4); return;
+      setPageError("이 시도의 독립 검증점과 허용오차를 실행 전에 확인·저장해야 합니다."); setStage(runStage); return;
     }
     const runningRecord: PaperRunSnapshot = {
       id: runId, planHash, frameId: active.frame.id, targetSet: active.targetSet, source: liveSource!,
@@ -819,7 +976,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
       verificationCriteria: criteria,
     };
     upsert({ ...active, runHistory:[...(active.runHistory??[]),...(active.run?[active.run]:[])], inkReadings:undefined,
-      run: runningRecord, status: "running", stage: 4, diagnosis: undefined, dataSource: liveSource! });
+      run: runningRecord, status: "running", stage: runStage, diagnosis: undefined, dataSource: liveSource! });
     setRunning(true); setPageError("");
     const observed: PaperPoseObservation[] = [];
     try {
@@ -854,7 +1011,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
       } : undefined);
       if (!results) {
         const cancelled = { ...runningRecord, status: "cancelled" as const, endedAt: Date.now(), observations: [] };
-      upsert({ ...active, runHistory:priorRuns, inkReadings:undefined, run: cancelled, status: "incomplete", stage: 4 }, "사람이 최종 실행 확인을 취소했습니다. 이동 명령은 전송되지 않았습니다.");
+      upsert({ ...active, runHistory:priorRuns, inkReadings:undefined, run: cancelled, status: "incomplete", stage: runStage }, "사람이 최종 실행 확인을 취소했습니다. 이동 명령은 전송되지 않았습니다.");
         setPageError("최종 확인이 취소됐습니다. 실행 측정은 0건입니다.");
       } else {
         const endedAt = Date.now();
@@ -864,7 +1021,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
         upsert({
           ...active, runHistory:priorRuns, inkReadings:undefined,
           run: complete ? completed : { ...completed, status: "partial" as const, error: check ?? "새 TCP 보고 좌표 꼭짓점 누락" },
-          status: complete ? "observed" : "incomplete", stage: 4,
+          status: complete ? "observed" : "incomplete", stage: runStage,
           ...(liveSource === "hardware" && complete ? { dataSource: "hardware" as const } : { dataSource: "mock" as const }),
         }, complete ? "같은 계획의 모든 새 TCP 보고 좌표 응답을 기록했습니다." : "실행은 완료로 인정되지 않았습니다. 새 측정 근거가 부족합니다.");
         setPageError(complete
@@ -876,7 +1033,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
       const endedAt = Date.now();
       let observations = [...observed];
       const failedRun = { ...runningRecord, status: observations.length ? "partial" as const : "failed" as const, endedAt, observations, error: message };
-      upsert({ ...active, runHistory:priorRuns, inkReadings:undefined, run: failedRun, status: "incomplete", stage: 4 }, "실행 실패 또는 부분 결과를 완료로 승격하지 않고 기록했습니다.");
+      upsert({ ...active, runHistory:priorRuns, inkReadings:undefined, run: failedRun, status: "incomplete", stage: runStage }, "실행 실패 또는 부분 결과를 완료로 승격하지 않고 기록했습니다.");
       setPageError(message);
     } finally { setRunning(false); }
   }
@@ -956,6 +1113,8 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     allowMismatchedHardware,
     retry: active && retryInputs && retryParent ? {id:active.id, attempt:retryParent.attempt, baseline:retryInputs,
       fields:paperRetryFields(retryParent), focusRequested:focusRetryId===active.id, editable:!active.run} : undefined,
+    parentAttempt:active?.parentAttemptId?records.find(record=>record.id===active.parentAttemptId)??null:null,
+    activeAttempt:active??null,
     rotationAllowed:rotationAllowed&&!isPaperDT(level),pathConcept:active?.pathConcept,
     records, recordId:active?.id??null, attempt:active?.attempt??null, analysisReady:false,
     revalidationScope:active?.revalidation?.scope??null,
@@ -966,6 +1125,12 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
       7, (diagnosisOverride ?? active?.diagnosis)?.status === "complete", !!active?.studentHypothesis?.trim(),
     ),
     planHash,
+    preparationSummary:[
+      frame?`O/X/Y ${frame.coordinateSystem} · User ${frame.user} / Tool ${frame.tool} · ${frame.source==="hardware"?"실장비":frame.source==="dt"?"DT":frame.source==="mock"?"모의":"교사 입력"}`:"O/X/Y 기준점 준비 필요",
+      liftRecord?`펜 높이 ${Number(liftRecord.z).toFixed(1)} mm · ${liftRecord.source==="hardware"?"실장비":liftRecord.source==="mock"?"모의":"교사 입력"}`:"펜 들기 높이 준비 필요",
+      `허용오차 위치 ±${practice.setupDraft.positionTolerance} mm · 방향 ±${practice.setupDraft.rotationTolerance}°`,
+      criteriaMatches?"이번 시도 기준 저장됨":"이번 시도 실행 전 기준 저장 필요",
+    ],
     verificationReasonDraft,
     followupObservationDraft,
     modelDecision,
@@ -1031,7 +1196,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
       reason: privateText(hypothesisDraft || transformDraft.explanation).slice(0, 1500) };
   }
   const priorSameType=records.filter(r=>r.id!==active?.id&&r.level===level&&r.diagnosis?.pattern===shownDiagnosis?.pattern).length;
-  const comparison=isPaperRectangle(level)&&shownDiagnosis&&frame&&run&&!running&&(stage===5||stage===6)
+  const comparison=isPaperRectangle(level)&&shownDiagnosis&&frame&&run&&!running&&(stage===4||stage===5||stage===6||stage===7)
     ?paperRectangleVisual(frame,targetPoints,run,shownDiagnosis,stage,paperFeedbackKey(context),priorSameType,attemptSupport,isMergedPaper(level)):null;
   state.comparison=comparison;
   state.transformEstimate=comparison&&frame&&run?paperTransformEstimate(frame,targetPoints,run):null;

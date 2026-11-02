@@ -1,9 +1,16 @@
 import type { SquareVisual } from "./squareComparisonVisual";
 import type { paperTransformEstimate } from "./paperRectangleTask";
-import type { PaperTrialRecord, PaperReferenceSource, PaperDiagnosis, PaperEvidenceSource, PaperFrame, PaperGridPoint, PaperPointName, PaperPredictionPoint, PaperReferenceSample, PaperRunSnapshot, PaperStudentTransform, PaperTargetSet, PaperCoordinateLevel, PaperAiAnalysisRecord, PaperInkReadingDraft, PaperVerificationCriteria } from "./paperCoordinateStudy";
+import type { PaperTrialRecord, PaperReferenceSource, PaperDiagnosis, PaperEvidenceSource, PaperFrame, PaperGridPoint, PaperPointName, PaperPredictionPoint, PaperReferenceSample, PaperRunSnapshot, PaperStudentTransform, PaperTargetSet, PaperCoordinateLevel, PaperAiAnalysisRecord, PaperInkReadingDraft, PaperVerificationCriteria, PaperTrialDrafts } from "./paperCoordinateStudy";
 import type { LearningAiController } from "./LearningAiFeedback";
 
 export type PaperLessonStage = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export type PaperStudentScreen = 1 | 2 | 3;
+
+/** The advanced paper lessons keep their established record stages internally,
+ * while students see only prediction, execution/comparison, and revision. */
+export function paperStudentScreenForStage(stage: number): PaperStudentScreen {
+  return stage <= 3 ? 1 : stage <= 6 ? 2 : 3;
+}
 export type PaperStageNavigationBlocker = {
   target: "diagnosis" | "hypothesis";
   message: string;
@@ -45,6 +52,8 @@ export type PaperCoordinateStudyViewState = {
   allowMismatchedHardware?: boolean;
   retry?: {id:string;attempt:number;baseline:NonNullable<ReturnType<typeof import("./paperRetry").paperRetryInputs>>;fields:string[];focusRequested:boolean;editable:boolean};
   revisionJourney?: import("./revisionJourney").RevisionJourneyData | null;
+  parentAttempt?: PaperTrialRecord | null;
+  activeAttempt?: PaperTrialRecord | null;
   rotationAllowed?:boolean;
   pathConcept?:{motion:string;closeX:string;closeY:string};
   gptQuestion?:string;
@@ -106,6 +115,7 @@ export type PaperCoordinateStudyViewState = {
   revisionReason: string;
   saveState: "ready" | "saving" | "saved" | "failed";
   saveMessage: string;
+  preparationSummary: string[];
   running: boolean;
   error: string;
 };
@@ -113,6 +123,12 @@ export type PaperCoordinateStudyViewState = {
 export type PaperCoordinateStudyViewActions = {
   onAllowMismatchedHardware?: (value:boolean) => void;
   onOpenConnection?: () => void;
+  onPersistDrafts: (drafts: PaperTrialDrafts) => void;
+  onRetrySave: () => void;
+  onSavePlanAndContinue: () => { message: string; target?: "references" | "transform" | "predictions" | "run" } | null;
+  onSaveRetryPlan: () => { message: string; target?: "references" | "transform" | "predictions" | "run" } | null;
+  onContinueToRevision: (hypothesis: string, diagnosis: PaperDiagnosis | null, inkReadings: PaperInkReadingDraft[]) => { message: string; target?: "run" | "analysis" | "hypothesis" | "ink" } | null;
+  onFinalizeRevalidation: (decision: "revise" | "retain", reason: string) => { message: string } | null;
   onResetRetry?: () => void;
   onPathConceptChange:(field:"motion"|"closeX"|"closeY",value:string)=>void;
   onBack: () => void;
@@ -141,7 +157,7 @@ export type PaperCoordinateStudyViewActions = {
   onModelDecisionReasonChange: (value: string) => void;
   onSaveFollowupObservation: (value: string) => void;
   onAiAnalysisDisplayed: (analysis: PaperAiAnalysisRecord) => void;
-  onRevise: (input: { reason: string; decision: "revise" | "retain"; decisionReason: string; followupObservation: string }) => void;
+  onRevise: (input: { reason: string; decision: "revise" | "retain"; decisionReason: string; followupObservation: string }) => { message: string; target?: "hypothesis" | "analysis" | "run" } | null;
   onChooseNewTarget: () => void;
   onMovePaper: (reason:string) => void;
 };

@@ -11,7 +11,8 @@ import { paperVerificationPointGuide } from "./paperCoordinateStudy";
 import { paperVerificationCriteriaSavedForAttempt } from "./paperCoordinateViewModel";
 import { ExecutionAiAnalysis } from "./ExecutionAiAnalysis";
 import type { PaperPointName } from "./paperCoordinateStudy";
-import type { PaperCoordinateStudyViewProps, PaperLessonStage } from "./paperCoordinateViewModel";
+import { paperStudentScreenForStage, type PaperCoordinateStudyViewProps, type PaperLessonStage } from "./paperCoordinateViewModel";
+import type { PaperTrialDrafts } from "./paperCoordinateStudy";
 import "./paperCoordinateStudyView.css";
 
 const STAGES = LEARNING_STAGES.map((s,i)=>({id:(i+1) as PaperLessonStage,title:s.label}));
@@ -36,6 +37,11 @@ const POSE_FIELDS = [
   { key: "y", label: "Y", unit: "mm" },
   { key: "z", label: "Z", unit: "mm" },
   { key: "r", label: "R", unit: "°" },
+] as const;
+const PAPER_FLOW_SCREENS = [
+  "예측하기",
+  "실행하고 비교하기",
+  "고치고 다시 확인하기",
 ] as const;
 
 function sourceLabel(source: string | null | undefined) {
@@ -75,6 +81,8 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
   const [revisionDraft, setRevisionDraft] = useState(state.revisionReason);
   const [followupDraft, setFollowupDraft] = useState(state.followupObservationDraft);
   const [decisionReasonDraft, setDecisionReasonDraft] = useState(state.modelDecisionReasonDraft);
+  const [flowGuidance, setFlowGuidance] = useState<{ message: string; target?: string } | null>(null);
+  const [finalDecisionReason, setFinalDecisionReason] = useState(state.modelDecisionReasonDraft);
   const journey=state.revisionJourney ? {...state.revisionJourney,
     draftRevisionReason:state.stage===7?revisionDraft:undefined} : null;
   const root=useRef<HTMLElement>(null), scene=usePaperScene();
@@ -125,11 +133,14 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
   const changed = (before:string|undefined,after:string) => before!==undefined && after.trim()!=="" && before!==after;
   const changeMark = (yes:boolean) => yes ? <small className="pcv-retry-changed">수정됨</small> : null;
   const displayPose=merged?state.displayPose??state.currentPose:state.currentPose;
+  const conciseFlow = merged && rectangle;
+  const screenIndex = paperStudentScreenForStage(state.stage);
 
   useEffect(() => setHypothesisDraft(state.studentHypothesis), [state.studentHypothesis]);
   useEffect(() => setRevisionDraft(state.revisionReason), [state.revisionReason]);
   useEffect(() => setFollowupDraft(state.followupObservationDraft), [state.followupObservationDraft]);
   useEffect(() => setDecisionReasonDraft(state.modelDecisionReasonDraft), [state.modelDecisionReasonDraft]);
+  useEffect(() => setFinalDecisionReason(state.modelDecisionReasonDraft), [state.modelDecisionReasonDraft]);
 
   const activeTitle = STAGES.find(stage => stage.id === state.stage)?.title ?? "과제 이해";
   const navigationBlocker = state.stage === 6 ? state.stageNavigationBlocker : null;
@@ -140,6 +151,33 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
     const element = root.current?.querySelector<HTMLElement>(selector);
     element?.scrollIntoView({ block: "center", behavior: "smooth" });
     element?.focus({ preventScroll: true });
+  };
+  const focusFlowTarget = (target?: string) => {
+    const selectors: Record<string, string> = {
+      references: ".pcv-teacher-prep--references",
+      transform: '[aria-label="이 관계를 선택한 이유"], [aria-label="원점 X (mm)"]',
+      predictions: ".pcv-predictions input",
+      run: ".pcv-run-panel",
+      analysis: ".execution-ai-panel",
+      hypothesis: '[aria-label="차이가 생긴 이유"]',
+      ink: ".pcv-ink-list",
+    };
+    const element = root.current?.querySelector<HTMLElement>(selectors[target ?? ""] ?? ".pcv-main");
+    const details = element?.closest("details");
+    if (details) details.open = true;
+    element?.scrollIntoView({ block: "center", behavior: "smooth" });
+    element?.focus({ preventScroll: true });
+  };
+  const runFlowAction = (
+    action: () => { message: string; target?: string } | null,
+  ) => {
+    const result = action();
+    setFlowGuidance(result);
+    if (result?.target) requestAnimationFrame(() => focusFlowTarget(result.target));
+  };
+  const persistDraft = (drafts: PaperTrialDrafts) => {
+    actions.onPersistDrafts(drafts);
+    setFlowGuidance(null);
   };
   const navigateToStage = (nextStage: PaperLessonStage) => {
     const requirement = state.stage === 6 && nextStage >= 7 ? state.stageNavigationBlocker : null;
@@ -155,6 +193,8 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
       if(state.stage!==4)actions.onStageChange(4);
       requestAnimationFrame(()=>{
         const criteria=root.current?.querySelector<HTMLElement>('[aria-label="실행 전 검증 기준"]');
+        const details=criteria?.closest("details");
+        if(details)details.open=true;
         criteria?.scrollIntoView({block:"center",behavior:"smooth"});
         criteria?.focus({preventScroll:true});
       });
@@ -228,6 +268,19 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
     );
   };
 
+  const renderReferencePreparation = () => (
+    <section className="pcv-alignment">
+      <h3>종이 정렬과 기준점 기록</h3>
+      <p>교사는 제조사 소프트웨어에서 종이를 정렬한 뒤 현재 위치를 읽어 O, X, Y 기준점으로 기록합니다. 핸드 가이딩은 현재 브라우저 브리지에서 지원되지 않습니다.</p>
+      <div className="pcv-reference-grid">{POINTS.map(renderReferenceEntry)}</div>
+      <div className="pcv-callout">
+        <strong>기준 자료의 출처</strong>
+        <p>실장비 기준은 컨트롤러가 보고한 TCP 보고 좌표이며 잉크 위치 측정이 아닙니다. 모의·DT 자료는 실제 측정값이 아니고, 교사가 입력한 좌표도 측정값이 아닙니다.</p>
+      </div>
+      {state.referenceError && <p className="pcv-alert" role="alert">{state.referenceError}</p>}
+    </section>
+  );
+
   const renderPredictionField = (point: string, field: "robotX" | "robotY", label: string, value: string) => (
     <label className="pcv-prediction-input" key={field}>
       <span>{label} {changeMark(changed(state.retry?.baseline.predictions.find(p=>p.name===point)?.[field],value))}</span>
@@ -238,8 +291,8 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
     </label>
   );
 
-  const renderActiveStage = () => {
-    switch (state.stage) {
+  const renderStage = (renderStageId: PaperLessonStage) => {
+    switch (renderStageId) {
       case 1:
         return <>
           <p className="pcv-lead">{merged?"종이 원점에서 시작하는 가로 110 mm, 세로 150 mm (11×15 cm) 직사각형을 예측합니다.":rectangle?"종이 (2, 2) cm에서 시작하는 가로 6 cm, 세로 4 cm 직사각형의 네 꼭짓점을 예측합니다.":"기존 사각형 수업의 좌표 생각을 종이 위의 10×10 cm 격자로 옮겨 봅니다."}</p>
@@ -257,16 +310,16 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
             </select>
           </label>
           <a className="pcv-button" href={merged?"/paper-coordinate-grid-20cm.svg":"/paper-coordinate-grid-a4.pdf"} target="_blank" rel="noreferrer">인쇄용 모눈종이 · 100% 실제 크기</a>
-          {dtOnly?<section className="pcv-callout"><h3>주어진 기준점 · DT 과제 조건</h3>{state.samples.map(p=><p key={p.point}>{p.point}: ({p.pose.x}, {p.pose.y}) mm · Z {p.pose.z} mm</p>)}<p>종이 x축은 로봇 X+, y축은 로봇 Y+ · 1 cm = 10 mm입니다.</p></section>:<section className="pcv-alignment">
-            <h3>종이 정렬과 기준점 기록</h3>
-            <p>교사는 제조사 소프트웨어에서 종이를 정렬한 뒤 현재 위치를 읽어 O, X, Y 기준점으로 기록합니다. 핸드 가이딩은 현재 브라우저 브리지에서 지원되지 않습니다.</p>
-            <div className="pcv-reference-grid">{POINTS.map(renderReferenceEntry)}</div>
-            <div className="pcv-callout">
-              <strong>기준 자료의 출처</strong>
-              <p>실장비 기준은 컨트롤러가 보고한 TCP 보고 좌표이며 잉크 위치 측정이 아닙니다. 모의·DT 자료는 실제 측정값이 아니고, 교사가 입력한 좌표도 측정값이 아닙니다.</p>
-            </div>
-            {state.referenceError && <p className="pcv-alert" role="alert">{state.referenceError}</p>}
-          </section>}
+          {dtOnly
+            ? <section className="pcv-callout"><h3>주어진 기준점 · DT 과제 조건</h3>{state.samples.map(p=><p key={p.point}>{p.point}: ({p.pose.x}, {p.pose.y}) mm · Z {p.pose.z} mm</p>)}<p>종이 x축은 로봇 X+, y축은 로봇 Y+ · 1 cm = 10 mm입니다.</p></section>
+            : merged
+              ? <details className="pcv-details pcv-teacher-prep pcv-teacher-prep--references" open={!state.frame}>
+                  <summary>교사용 수업 준비 · 종이 정렬과 O/X/Y 기준점</summary>
+                  <p className="pcv-prep-status">{state.frame ? `준비됨 · ${sourceLabel(state.frame.source)} · User ${state.frame.user} / Tool ${state.frame.tool}` : "준비 필요 · 교사가 연결과 종이 기준점 O/X/Y를 확인해야 합니다."}</p>
+                  <button type="button" className="pcv-button pcv-button--quiet" onClick={actions.onOpenConnection}>연결·User/Tool 설정 열기</button>
+                  {renderReferencePreparation()}
+                </details>
+              : renderReferencePreparation()}
           <div className="pcv-target-layout">
             {renderPaperGrid()}
             <div className="pcv-target-list">
@@ -300,9 +353,9 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
             {(!merged||state.rotationAllowed)&&<label className="pcv-field"><span>추가 회전 (°){changeMark(changed(state.retry?.baseline.transform.rotationDegrees,state.transform.rotationDegrees))}</span><input type="number" step="any" inputMode="decimal" value={state.transform.rotationDegrees}
               onChange={event => actions.onTransformChange("rotationDegrees", event.target.value)} /></label>}
           </div>
-          <label className="pcv-field"><span>이 관계를 선택한 이유{changeMark(changed(state.retry?.baseline.transform.explanation,state.transform.explanation))}</span><textarea rows={3} value={state.transform.explanation}
+          <label className="pcv-field"><span>이 관계를 선택한 이유{changeMark(changed(state.retry?.baseline.transform.explanation,state.transform.explanation))}</span><textarea aria-label="이 관계를 선택한 이유" rows={3} value={state.transform.explanation}
             onChange={event => actions.onTransformChange("explanation", event.target.value)} /></label>
-          <button type="button" className="pcv-button pcv-button--primary" onClick={actions.onSaveTransform} disabled={state.running}>관계 저장</button>
+          {!conciseFlow&&<button type="button" className="pcv-button pcv-button--primary" onClick={actions.onSaveTransform} disabled={state.running}>관계 저장</button>}
           {state.transformFeedback && <p className="pcv-feedback" role="status">{state.transformFeedback}</p>}
         </>;
       case 3:
@@ -329,8 +382,8 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
                 </div>
               </fieldset>;
             }) : <p className="pcv-empty">예측할 목표점이 없습니다.</p>}
-            <button type="button" className="pcv-button pcv-button--primary" onClick={actions.onSavePrediction}
-              disabled={state.running || !state.predictionsReady}>예측 저장</button>
+             {!conciseFlow&&<button type="button" className="pcv-button pcv-button--primary" onClick={actions.onSavePrediction}
+               disabled={state.running || !state.predictionsReady}>예측 저장</button>}
             {state.predictionFeedback && <p className="pcv-feedback" role="status">{state.predictionFeedback}</p>}
           </div>
         </>;
@@ -351,6 +404,10 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
               disabled={state.running || !state.physicalAvailable}>{state.currentSource === "mock" ? "모의 브리지에서 시험" : "실장비에서 확인"}</button>
               {merged&&blockers(state.physicalBlockers,"실장비 실행 전 확인")}</div>}
           </div>
+          {merged&&<details className="pcv-details pcv-teacher-prep pcv-teacher-prep--execution">
+            <summary>교사용 수업 준비 · 높이, 허용오차와 감독</summary>
+            <ul className="pcv-prep-list">{state.preparationSummary.map(item=><li key={item}>{item}</li>)}</ul>
+            <button type="button" className="pcv-button pcv-button--quiet" onClick={actions.onOpenConnection}>연결·User/Tool 설정 열기</button>
           {state.level==="advanced-paper-hardware"&&<details className="pcv-details pcv-teacher-setting" tabIndex={-1}>
             <summary>교사 감독 설정</summary>
             <label><input type="checkbox" checked={!!state.allowMismatchedHardware} disabled={state.running} onChange={e=>actions.onAllowMismatchedHardware?.(e.target.checked)}/> 틀린 예측도 실장비로 확인 허용 (교사 감독)</label>
@@ -392,6 +449,7 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
             <button type="button" className="pcv-button pcv-button--quiet" onClick={actions.onSaveVerificationCriteria}
               disabled={state.running||!!state.run}>이 시도의 실행 전 기준 저장</button>
           </section>
+          </details>}
           <p className="pcv-note">DT는 가상 자료이며 실측이 아닙니다. 실장비 결과는 컨트롤러 TCP 보고 좌표 보고 위치입니다. 이것만으로 펜 접촉이나 잉크 위치를 확인할 수 없습니다.</p>
           {!merged&&!state.physicalAvailable && state.physicalUnavailableReason && <p className="pcv-callout pcv-callout--compact" role="status">{state.physicalUnavailableReason}</p>}
           {state.running && <p className="pcv-feedback" role="status">결과를 기다리는 중입니다.</p>}
@@ -441,7 +499,7 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
                   <small>학생 수기 기록 · cm · 실행 {state.run?.id??"없음"} · 기준 {state.frame?.id??"없음"}</small>
                 </fieldset>;
               })}
-              <button type="button" className="pcv-button pcv-button--primary" onClick={actions.onSaveInkReadings} disabled={state.running}>잉크 읽기 저장</button>
+              {!conciseFlow&&<button type="button" className="pcv-button pcv-button--primary" onClick={actions.onSaveInkReadings} disabled={state.running}>잉크 읽기 저장</button>}
             </div>
           </div>
           <p className="pcv-note">눈금 읽기는 학생이 종이에서 관찰한 값입니다. 잉크 위치는 자동 측정되지 않습니다.</p>
@@ -451,7 +509,10 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
           <p className="pcv-lead">예측, 제어기 보고 위치, 종이에서 읽은 잉크 좌표를 구분해서 살펴봅니다.</p>
           {renderPaperGrid()}
           {state.revalidationScope && <p className="pcv-success" role="status">{state.revalidationScope}</p>}
-          <PaperDiagnosisVisual state={state} cause={hypothesisDraft} onCauseChange={setHypothesisDraft} onSaveCause={()=>actions.onSaveHypothesis(hypothesisDraft)}/>
+          <PaperDiagnosisVisual state={state} cause={hypothesisDraft} causeRequired={conciseFlow} onCauseChange={value=>{
+            setHypothesisDraft(value);
+            persistDraft({studentHypothesis:value});
+          }} onSaveCause={conciseFlow?undefined:()=>actions.onSaveHypothesis(hypothesisDraft)}/>
           {state.diagnosis ? <section className="pcv-interpretation" aria-label="비교 해석">
             <div className="pcv-interpretation-head"><StatusPill tone={state.diagnosis.status === "complete" ? "good" : "warn"}>{state.diagnosis.status === "complete" ? "비교 자료 준비됨" : state.diagnosis.status === "invalidated" ? "자료 다시 확인 필요" : "비교 미완료"}</StatusPill>
               <span>{sourceLabel(state.diagnosis.source)}</span></div>
@@ -485,8 +546,8 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
                 ...analysis, recordId: state.recordId, runId: run.id, planHash: run.planHash, source: run.source,
               });
             }}/>
-          {!state.comparison&&<><label className="pcv-field"><span>{state.stage===6?"7단계로 이동하기 전 저장할 원인 가설":"내가 생각하는 이유 (원인을 단정하지 않고 후보로)"}</span><textarea aria-label="관측 차이에 대한 원인 가설" aria-required={state.stage===6||undefined} rows={4} value={hypothesisDraft}
-            onChange={event => setHypothesisDraft(event.target.value)} /></label>
+          {!state.comparison&&!conciseFlow&&<><label className="pcv-field"><span>{state.stage===6?"7단계로 이동하기 전 저장할 원인 가설":"내가 생각하는 이유 (원인을 단정하지 않고 후보로)"}</span><textarea aria-label="관측 차이에 대한 원인 가설" aria-required={state.stage===6||undefined} rows={4} value={hypothesisDraft}
+            onChange={event => {setHypothesisDraft(event.target.value);persistDraft({studentHypothesis:event.target.value});}} /></label>
           <button type="button" className="pcv-button pcv-button--primary" onClick={() => actions.onSaveHypothesis(hypothesisDraft)} disabled={state.running}>생각 저장</button></>}
         </>;
       case 7:
@@ -495,25 +556,98 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
           {state.diagnosis && <div className="pcv-interpretation pcv-interpretation--compact"><StatusPill tone="warn">가능한 해석</StatusPill><p>{state.diagnosis.candidate}</p><p className="pcv-note">{state.diagnosis.question}</p></div>}
           <label className="pcv-field"><span>AI 질문을 본 뒤 추가로 확인한 관측과 근거</span><textarea rows={3} value={followupDraft}
             onChange={event=>{setFollowupDraft(event.target.value);actions.onFollowupObservationChange(event.target.value);}} /></label>
-          <button type="button" className="pcv-button pcv-button--quiet" onClick={()=>actions.onSaveFollowupObservation(followupDraft)}>추가 관측 저장</button>
+          {!conciseFlow&&<button type="button" className="pcv-button pcv-button--quiet" onClick={()=>actions.onSaveFollowupObservation(followupDraft)}>추가 관측 저장</button>}
           <label className="pcv-field"><span>모델 판단</span><select value={state.modelDecision} onChange={event=>actions.onModelDecisionChange(event.target.value as "revise"|"retain")}>
             <option value="revise">모델 수정</option><option value="retain">현재 모델 유지</option></select></label>
           <label className="pcv-field"><span>유지 또는 수정 판단의 근거</span><textarea rows={2} value={decisionReasonDraft}
             onChange={event=>{setDecisionReasonDraft(event.target.value);actions.onModelDecisionReasonChange(event.target.value);}} /></label>
           <label className="pcv-field"><span>어떤 피드백을 보고, 계산의 어느 부분을 바꾸나요?</span><textarea aria-label="무엇을 다시 살펴볼까요?" rows={4} value={revisionDraft}
             placeholder="받은 질문과 연결해, 바꿀 식·좌표와 그 이유를 적어 주세요."
-            onChange={event => setRevisionDraft(event.target.value)} /></label>
+             onChange={event => {setRevisionDraft(event.target.value);persistDraft({revisionReason:event.target.value});}} /></label>
           <div className="pcv-button-row pcv-button-row--wrap">
-            <button type="button" className="pcv-button pcv-button--primary" onClick={() => actions.onRevise({reason:revisionDraft,decision:state.modelDecision,decisionReason:decisionReasonDraft,followupObservation:followupDraft})} disabled={state.running}>이유와 수정 기록</button>
-            {!rectangle&&<button type="button" className="pcv-button pcv-button--outline" onClick={actions.onChooseNewTarget} disabled={state.running}>다른 목표로 이어가기</button>}
+            <button type="button" className="pcv-button pcv-button--primary" onClick={() => conciseFlow
+              ? runFlowAction(()=>actions.onRevise({reason:revisionDraft,decision:state.modelDecision,decisionReason:decisionReasonDraft,followupObservation:followupDraft}))
+              : actions.onRevise({reason:revisionDraft,decision:state.modelDecision,decisionReason:decisionReasonDraft,followupObservation:followupDraft})}
+              disabled={state.running}>{conciseFlow?"수정 근거를 저장하고 새 시도 준비":"이유와 수정 기록"}</button>
+            {!conciseFlow&&!rectangle&&<button type="button" className="pcv-button pcv-button--outline" onClick={actions.onChooseNewTarget} disabled={state.running}>다른 목표로 이어가기</button>}
           </div>
-          <div className="pcv-callout pcv-callout--compact">
+          {flowGuidance&&conciseFlow&&<p className="pcv-navigation-guidance" role="alert">{flowGuidance.message}</p>}
+          {!conciseFlow&&<div className="pcv-callout pcv-callout--compact">
             <strong>종이 위치가 바뀌었나요?</strong>
             <p>종이를 옮긴 뒤에는 기존 기준점을 그대로 쓰지 않습니다. 종이를 정렬하고 기준점을 다시 기록해 주세요.</p>
             <button type="button" className="pcv-button pcv-button--quiet" onClick={()=>actions.onMovePaper(revisionDraft)} disabled={state.running}>종이를 옮겼어요 · 기준점 다시 기록</button>
-          </div>
+          </div>}
         </>;
     }
+  };
+
+  const renderRetryScreen = () => (
+    <>
+      <section className="pcv-previous-attempt" aria-label="이전 시도와 수정 근거">
+        <h3>이전 시도에서 이어짐 · 시도 {state.parentAttempt?.attempt ?? "—"}</h3>
+        <p>이전 모델 원점 ({state.parentAttempt?.transform?.originX ?? "—"}, {state.parentAttempt?.transform?.originY ?? "—"}) mm · 배율 {state.parentAttempt?.transform?.millimetersPerCentimeter ?? "—"} mm/cm · 허용오차 ±{state.parentAttempt?.verificationCriteria?.positionToleranceMm ?? "—"} mm</p>
+        {state.parentAttempt?.aiAnalyses?.filter(item=>item.runId===state.parentAttempt?.run?.id).slice(-1).map(item=><blockquote key={item.id}>
+          <strong>{item.provider==="openai"&&item.status==="provided"?"실제 GPT 응답":"체험/기본 응답"} · 이전 실행 {item.runId}</strong>
+          <p>{item.text}</p>
+        </blockquote>)}
+        {state.parentAttempt?.followupObservation&&<p>추가 관측: {state.parentAttempt.followupObservation.text}</p>}
+        <p>모델 판단: {state.parentAttempt?.modelDecision==="retain"?"유지":"수정"} · {state.parentAttempt?.modelDecisionReason ?? "근거 없음"}</p>
+        <p>수정 이유: {state.parentAttempt?.revisionReason ?? "기록 없음"}</p>
+      </section>
+      <p className="pcv-lead">새 점의 수학적 예측을 직접 확인하고 저장합니다. 이전 시도의 실행·관측·기준은 새 시도에 복사하지 않습니다.</p>
+      {renderStage(2)}
+      {renderStage(3)}
+      <div className="pcv-button-row pcv-button-row--wrap">
+        <button type="button" className="pcv-button pcv-button--primary" onClick={()=>runFlowAction(actions.onSaveRetryPlan)}
+          disabled={state.running||!state.predictionsReady}>수정 모델과 새 예측 저장</button>
+      </div>
+      {renderStage(4)}
+      {state.run?.status==="completed"&&<>
+        {renderStage(5)}
+        {renderStage(6)}
+        <section className="pcv-final-judgment" aria-label="재검증에 대한 학생 판단">
+          <h3>새 실행을 보고 최종 판단</h3>
+          <p>{state.revalidationScope ?? "저장된 기준과 독립 검증점으로 판정합니다. DT·모의 결과는 실물 검증 완료가 아닙니다."}</p>
+          <label className="pcv-field"><span>모델 판단</span><select value={state.modelDecision} onChange={event=>{
+            const decision=event.target.value as "revise"|"retain";
+            actions.onModelDecisionChange(decision);
+          }}><option value="revise">다시 수정 필요</option><option value="retain">현재 모델 유지</option></select></label>
+          <label className="pcv-field"><span>판단 근거</span><textarea rows={3} value={finalDecisionReason} onChange={event=>{
+            setFinalDecisionReason(event.target.value);
+            actions.onModelDecisionReasonChange(event.target.value);
+          }}/></label>
+          <button type="button" className="pcv-button pcv-button--primary" onClick={()=>runFlowAction(()=>actions.onFinalizeRevalidation(state.modelDecision,finalDecisionReason))}
+            disabled={state.running||!finalDecisionReason.trim()}>최종 판단 저장</button>
+          {state.activeAttempt?.revalidation?.scope&&<p role="status">{state.activeAttempt.revalidation.scope}</p>}
+        </section>
+      </>}
+    </>
+  );
+
+  const renderConciseFlow = () => {
+    if (screenIndex===1) return <>
+      {renderStage(1)}{renderStage(2)}{renderStage(3)}
+      <div className="pcv-flow-footer">
+        <p>가정·변환 관계와 모든 좌표 예측을 한 번에 저장합니다. 입력은 작성 중 자동 보존됩니다.</p>
+        <button type="button" className="pcv-button pcv-button--primary" disabled={state.running}
+          onClick={()=>runFlowAction(actions.onSavePlanAndContinue)}>예측을 저장하고 실행 비교로</button>
+      </div>
+      {flowGuidance&&<p className="pcv-navigation-guidance" role="alert">{flowGuidance.message}</p>}
+    </>;
+    if (screenIndex===2) return <>
+      {renderStage(4)}{renderStage(5)}{renderStage(6)}
+      <div className="pcv-flow-footer">
+        <p>DT·실장비 실행과 자료 기반 분석은 각각 이 화면의 명시적 버튼에서만 시작됩니다.</p>
+        <button type="button" className="pcv-button pcv-button--primary" disabled={state.running}
+          onClick={()=>runFlowAction(()=>actions.onContinueToRevision(hypothesisDraft,state.diagnosis,state.inkReadings))}>수정하고 다시 확인하기로</button>
+      </div>
+      {flowGuidance&&<p className="pcv-navigation-guidance" role="alert">{flowGuidance.message}</p>}
+    </>;
+    if(state.targetSet==="revalidation")return renderRetryScreen();
+    return <>
+      {renderStage(7)}
+      {flowGuidance&&<p className="pcv-navigation-guidance" role="alert">{flowGuidance.message}</p>}
+    </>;
   };
 
   return (
@@ -526,26 +660,37 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
       </header>}
 
       <div className="pcv-stage-details">
-      <nav className="pcv-stage-nav" aria-label="7단계 학습 흐름">
-        {STAGES.map((stage, index) => (
-          <button type="button" key={stage.id} className={`pcv-stage${state.stage === stage.id ? " is-current" : ""}`}
-            aria-current={state.stage === stage.id ? "step" : undefined} onClick={() => navigateToStage(stage.id)}>
-            <span className="pcv-stage-index">{String(index + 1).padStart(2, "0")}</span><span>{stage.title}</span>
-          </button>
-        ))}
-      </nav></div>
+      {conciseFlow
+        ? <nav className="pcv-stage-nav pcv-stage-nav--three" aria-label="종이 좌표 학습 세 화면">
+            <ol>{PAPER_FLOW_SCREENS.map((title,index)=><li key={title} className={screenIndex===index+1?"is-current":screenIndex>index+1?"is-complete":""}
+              aria-current={screenIndex===index+1?"step":undefined}><span>{index+1}</span><strong>{title}</strong></li>)}</ol>
+          </nav>
+        : <nav className="pcv-stage-nav" aria-label="7단계 학습 흐름">
+            {STAGES.map((stage, index) => (
+              <button type="button" key={stage.id} className={`pcv-stage${state.stage === stage.id ? " is-current" : ""}`}
+                aria-current={state.stage === stage.id ? "step" : undefined} onClick={() => navigateToStage(stage.id)}>
+                <span className="pcv-stage-index">{String(index + 1).padStart(2, "0")}</span><span>{stage.title}</span>
+              </button>
+            ))}
+          </nav>}
+      </div>
 
-      {state.error && state.stage!==4 && <p className="pcv-alert" role="alert">{state.error}</p>}
-      <LearningRevisionJourney data={journey}/>
-      <div className={`pcv-edit-workspace${merged&&(state.stage===3||state.stage===7)?" is-editing":""}`}>
-      {merged&&<PaperSceneMap key={state.level} compact={state.stage===3||state.stage===7}/>}
+      {state.error && (conciseFlow || state.stage!==4) && <p className="pcv-alert" role="alert">{state.error}</p>}
+      {!conciseFlow&&<LearningRevisionJourney data={journey}/>}
+      <div className={`pcv-edit-workspace${merged&&(conciseFlow?screenIndex===3:state.stage===3||state.stage===7)?" is-editing":""}`}>
+      {merged&&<PaperSceneMap key={state.level} compact={conciseFlow?screenIndex===3:state.stage===3||state.stage===7}/>}
       <div className="pcv-edit-content">
       <RevisionEditingLayout data={journey}>
       <main className="pcv-main">
+        {conciseFlow&&<div className="pcv-preparation-summary" aria-label="교사용 수업 준비 상태">
+          <strong>수업 준비</strong>
+          <ul>{state.preparationSummary.map(item=><li key={item}>{item}</li>)}</ul>
+          <button type="button" className="pcv-button pcv-button--quiet" onClick={actions.onOpenConnection}>연결 설정</button>
+        </div>}
         <section className="pcv-activity" aria-labelledby={`${id}-activity-heading`}>
-          <div className="pcv-activity-kicker"><span>지금 하는 일</span><span>단계 {state.stage} / 7</span></div>
-          <h2 id={`${id}-activity-heading`}>{activeTitle}</h2>
-          {renderActiveStage()}
+          <div className="pcv-activity-kicker"><span>지금 하는 일</span><span>{conciseFlow?`화면 ${screenIndex} / 3`:`단계 ${state.stage} / 7`}</span></div>
+          <h2 id={`${id}-activity-heading`}>{conciseFlow?PAPER_FLOW_SCREENS[screenIndex-1]:activeTitle}</h2>
+          {conciseFlow?renderConciseFlow():renderStage(state.stage)}
         </section>
         <aside className="pcv-side-note" aria-label="현재 좌표 정보">
           <span className="pcv-eyebrow">{state.stage===1||state.stage===4 ? "현재 보고된 위치" : "저장된 관측을 비교합니다"}</span>
@@ -563,7 +708,7 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
       </main>
       </RevisionEditingLayout>
 
-      <div className="pcv-button-row pcv-button-row--stage-nav">
+      {!conciseFlow&&<div className="pcv-button-row pcv-button-row--stage-nav">
         <button className="pcv-button" disabled={state.running||state.stage===1} onClick={()=>actions.onStageChange((state.stage-1) as PaperLessonStage)}>이전</button>
         <button className="pcv-button pcv-button--primary" disabled={state.running||state.stage===7} onClick={()=>navigateToStage((state.stage+1) as PaperLessonStage)}>다음 단계</button>
         {navigationBlocker && <div className="pcv-navigation-guidance" role="status" aria-live="polite">
@@ -572,7 +717,7 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
             {navigationBlocker.target === "hypothesis" ? "생각 저장 입력칸으로 이동" : "비교 자료로 이동"}
           </button>
         </div>}
-      </div>
+      </div>}
       </div></div>
       <details className="pcv-details pcv-records"><summary>시도 연결 기록 · {state.records.length}회</summary>
         {state.records.map(r=><article key={r.id}><h3>시도 {r.attempt} · {sourceLabel(r.run?.source??r.dataSource)}</h3><p>{isPaperRectangle(r.level)?"사각형 P1/P2/P3/P4":r.targetSet==="initial"?"첫 목표 A/B/C":"새 목표 D/E/F"} · 이전 시도 {state.records.find(p=>p.id===r.parentAttemptId)?.attempt??"없음"}</p><p>관측 {r.run?.observations.length??0}개 · {r.diagnosis?.candidate??"비교 전"}</p><p>가설: {r.studentHypothesis??"작성 전"} · 수정: {r.revisionReason??"작성 전"}</p><p>{r.revalidation?.scope??"재검증 완료 전"}</p></article>)}
@@ -610,8 +755,9 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
           </section>
         </div>
       </details>
-      {state.saveState !== "ready" && <p className="pcv-save-status" role="status" aria-live="polite">
-        {state.saveState === "saving" ? "기록을 저장하는 중입니다." : state.saveState === "saved" ? state.saveMessage || "기록이 저장되었습니다." : state.saveMessage || "기록을 저장하지 못했습니다."}
+      {(conciseFlow||state.saveState!=="ready") && <p className={`pcv-save-status${state.saveState==="failed"?" is-failed":""}`} role="status" aria-live="polite">
+        {state.saveState === "saving" ? "저장 중" : state.saveState === "saved" ? state.saveMessage || "저장됨" : state.saveState==="failed" ? state.saveMessage || "저장 실패 · 입력은 화면에 유지됩니다." : "작성 중인 입력은 자동 보존됩니다."}
+        {state.saveState==="failed"&&<button type="button" className="pcv-button pcv-button--quiet" onClick={actions.onRetrySave}>저장 다시 시도</button>}
       </p>}
       <small className="square-ui-version">과제 버전: {merged?"v4-paper-merged":"기존 종이 과제"}</small>
     </section>

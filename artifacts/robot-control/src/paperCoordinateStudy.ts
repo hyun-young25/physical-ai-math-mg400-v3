@@ -42,6 +42,18 @@ export type PaperStudentTransform = {
   explanation: string;
 };
 
+export type PaperTrialDrafts = {
+  transform?: PaperStudentTransform;
+  predictions?: PaperPredictionPoint[];
+  studentHypothesis?: string;
+  followupObservation?: string;
+  modelDecision?: "revise" | "retain";
+  modelDecisionReason?: string;
+  revisionReason?: string;
+  inkReadings?: PaperInkReadingDraft[];
+  verificationReason?: string;
+};
+
 export type PaperPredictionPoint = PaperGridPoint & {
   robotX: string;
   robotY: string;
@@ -187,6 +199,8 @@ export type PaperTrialRecord = {
     result: "physical-verified" | "simulation-only" | "incomplete"; tcpWithinTolerance?: boolean; inkWithinTolerance?: boolean };
   verificationCriteria?: PaperVerificationCriteria;
   diagnosisToleranceMm?: number;
+  /** Unsubmitted form contents are recoverable, but never count as completed evidence. */
+  drafts?: PaperTrialDrafts;
 };
 
 export function recoverInterruptedPaperRuns(records: PaperTrialRecord[], now = Date.now()): PaperTrialRecord[] {

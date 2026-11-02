@@ -31,6 +31,10 @@ test("7단계 진입 차단은 실제 누락 항목과 이동 위치를 반환�
   assert.equal(exports_.paperStageNavigationRequirement(6, false, false), null);
 });
 
+test("기존 저장 단계는 학생에게 세 화면으로 묶여 재시도도 수정 화면에 남는다", () => {
+  assert.deepEqual([1, 2, 3, 4, 5, 6, 7].map(exports_.paperStudentScreenForStage), [1, 1, 1, 2, 2, 2, 3]);
+});
+
 test("실행 전 기준은 실행 기록이 없어도 현재 시도·기준점·계획에 맞으면 저장됨으로 표시된다", () => {
   const criteria = {
     recordId: "attempt-2",

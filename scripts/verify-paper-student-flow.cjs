@@ -32,7 +32,6 @@ async function main() {
   const context = await browser.newContext({
     viewport: { width: 1600, height: 900 },
     deviceScaleFactor: 1,
-    recordVideo: { dir: evidenceDir, size: { width: 1600, height: 900 } },
   });
   // Keep the real API for student entry and record sync. Stub only the paid GPT
   // endpoint so the visible UI is truthful about its fallback source.
@@ -54,7 +53,6 @@ async function main() {
   });
   try {
     const page = await context.newPage();
-    const recording = page.video();
     page.setDefaultTimeout(12_000);
     page.on("pageerror", error => errors.push(error.message));
     page.on("console", message => {
@@ -81,9 +79,11 @@ async function main() {
     if (await introClose.count()) await introClose.first().click({ noWaitAfter: true });
     const lessonNav = page.getByRole("navigation", { name: "학습 목차" });
     if ((await lessonNav.evaluate(element => element.getBoundingClientRect().x)) < 0) {
-      await page.getByRole("button", { name: "☰", exact: true }).click({ noWaitAfter: true });
+      await page.getByRole("button", { name: "학습 목차 열기/닫기", exact: true }).click({ noWaitAfter: true });
     }
-    await lessonNav.getByRole("button", { name: /2-4.*도형 경로 만들기/ }).click({ noWaitAfter: true });
+    const paperLesson=lessonNav.getByRole("button", { name: /2-4.*도형 경로 만들기/ });
+    await paperLesson.waitFor({state:"visible"});
+    await paperLesson.evaluate(element=>element.click());
     await page.getByText("2-4. 도형 경로 만들기", { exact: true }).waitFor();
     await page.waitForTimeout(300);
     await page.getByRole("button", { name: "5. 종이 기준점 (DT)", exact: true }).click({ noWaitAfter: true });
@@ -112,27 +112,34 @@ async function main() {
       }
       console.log(`UI clicked: ${label}`);
     };
-    const stage = async number => {
-      await view.getByText(`단계 ${number} / 7`, { exact: false }).waitFor();
+    const screen = async number => {
+      await view.getByText(`화면 ${number} / 3`, { exact: true }).waitFor();
     };
     const shot = async filename => page.screenshot({ path: path.join(evidenceDir, filename) });
+    const prepareCriteria = async () => {
+      const details=view.locator(".pcv-teacher-prep--execution");
+      if (!(await details.evaluate(element=>element.open))) await details.locator(":scope > summary").click();
+      await view.getByLabel("허용오차를 선택한 근거", { exact: true })
+        .fill("실행 전 합의한 2 mm 범위로 측정 자료를 비교합니다.");
+      await click("이 시도의 실행 전 기준 저장");
+    };
 
     assert.match(await view.innerText(), /DT 전용/);
     assert.match(await view.innerText(), /실측 아님/);
+    await screen(1);
+    assert.equal(await view.getByRole("navigation", { name: "종이 좌표 학습 세 화면" }).getByRole("listitem").count(), 3);
+    assert.equal(await view.getByRole("button", { name: "다음 단계" }).count(), 0,
+      "the simplified flow must not require repeated seven-step navigation");
     await shot("01-paper-student-entry.png");
 
-    // Step 2: student's own model explanation. It deliberately includes a
+    // Screen 1: student's own model explanation. It deliberately includes a
     // synthetic name marker to prove PII redaction without dropping the formula.
-    await click("다음 단계");
-    await stage(2);
     await view.getByLabel("원점 X (mm)", { exact: true }).fill("180");
     await view.getByLabel("원점 Y (mm)", { exact: true }).fill("-60");
     await view.getByLabel("1 cm당 길이 (mm)", { exact: true }).fill("10");
     await view.getByLabel(/이 관계를 선택한 이유/)
       .fill("이름: 홍길동, P3의 X=180+10×11을 계산해 310 mm라고 예측했어요.");
-    await click("관계 저장");
-    await click("다음 단계");
-    await stage(3);
+    assert.equal(await view.getByRole("button", { name: "관계 저장", exact: true }).count(), 0);
 
     const points = [[180, -60], [290, -60], [290, 90], [180, 90]];
     await view.getByLabel("직선 경로 명령").selectOption("MoveL");
@@ -143,12 +150,12 @@ async function main() {
       await view.getByLabel(`P${point} 예측 로봇 X · mm`, { exact: true }).fill(String(x + (point === 3 ? 20 : 0)));
       await view.getByLabel(`P${point} 예측 로봇 Y · mm`, { exact: true }).fill(String(y));
     }
-    await click("예측 저장");
+    await click("예측을 저장하고 실행 비교로");
     await shot("03-student-prediction.png");
     await page.waitForTimeout(4_000);
-    await click("다음 단계");
-    await stage(4);
+    await screen(2);
     assert.match(await view.innerText(), /DT · 실측 아님|가상 DT/);
+    await prepareCriteria();
     await click("DT에서 확인");
     await page.waitForTimeout(2_000);
     await page.waitForFunction(() => {
@@ -159,6 +166,9 @@ async function main() {
     const firstAfterRun = (await records())[0];
     assert.equal(firstAfterRun.run.source, "dt");
     assert.equal(firstAfterRun.run.status, "completed");
+    assert.deepEqual(firstAfterRun.run.verificationCriteria.independentVerificationPoints, ["P2","P3","P4"]);
+    assert.deepEqual(firstAfterRun.run.verificationCriteria.constructionOverlaps,
+      [{targetPoint:"P1",constructionPoint:"O"}]);
     const previewLabel = page.getByTestId("paper-preview-label");
     await previewLabel.waitFor({ timeout: 15_000 });
     assert.match(await previewLabel.innerText(), /파란 고스트 · DT · 실측 아님/);
@@ -166,10 +176,7 @@ async function main() {
     await page.waitForTimeout(5_000);
     console.log("PASS first DT run and blue ghost");
 
-    await click("다음 단계");
-    await stage(5);
-    await click("다음 단계");
-    await stage(6);
+    await screen(2);
     const first = (await records())[0];
     assert.equal(first.diagnosis.pattern, "calculation");
     assert.match(first.transform.explanation, /X=180\+10×11/);
@@ -227,13 +234,18 @@ async function main() {
     await causeInput
       .fill("P3의 X 계산에서 11 cm × 10 mm/cm를 110 mm로 계산해 원점 180 mm에 더해야 한다는 점을 다시 확인하겠습니다.");
     console.log("PASS student hypothesis entered through visible UI");
-    await click("생각 저장");
-    await click("다음 단계");
+    assert.equal(await view.getByRole("button", { name: "생각 저장", exact: true }).count(),0);
+    await click("수정하고 다시 확인하기로");
+    await screen(3);
+    await view.getByLabel("AI 질문을 본 뒤 추가로 확인한 관측과 근거", { exact: true })
+      .fill("종이 눈금에서 P3의 11 cm 위치를 다시 확인했습니다.");
+    await view.getByLabel("모델 판단", { exact: true }).selectOption("revise");
+    await view.getByLabel("유지 또는 수정 판단의 근거", { exact: true })
+      .fill("P3 목표와 DT 결과의 차이를 확인하고 단위 환산식을 다시 계산했습니다.");
     const longRevisionReason = `이메일: qa-private@example.com; P3의 좌표 계산을 다시 확인합니다. 종이 x좌표 11 cm와 1 cm당 10 mm를 곱해 110 mm를 얻고, 원점 X 180 mm에 더합니다. 따라서 P3의 X 예측을 310 mm에서 290 mm로 수정합니다. ${"이 식의 각 항과 단위를 다시 대입해 확인합니다. ".repeat(18)}`;
     await view.getByLabel("무엇을 다시 살펴볼까요?", { exact: true })
       .fill(longRevisionReason);
-    await click("이유와 수정 기록");
-    await view.getByTestId("paper-retry-note").waitFor();
+    await click("수정 근거를 저장하고 새 시도 준비");
     console.log("PASS revision reason saved and linked retry created");
     await page.waitForTimeout(4_000);
     let all = await records();
@@ -243,21 +255,23 @@ async function main() {
     assert.equal(child.run, undefined, "a revision starts without an old run");
     assert.equal(child.transform.explanation, parentAfterReason.transform.explanation);
 
-    // The new attempt carries the old plan, but the student edits the reasoning
-    // and the P3 prediction before its independent DT run.
-    await click("이전");
-    await stage(2);
-    console.log("PASS retry returned to model stage");
+    // The revalidation attempt remains on screen 3; the student edits the
+    // mathematical explanation and enters fresh independent predictions.
     await view.getByLabel(/이 관계를 선택한 이유/)
       .fill("P3의 X=180+10×11=290 mm로 다시 계산했습니다. 11 cm×10 mm/cm=110 mm입니다.");
     console.log("PASS retry model explanation changed through visible UI");
-    await click("관계 저장");
-    await click("다음 단계");
-    await stage(3);
-    await view.getByLabel("P3 예측 로봇 X · mm", { exact: true }).fill("290");
-    await click("예측 저장");
-    await click("다음 단계");
-    await stage(4);
+    for (const [index, [x, y]] of [[200,-30],[270,-30],[270,60],[200,60]].entries()) {
+      const point=index+1;
+      await view.getByLabel(`P${point} 예측 로봇 X · mm`, { exact: true }).fill(String(x));
+      await view.getByLabel(`P${point} 예측 로봇 Y · mm`, { exact: true }).fill(String(y));
+    }
+    await click("수정 모델과 새 예측 저장");
+    await screen(3);
+    assert.equal(await view.getByRole("button", { name: "다음 단계" }).count(),0);
+    const plannedChild=(await records())[1];
+    assert.equal(plannedChild.verificationCriteria.targetSet,"revalidation");
+    assert.deepEqual(plannedChild.verificationCriteria.independentVerificationPoints,["P1","P2","P3","P4"]);
+    assert.deepEqual(plannedChild.verificationCriteria.constructionOverlaps,[]);
     await click("DT에서 확인");
     await page.waitForTimeout(2_000);
     await page.waitForFunction(() => {
@@ -265,10 +279,7 @@ async function main() {
       const rows = key ? JSON.parse(localStorage.getItem(key) || "[]") : [];
       return rows.at(-1)?.run?.status === "completed";
     }, null, { timeout: 60_000 });
-    await click("다음 단계");
-    await stage(5);
-    await click("다음 단계");
-    await stage(6);
+    await screen(3);
     console.log("PASS corrected prediction rerun in DT");
     assert.match(await page.locator(".square-type-badge").innerText(), /예측과 실행 일치/);
     all = await records();
@@ -324,7 +335,6 @@ async function main() {
     fs.writeFileSync(path.join(evidenceDir, "verification.json"), JSON.stringify(report, null, 2));
     console.log("PASS real student shell end-to-end:", JSON.stringify(report));
     await context.close();
-    console.log("Recorded browser video:", await recording.path());
   } finally {
     await browser.close();
   }
