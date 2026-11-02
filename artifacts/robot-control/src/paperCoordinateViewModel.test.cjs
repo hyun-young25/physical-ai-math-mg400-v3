@@ -36,6 +36,10 @@ test("기존 저장 단계는 학생에게 세 화면으로 묶여 재시도도 
 });
 
 test("재시도는 완료 전에는 비교 화면을 열고, 완료 직후에만 판단 화면으로 자동 이동한다", () => {
+  assert.equal(exports_.paperRetryExecutionReady(1), false);
+  assert.equal(exports_.paperRetryExecutionReady(2), false);
+  assert.equal(exports_.paperRetryExecutionReady(3), true);
+  assert.equal(exports_.paperRetryExecutionReady(4), true);
   assert.equal(exports_.paperRetryInitialStep("running", true), 3);
   assert.equal(exports_.paperRetryInitialStep("completed", true), 4);
   assert.equal(exports_.paperRetryInitialStep(null, false), 1);
@@ -125,14 +129,45 @@ test("간략화된 실행·비교와 수정·재확인 화면에 실행 조작�
     path.join(__dirname, "PaperCoordinateStudyView.tsx"),
     "utf8",
   );
-  assert.match(view, /const renderExecutionControls = \(\) =>/);
+  assert.match(
+    view,
+    /const renderExecutionControls = \(\s*executionAllowed = true,\s*retryStep\?: number,\s*\) =>/,
+  );
   assert.match(view, /data-testid="paper-execution-controls"/);
   assert.match(view, /onClick=\{actions\.onRunDT\}/);
   assert.match(view, /onClick=\{actions\.onRunPhysical\}/);
-  assert.match(view, /disabled=\{state\.running \|\| !state\.runAvailable\}/);
-  assert.match(view, /disabled=\{state\.running \|\| dtOnly \|\| !state\.physicalAvailable\}/);
+  const dtButton = view
+    .match(/data-testid="paper-run-dt"[\s\S]*?<\/button>/)?.[0]
+    .replace(/\s+/g, " ");
+  const physicalButton = view
+    .match(/data-testid="paper-run-physical"[\s\S]*?<\/button>/)?.[0]
+    .replace(/\s+/g, " ");
+  assert.match(
+    dtButton,
+    /disabled=\{ state\.running \|\| !executionAllowed \|\| !state\.runAvailable \}/,
+  );
+  assert.match(
+    physicalButton,
+    /disabled=\{ state\.running \|\| !executionAllowed \|\| dtOnly \|\| !state\.physicalAvailable \}/,
+  );
   assert.match(view, /renderExecutionControls\(\)[\s\S]*renderStage\(state\.stage\)/);
-  assert.match(view, /guidedRetryStep >= 3 && renderExecutionControls\(\)/);
+  const retryScreen = view.match(
+    /const renderRetryScreen = \(\) => \(\s*<>[\s\S]*?<\/>\s*\);/,
+  )?.[0];
+  assert.ok(retryScreen, "수정 후 재확인 화면이 있어야 합니다.");
+  assert.match(
+    retryScreen,
+    /\{renderExecutionControls\(\s*paperRetryExecutionReady\(guidedRetryStep\),\s*guidedRetryStep,\s*\)\}/,
+  );
+  assert.doesNotMatch(
+    retryScreen,
+    /guidedRetryStep\s*>=\s*3\s*&&\s*renderExecutionControls/,
+  );
+  assert.match(view, /!executionAllowed \|\| !state\.runAvailable/);
+  assert.match(view, /!executionAllowed \|\|[\s\S]*!state\.physicalAvailable/);
+  assert.match(view, /수정한 계획을 저장하기 전에는 DT를 실행할 수 없습니다/);
+  assert.match(view, /수정한 계획을 저장하기 전에는 실장비를 실행할 수 없습니다/);
+  assert.match(view, /새 예측 입력으로 이동/);
   assert.match(view, /paperComparableRunPair\([\s\S]*state\.activeAttempt\?\.runHistory/);
   assert.match(view, /이전 실행[\s\S]*현재 실행/);
   assert.match(view, /DT는 가상 자료/);

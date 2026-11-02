@@ -18,6 +18,7 @@ import { paperInkComparisons } from "./paperAiAnalysis";
 import { paperVerificationPointGuide } from "./paperCoordinateStudy";
 import {
   paperComparableRunPair,
+  paperRetryExecutionReady,
   paperRetryComparisonReady,
   paperRetryInitialStep,
   paperRetryRunJustCompleted,
@@ -496,7 +497,10 @@ export function PaperCoordinateStudyView({
         ))}
       </ul>
     ) : null;
-  const renderExecutionControls = () => {
+  const renderExecutionControls = (
+    executionAllowed = true,
+    retryStep?: number,
+  ) => {
     const runPair = paperComparableRunPair(
       state.activeAttempt?.runHistory,
       state.run,
@@ -621,11 +625,37 @@ export function PaperCoordinateStudyView({
               className="pcv-button pcv-button--primary"
               data-testid="paper-run-dt"
               onClick={actions.onRunDT}
-              disabled={state.running || !state.runAvailable}
+              disabled={
+                state.running || !executionAllowed || !state.runAvailable
+              }
             >
               {state.running ? "처리 중" : "DT에서 확인"}
             </button>
-            {blockers(state.dtBlockers, "DT 실행 전 확인")}
+            {!executionAllowed ? (
+              <div className="pcv-run-blockers" role="status">
+                <p>
+                  수정한 계획을 저장하기 전에는 DT를 실행할 수 없습니다.
+                  {retryStep === 1
+                    ? " 먼저 관계를 저장하고 새 검증점 예측을 입력하세요."
+                    : " 새 검증점 예측을 저장하면 이 화면에서 다시 실행할 수 있습니다."}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGuidedRetryStep(retryStep === 1 ? 1 : 2);
+                    requestAnimationFrame(() =>
+                      focusFlowTarget(
+                        retryStep === 1 ? "transform" : "predictions",
+                      ),
+                    );
+                  }}
+                >
+                  {retryStep === 1 ? "관계 수정으로 이동" : "새 예측 입력으로 이동"}
+                </button>
+              </div>
+            ) : (
+              blockers(state.dtBlockers, "DT 실행 전 확인")
+            )}
           </div>
           <div className="pcv-run-action">
             <button
@@ -634,14 +664,39 @@ export function PaperCoordinateStudyView({
               data-testid="paper-run-physical"
               onClick={actions.onRunPhysical}
               disabled={
-                state.running || dtOnly || !state.physicalAvailable
+                state.running ||
+                !executionAllowed ||
+                dtOnly ||
+                !state.physicalAvailable
               }
             >
               {state.currentSource === "mock"
                 ? "모의 브리지에서 시험"
                 : "실장비에서 확인"}
             </button>
-            {dtOnly ? (
+            {!executionAllowed ? (
+              <div className="pcv-run-blockers" role="status">
+                <p>
+                  수정한 계획을 저장하기 전에는 실장비를 실행할 수 없습니다.
+                  {retryStep === 1
+                    ? " 먼저 관계를 저장하고 새 검증점 예측을 입력하세요."
+                    : " 새 검증점 예측을 저장하면 기존 준비 조건을 다시 확인합니다."}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGuidedRetryStep(retryStep === 1 ? 1 : 2);
+                    requestAnimationFrame(() =>
+                      focusFlowTarget(
+                        retryStep === 1 ? "transform" : "predictions",
+                      ),
+                    );
+                  }}
+                >
+                  {retryStep === 1 ? "관계 수정으로 이동" : "새 예측 입력으로 이동"}
+                </button>
+              </div>
+            ) : dtOnly ? (
               <p className="pcv-run-blocker-note">{dtOnlyMessage}</p>
             ) : (
               blockers(state.physicalBlockers, "실장비 실행 전 확인")
@@ -2470,7 +2525,10 @@ export function PaperCoordinateStudyView({
           aria-label="수정 후 재확인 진행률"
         />
       </div>
-    {guidedRetryStep >= 3 && renderExecutionControls()}
+      {renderExecutionControls(
+        paperRetryExecutionReady(guidedRetryStep),
+        guidedRetryStep,
+      )}
       {guidedRetryStep === 1 && (
         <>
           <p className="pcv-guided-instruction">

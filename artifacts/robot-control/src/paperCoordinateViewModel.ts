@@ -38,6 +38,12 @@ export function paperRetryInitialStep(
   return hasPlanHash ? 3 : 1;
 }
 
+/** Execution controls stay visible on the retry screen, but only become usable
+ * after the revised transform and predictions have been saved as a new plan. */
+export function paperRetryExecutionReady(step: number): boolean {
+  return step >= 3;
+}
+
 export function paperRetryRunJustCompleted(
   previous: PaperRunSnapshot["status"] | null,
   current: PaperRunSnapshot["status"] | null,
