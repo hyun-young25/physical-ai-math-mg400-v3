@@ -2,14 +2,14 @@ import { useEffect,useState,useSyncExternalStore,type ComponentType } from "reac
 import { useAuth } from "@workspace/replit-auth-web";
 import LearningEntry from "./LearningEntry";
 import LearningTeacher from "./LearningTeacher";
-import { getOwnerIdentity,setLearningUser,type LearningUser } from "./learningClient";
+import { getOwnerIdentity,lockStudentVisit,restoreStudentVisit,setLearningUser,type LearningUser } from "./learningClient";
 import { initializeLearningSync,stopLearningSync,flushLearningQueue,canLeaveLearningVisit,getLearningSaveState,subscribeLearningSave } from "./learningSync";
 import "./learningAccounts.css";
 export default function LearningShell(){
   const auth=useAuth({basePath:import.meta.env.BASE_URL});
   const professor=new URLSearchParams(window.location.search).get("professor")==="1";
   const [user,setUser]=useState<LearningUser|null>(null),[Content,setContent]=useState<ComponentType|null>(null);
-  const [loading,setLoading]=useState(false),[error,setError]=useState("");
+  const [loading,setLoading]=useState(false),[restoring,setRestoring]=useState(true),[error,setError]=useState("");
   const state=useSyncExternalStore(subscribeLearningSave,getLearningSaveState);
   useEffect(()=>{void flushLearningQueue();},[]);
   async function loadLearningApp(){
@@ -33,6 +33,18 @@ export default function LearningShell(){
       .catch(err=>{if(live)setError(err instanceof Error?err.message:"소유자 권한을 확인하지 못했습니다.");});
     return()=>{live=false;};
   },[professor,auth.isLoading,auth.isAuthenticated]);
+  useEffect(()=>{
+    if(professor){setRestoring(false);return;}
+    let live=true;
+    restoreStudentVisit().then(restored=>{
+      if(!live)return;
+      if(!restored){setRestoring(false);return;}
+      void prepare(restored).finally(()=>{if(live)setRestoring(false);});
+    }).catch(err=>{
+      if(live){setError(err instanceof Error?err.message:"방문을 복구하지 못했습니다.");setRestoring(false);}
+    });
+    return()=>{live=false;};
+  },[professor]);
   async function prepare(next:LearningUser){
     setLoading(true);setError("");setUser(next);
     try{
@@ -50,6 +62,8 @@ export default function LearningShell(){
       setError("전송 실패와 브라우저 임시 저장 실패가 겹쳤습니다. 연결을 복구한 후 다시 전송하고 학생을 변경하세요.");
       return;
     }
+    try{await lockStudentVisit();}
+    catch(err){setError(err instanceof Error?err.message:"현재 방문을 잠그지 못했습니다. 학생을 변경하지 않았습니다.");return;}
     stopLearningSync();setLearningUser(null);
     // Reset every lesson cache and robot state; old pending visits keep original attribution.
     window.location.assign(import.meta.env.BASE_URL);
@@ -65,7 +79,9 @@ export default function LearningShell(){
       <a href={import.meta.env.BASE_URL}>학생 화면으로</a>
     </div></div></section>;
   }
-  if(!user)return <LearningEntry onEnter={next=>{void prepare(next);}} onProfessor={auth.login}/>;
+  if(!user)return restoring
+    ?<section className="la-root"><p className="learning-shell-message" role="status">기존 방문 확인 중입니다.</p></section>
+    :<LearningEntry onEnter={next=>{void prepare(next);}} onProfessor={auth.login}/>;
   return <>
     <header className="learning-student-bar">
       <strong>{user.login}</strong>

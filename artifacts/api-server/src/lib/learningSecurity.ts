@@ -1,4 +1,4 @@
-import { randomBytes, scrypt as scryptCallback, timingSafeEqual, createHash } from "node:crypto";
+import { randomBytes, scrypt as scryptCallback, timingSafeEqual, createHash, createHmac } from "node:crypto";
 import { promisify } from "node:util";
 import type { Request, Response } from "express";
 import { pool } from "@workspace/db";
@@ -21,6 +21,33 @@ export async function verifyPassword(password: string, encoded: string) {
   return timingSafeEqual(actual, Buffer.from(hex, "hex"));
 }
 export const COOKIE = "mg400_learning";
+export const VISIT_COOKIE = "mg400_learning_visit";
+const VISIT_SESSION_MS = 12 * 60 * 60 * 1000;
+const VISIT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function visitProofSecret() {
+  const secret=process.env.SESSION_SECRET;
+  if(!secret||secret.length<32)throw new Error("방문 복구를 위한 서버 세션 설정이 없습니다.");
+  return secret;
+}
+export function createLearningVisitProof(visitId: string, now = Date.now()) {
+  if(!VISIT_ID_PATTERN.test(visitId))throw new Error("유효하지 않은 방문 식별자입니다.");
+  const payload=Buffer.from(JSON.stringify({visitId,expiresAt:now+VISIT_SESSION_MS})).toString("base64url");
+  const signature=createHmac("sha256",visitProofSecret()).update(`mg400-learning-visit:${payload}`).digest("hex");
+  return `${payload}.${signature}`;
+}
+export function readLearningVisitProof(value: unknown, now = Date.now()): string | null {
+  if(typeof value!=="string"||value.length>512)return null;
+  const [payload,signature,extra]=value.split(".");
+  if(!payload||!signature||extra!==undefined||!/^[a-f0-9]{64}$/i.test(signature))return null;
+  try{
+    const expected=createHmac("sha256",visitProofSecret()).update(`mg400-learning-visit:${payload}`).digest();
+    const received=Buffer.from(signature,"hex");
+    if(received.length!==expected.length||!timingSafeEqual(received,expected))return null;
+    const decoded=JSON.parse(Buffer.from(payload,"base64url").toString("utf8"));
+    if(!VISIT_ID_PATTERN.test(decoded?.visitId)||!Number.isSafeInteger(decoded?.expiresAt)||decoded.expiresAt<=now)return null;
+    return decoded.visitId;
+  }catch{return null;}
+}
 export type Account = { id: string; role: "student" | "teacher"; class_code: string; login: string };
 export function publicAccount(a: Account) {
   return { id: a.id, role: a.role, classCode: a.class_code, login: a.login };
@@ -45,6 +72,14 @@ export async function createSession(res: Response, a: Account) {
 }
 export function eraseCookie(res: Response) {
   res.clearCookie(COOKIE, { path: "/api/learning", httpOnly: true, sameSite: "none",
+    secure: true, partitioned: true });
+}
+export function setLearningVisitCookie(res: Response, proof: string) {
+  res.cookie(VISIT_COOKIE, proof, { httpOnly: true, secure: true, partitioned: true,
+    sameSite: "none", path: "/api/learning", maxAge: VISIT_SESSION_MS });
+}
+export function eraseLearningVisitCookie(res: Response) {
+  res.clearCookie(VISIT_COOKIE, { path: "/api/learning", httpOnly: true, sameSite: "none",
     secure: true, partitioned: true });
 }
 

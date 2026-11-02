@@ -1,7 +1,8 @@
 import { ATTEMPT_HEADERS,attemptRows,parseAttemptFilter,matchesAttempt,attemptCsvLine } from "../lib/squareAttemptCsv";
 import { Router, type Request, type Response, type IRouter } from "express";
 import { pool } from "@workspace/db";
-import { eraseCookie, COOKIE, digest, loginLimit } from "../lib/learningSecurity";
+import { eraseCookie, COOKIE, digest, loginLimit, VISIT_COOKIE, setLearningVisitCookie, eraseLearningVisitCookie,
+  createLearningVisitProof, readLearningVisitProof } from "../lib/learningSecurity";
 import { CSV_HEADERS, csvCell, csvRows } from "../lib/learningCsv";
 import { requireLearningOwner } from "../lib/learningOwner";
 
@@ -31,7 +32,7 @@ router.get("/learning/session", async (req, res) => {
 router.post("/learning/lock", async (req,res) => {
   const token: unknown = req.cookies?.[COOKIE];
   if (typeof token === "string") await pool.query("DELETE FROM learning_sessions WHERE token_hash=$1",[digest(token)]);
-  eraseCookie(res); res.json({ok:true});
+  eraseCookie(res); eraseLearningVisitCookie(res); res.json({ok:true});
 });
 router.post("/learning/student/enter", async (req, res) => {
   if (!loginLimit(req, res)) return;
@@ -48,16 +49,34 @@ router.post("/learning/student/enter", async (req, res) => {
     const found=await client.query("SELECT id,login FROM learning_accounts WHERE role='learner' AND class_code='' AND login=$1",[login]);
     const account=found.rows[0];
     const visit=await client.query("INSERT INTO learning_visits(account_id) VALUES($1) RETURNING id",[account.id]);
+    const visitProof=createLearningVisitProof(visit.rows[0].id);
     await client.query("COMMIT");
+    setLearningVisitCookie(res,visitProof);
     res.json({user:{id:account.id,role:"student",classCode:"",login:account.login,visitId:visit.rows[0].id}});
   }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
+});
+router.get("/learning/student/restore", async (req,res) => {
+  const visitId=readLearningVisitProof(req.cookies?.[VISIT_COOKIE]);
+  if(!visitId){
+    eraseLearningVisitCookie(res);res.json({user:null});return;
+  }
+  // Restore only the one unexpired server-issued visit bound to the HttpOnly
+  // browser cookie. Student login labels and query/body IDs grant no read access.
+  const found=await pool.query(
+    `SELECT v.id AS visit_id,v.account_id,a.login
+     FROM learning_visits v JOIN learning_accounts a ON a.id=v.account_id
+     WHERE v.id=$1 AND a.role='learner' AND v.created_at>now()-interval '12 hours'`,
+    [visitId]);
+  const row=found.rows[0];
+  if(!row){eraseLearningVisitCookie(res);res.json({user:null});return;}
+  res.json({user:{id:row.account_id,role:"student",classCode:"",login:row.login,visitId:row.visit_id}});
 });
 for(const path of ["/learning/teacher/enter","/learning/owner/setup"])
   router.post(path,(_req,res)=>{res.status(410).json({error:"공개 교수자 가입·초기 설정과 비밀번호 입장은 사용하지 않습니다. 교수자 버튼의 계정 인증을 사용하세요."});});
 router.post("/learning/logout", async (req, res) => {
   const token=req.cookies?.[COOKIE];
   if(typeof token==="string")await pool.query("DELETE FROM learning_sessions WHERE token_hash=$1",[digest(token)]);
-  eraseCookie(res); res.json({ ok: true });
+  eraseCookie(res); eraseLearningVisitCookie(res); res.json({ ok: true });
 });
 router.get("/learning/classes", async (req, res) => {
   res.status(410).json({error:"수업 코드와 수업 개설은 더 이상 필요하지 않습니다."});

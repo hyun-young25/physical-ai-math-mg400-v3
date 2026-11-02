@@ -24,6 +24,16 @@ export async function enterStudent(input: { login: string }) {
   const data = await learningRequest<{ user: LearningUser }>("/student/enter", "POST", input);
   setLearningUser(data.user); return data.user;
 }
+export async function restoreStudentVisit(): Promise<LearningUser | null> {
+  const data=await learningRequest<{user:LearningUser|null}>("/student/restore");
+  const user=data.user;
+  if(!user||user.role!=="student"||typeof user.visitId!=="string")return null;
+  setLearningUser(user);return user;
+}
+export async function lockStudentVisit() {
+  await learningRequest("/lock","POST",{});
+  if(activeUser?.role==="student")setLearningUser(null);
+}
 export const getOwnerIdentity = () => learningRequest<{user:LearningUser}>("/session");
 export async function logoutLearning() { await learningRequest("/logout", "POST", {}); setLearningUser(null); }
 export const listLearningStudents = () => learningRequest<{ students: LearningStudent[] }>("/teacher/students");

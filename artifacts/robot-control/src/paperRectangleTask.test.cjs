@@ -47,6 +47,27 @@ test("same generic revalidation checks require fresh linked observations under a
  assert.equal(p.paperRevalidationScope({...record,run:{...next,frameId:f.id}},parent,targets),null);
 });
 
+test("same-visit refresh closes an interrupted DT run as partial without changing its evidence",()=>{
+ const now=1_800_000_000_000,observations=[{point:"P1",pose:{x:200,y:20},source:"dt",measuredAt:now-100}];
+ const criteria={positionToleranceMm:3,rationale:"실행 전 확인",confirmedAt:now-200};
+ const original={id:"attempt",task:"paper-coordinate",version:1,attempt:1,parentAttemptId:null,targetSet:"initial",
+   level:"advanced-paper-dt",status:"running",dataSource:"dt",createdAt:new Date(now-1000).toISOString(),
+   updatedAt:new Date(now-500).toISOString(),run:{id:"run",status:"running",startedAt:now-300,
+     observations,commands:[{point:"P1",pose:{x:210,y:20}}]},verificationCriteria:criteria,
+   aiAnalyses:[{id:"analysis",question:"이전 분석 질문"}],revisionReason:"학생이 입력한 이유"};
+ const [recovered]=p.recoverInterruptedPaperRuns([original],now);
+ assert.equal(recovered.status,"incomplete");
+ assert.equal(recovered.run.status,"partial");
+ assert.equal(recovered.run.endedAt,now);
+ assert.match(recovered.run.error,/새로고침/);
+ assert.deepEqual(recovered.run.observations,observations);
+ assert.deepEqual(recovered.run.commands,original.run.commands);
+ assert.deepEqual(recovered.verificationCriteria,criteria);
+ assert.deepEqual(recovered.aiAnalyses,original.aiAnalyses);
+ assert.equal(recovered.revisionReason,original.revisionReason);
+ assert.equal(original.run.status,"running","stored input object is not mutated");
+});
+
 test("revalidation status uses the saved pre-run criteria and never calls DT a physical verification",()=>{
  const f=frame(),t=transform(30),prior=run(f,t,now),parent={id:"parent",frame:f,targetSet:"initial",run:{...prior,id:"prior",endedAt:now+10},
    studentHypothesis:"축 회전을 확인",revisionReason:"독립 점에서 다시 비교"};

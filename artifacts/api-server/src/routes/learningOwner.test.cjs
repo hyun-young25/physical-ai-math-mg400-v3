@@ -4,10 +4,17 @@ const {createRequire}=require("node:module"),ts=require("typescript");
 const express=createRequire(path.resolve("artifacts/api-server/package.json"))("express");
 function fixture(pin="TEST_OWNER"){
   const statements=[];
+  const visits=new Map();
   const rows=[{event_id:"TEST_EVENT_A",login:"TEST_A",payload:{prediction:{z:40},reason:"최초"},changed_paths:["prediction.z"]},
     {event_id:"TEST_EVENT_B",login:"TEST_B",payload:{prediction:{z:35},reason:"수정"},changed_paths:["prediction.z"]}];
   const pool={query:async(sql,args)=>{
     statements.push(sql);
+    if(sql.includes("FROM learning_visits v JOIN learning_accounts a ON a.id=v.account_id")&&sql.includes("created_at>now()")){
+      const visit=visits.get(args[0]);
+      return visit&&Date.now()-visit.createdAt<12*60*60*1000
+        ?{rows:[{visit_id:args[0],account_id:visit.account_id,login:visit.login}],rowCount:1}
+        :{rows:[],rowCount:0};
+    }
     if(sql.includes("COALESCE(max(sequence)"))return {rows:[{n:100}],rowCount:1};
     if(sql.includes("latest WHERE sequence>"))return {rows:args.at(-1)===0?[{sequence:1,account_id:"TEST_ACCOUNT",visit_id:"TEST_VISIT",record_id:"attempt",payload:{task:"square-attempt",taskIndex:4,taskVersion:"v4-paper-merged",createdAt:"2026-10-29T01:00:00Z",questionText:"실제 저장 질문"}}]:[],rowCount:args.at(-1)===0?1:0};
     if(sql.includes("max(e.occurred_at)"))return {rows:[{login:"TEST_A"},{login:"TEST_B"}],rowCount:2};
@@ -21,7 +28,11 @@ function fixture(pin="TEST_OWNER"){
       statements.push(sql);
       if(sql.startsWith("SELECT id,login"))return {rows:[{id:"10000000-0000-4000-8000-000000000001",login:currentLogin}]};
       if(sql.startsWith("INSERT INTO learning_accounts"))currentLogin=args[0];
-      if(sql.startsWith("INSERT INTO learning_visits"))return {rows:[{id:require("node:crypto").randomUUID()}]};
+      if(sql.startsWith("INSERT INTO learning_visits")){
+        const id=require("node:crypto").randomUUID();
+        visits.set(id,{account_id:"10000000-0000-4000-8000-000000000001",login:currentLogin,createdAt:Date.now()});
+        return {rows:[{id}]};
+      }
       return {rows:[]};
     },release(){}
   });
@@ -39,16 +50,25 @@ function fixture(pin="TEST_OWNER"){
   const owner=load("../lib/learningOwner.ts"),csv=load("../lib/learningCsv.ts");
   const attemptCsv=load("../lib/squareAttemptCsv.ts",{"./learningCsv":csv});
   const router=load("learning.ts",{"../lib/squareAttemptCsv":attemptCsv,express,"@workspace/db":{pool},"../lib/learningOwner":owner,
-    "../lib/learningSecurity":{loginLimit:()=>true},"../lib/learningCsv":csv}).default;
-  async function call(route,id,{role="teacher",body={},query={}}={}){
+    "../lib/learningSecurity":{
+      COOKIE:"mg400_learning",VISIT_COOKIE:"mg400_learning_visit",digest:value=>`hash:${value}`,
+      loginLimit:()=>true,eraseCookie:res=>res.clearCookie("mg400_learning"),
+      createLearningVisitProof:id=>`proof:${id}`,
+      readLearningVisitProof:value=>typeof value==="string"&&value.startsWith("proof:")?value.slice(6):null,
+      setLearningVisitCookie:(res,value)=>res.cookie("mg400_learning_visit",value,{httpOnly:true,maxAge:12*60*60*1000}),
+      eraseLearningVisitCookie:res=>res.clearCookie("mg400_learning_visit"),
+    },"../lib/learningCsv":csv}).default;
+  async function call(route,id,{role="teacher",body={},query={},cookies={}}={}){
     const handler=router.stack.find(l=>l.route?.path===route).route.stack[0].handle;
-    const res={statusCode:200,body:null,text:"",destroyed:false,status(n){this.statusCode=n;return this;},
+    const res={statusCode:200,body:null,text:"",destroyed:false,cookiesSet:{},cookiesCleared:[],
+      status(n){this.statusCode=n;return this;},cookie(name,value,options){this.cookiesSet[name]={value,options};return this;},
+      clearCookie(name){this.cookiesCleared.push(name);return this;},
       json(v){this.body=v;return this;},set(){return this;},write(v){this.text+=v;return true;},end(){}};
-    await handler({user:id?{id,firstName:"TEST"}:undefined,isAuthenticated:()=>!!id,
+    await handler({user:id?{id,firstName:"TEST"}:undefined,isAuthenticated:()=>!!id,cookies,
       body:{role,...body},query,get:()=>undefined},res);
     return res;
   }
-  return {call,statements,owner};
+  return {call,statements,owner,visits};
 }
 test("a first numeric ID 1234 and ordinary text IDs enter with only login, never credentials or a course code",async()=>{
   for(const login of ["1234","studentABC","일반문자아이디"]){
@@ -59,6 +79,38 @@ test("a first numeric ID 1234 and ordinary text IDs enter with only login, never
     assert.ok(f.statements.some(sql=>sql.includes("ON CONFLICT DO NOTHING")));
     assert.ok(f.statements.every(sql=>!/\bUPDATE\b|\bDELETE\b/.test(sql)));
   }
+});
+test("only the live HttpOnly visit cookie restores its exact visit; login labels and supplied IDs are ignored",async()=>{
+  const f=fixture();
+  const first=await f.call("/learning/student/enter",undefined,{body:{login:"연동검수01"}});
+  const other=await f.call("/learning/student/enter",undefined,{body:{login:"다른학생"}});
+  const firstVisit=first.body.user.visitId,otherVisit=other.body.user.visitId;
+  const firstProof=first.cookiesSet.mg400_learning_visit.value,otherProof=other.cookiesSet.mg400_learning_visit.value;
+  assert.notEqual(firstProof,firstVisit,"the HttpOnly capability is separate from the client visit ID");
+  assert.equal(first.cookiesSet.mg400_learning_visit.options.httpOnly,true);
+  assert.equal(first.cookiesSet.mg400_learning_visit.options.maxAge,12*60*60*1000);
+  const restored=await f.call("/learning/student/restore",undefined,{cookies:{mg400_learning_visit:firstProof},
+    query:{visitId:otherVisit},body:{login:"다른학생",visitId:otherVisit}});
+  assert.deepEqual(restored.body.user,{id:"10000000-0000-4000-8000-000000000001",role:"student",
+    classCode:"",login:"연동검수01",visitId:firstVisit});
+  const otherRestored=await f.call("/learning/student/restore",undefined,{cookies:{mg400_learning_visit:otherProof}});
+  assert.equal(otherRestored.body.user.login,"다른학생");
+  assert.equal(otherRestored.body.user.visitId,otherVisit);
+  assert.ok(f.statements.some(sql=>sql.includes("v.created_at>now()-interval '12 hours'")));
+});
+test("missing, expired, and explicitly locked visit cookies cannot restore any visit",async()=>{
+  const f=fixture();
+  const first=await f.call("/learning/student/enter",undefined,{body:{login:"연동검수01"}});
+  const visitId=first.body.user.visitId;
+  const proof=first.cookiesSet.mg400_learning_visit.value;
+  f.visits.get(visitId).createdAt=Date.now()-13*60*60*1000;
+  const expired=await f.call("/learning/student/restore",undefined,{cookies:{mg400_learning_visit:proof}});
+  assert.equal(expired.body.user,null);
+  assert.ok(expired.cookiesCleared.includes("mg400_learning_visit"));
+  const absent=await f.call("/learning/student/restore");
+  assert.equal(absent.body.user,null);
+  const locked=await f.call("/learning/lock",undefined,{cookies:{mg400_learning_visit:proof}});
+  assert.ok(locked.cookiesCleared.includes("mg400_learning_visit"));
 });
 test("missing owner binding stays closed even for a verified account; first visitor never gets elevated",async()=>{
   const f=fixture("");

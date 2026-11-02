@@ -14,7 +14,7 @@ import type { LessonPose } from "./curriculum";
 import { PaperCoordinateStudyView } from "./PaperCoordinateStudyView";
 import type { PaperCoordinateStudyViewState, PaperLessonStage } from "./paperCoordinateViewModel";
 import {
-  PAPER_ANGLE_TOLERANCE_DEG, PAPER_GRID_SIZE_CM, PAPER_MEASURE_TOLERANCE_MM, PAPER_SAMPLE_MAX_AGE_MS,
+  PAPER_ANGLE_TOLERANCE_DEG, PAPER_GRID_SIZE_CM, PAPER_MEASURE_TOLERANCE_MM, PAPER_SAMPLE_MAX_AGE_MS, recoverInterruptedPaperRuns,
   PAPER_TARGETS, comparePaperPredictionToFrame, diagnosePaperRun, frameInversePoint, frameTransformPoint,
   getPaperFrameAngleDegrees, makePaperPlanHash, studentTransformPoint, validatePaperFrame, validatePaperRunForDiagnosis, paperRevalidationAssessment,
 } from "./paperCoordinateStudy";
@@ -42,11 +42,7 @@ const isRecord = (value: unknown): value is PaperTrialRecord => !!value && typeo
   && typeof (value as PaperTrialRecord).id === "string";
 const timeIso = () => new Date().toISOString();
 const poseDistance = (a: LessonPose, b: LessonPose) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
-const freshRecords = () => readEvidence(STORAGE_KEY, isRecord).map(record => {
-  if (record.run?.status !== "running") return record;
-  const run = { ...record.run, status: "partial" as const, endedAt: Date.now(), error: "새로고침으로 실행이 끝났습니다. 완료로 처리하지 않습니다." };
-  return { ...record, run, status: "incomplete" as const, updatedAt: timeIso() };
-});
+const freshRecords = () => recoverInterruptedPaperRuns(readEvidence(STORAGE_KEY, isRecord));
 
 export type PaperCoordinateStudyProps = {
   onBack: () => void;

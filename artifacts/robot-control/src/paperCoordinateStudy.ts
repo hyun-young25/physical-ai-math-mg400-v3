@@ -187,6 +187,19 @@ export type PaperTrialRecord = {
   diagnosisToleranceMm?: number;
 };
 
+export function recoverInterruptedPaperRuns(records: PaperTrialRecord[], now = Date.now()): PaperTrialRecord[] {
+  return records.map(record => {
+    if (record.run?.status !== "running") return record;
+    return {
+      ...record,
+      run: { ...record.run, status: "partial" as const, endedAt: now,
+        error: "새로고침으로 실행이 끝났습니다. 완료로 처리하지 않습니다." },
+      status: "incomplete" as const,
+      updatedAt: new Date(now).toISOString(),
+    };
+  });
+}
+
 export const PAPER_GRID_SIZE_CM = 10;
 export const PAPER_MEASURE_TOLERANCE_MM = 2;
 export const PAPER_ANGLE_TOLERANCE_DEG = 2;
