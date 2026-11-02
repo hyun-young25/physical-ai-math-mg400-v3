@@ -2,7 +2,7 @@ const test=require("node:test"),assert=require("node:assert/strict"),fs=require(
 const exports_={};new Function("exports",ts.transpileModule(fs.readFileSync(__dirname+"/learningAiContext.ts","utf8"),{
   compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS},
 }).outputText)(exports_);
-const {makeFeedbackContext,numericFeedbackContext,feedbackVersion,localFeedback,sanitizeFeedbackContext,feedbackHistoryEnvelope,squareMeasurementLinkedToMission}=exports_;
+const {makeFeedbackContext,numericFeedbackContext,feedbackVersion,localFeedback,sanitizeFeedbackContext,feedbackHistoryEnvelope,fitFeedbackRequestBudget,feedbackFailureFromTransport,squareMeasurementLinkedToMission}=exports_;
 const condition={id:"height-practice",prompt:"현재 높이 20, 목표 높이 60",support:"guided"};
 const original={conditionKey:JSON.stringify(condition),prediction:{z:"60"},reason:"최초 풀이",runs:[],answerReviews:[],explanationReviews:[]};
 const input=(patch={})=>({task:"foundation",condition,fields:[{key:"z",label:"변화량",unit:"mm"}],
@@ -190,4 +190,60 @@ test("an exact-run hardware failure remains unavailable and is never promoted to
   assert.equal(run.measurement.isPhysicalMeasurement,false);
   assert.deepEqual(run.measurement.observations,[]);
   assert.match(run.measurement.detail.error,/제어기 회신 누락/);
+});
+test("direct paper parent survives privacy cleanup and API-size compaction with model, displayed feedback and revision evidence",()=>{
+  const parent={recordId:"attempt-190",attempt:1,taskVersion:"paper-v3",level:"advanced-paper-dt",
+    transform:{originX:"190",originY:"-60",millimetersPerCentimeter:"10",rotationDegrees:"0",
+      explanation:"첫 시도의 원점 X=190 가정과 좌표 변환식"},
+    predictions:[{name:"P1",xCm:2,yCm:3,robotX:210,robotY:-30}],
+    studentHypothesis:"원점 기준이 어긋났을 수 있음",modelDecision:"revise",
+    modelDecisionReason:"같은 실행에서 확인한 목표-명령 차이 10mm와 새 기준점 관측",
+    followupObservation:{recordId:"attempt-190",runId:"run-190",source:"student-report",
+      text:"종이 눈금에서 기준점 O와 P1을 다시 확인",recordedAt:10},
+    revisionReason:"X=190 가정을 재검토하고 180으로 수정",
+    previouslyDisplayedFeedback:[{recordId:"attempt-190",runId:"run-190",planHash:"plan-190",
+      source:"dt",provider:"openai",status:"provided",displayedAt:11,
+      text:"목표와 명령의 차이는 10mm입니다. 기준점 해석을 추가로 확인하세요."}],
+    frame:{source:"dt",coordinateSystem:"paper-mm",samples:[{point:"O",pose:{x:190,y:-60,z:80,r:0}}]},
+    run:{id:"run-190",planHash:"plan-190",frameId:"frame-190",source:"dt",status:"completed",
+      verificationCriteria:{positionToleranceMm:2,rationale:"실행 전 2mm 허용오차"},
+      commands:[{point:"P1",pose:{x:200,y:-30,z:80,r:0}}],
+      observations:[{point:"P1",pose:{x:200,y:-30,z:80,r:0},source:"dt",measuredAt:12}]},
+  };
+  const context={task:"paper-coordinate",condition:JSON.stringify({taskVersion:"paper-v4",frame:{samples:Array(20).fill(parent.frame.samples[0])}}),
+    answers:JSON.stringify({savedStudentTransform:{originX:"180",originY:"-60",explanation:"현재 시도 X=180"},revisionReason:"10mm 차이를 근거로 원점을 수정"}),
+    reason:"학생 설명: 원점 X=180",initialPrediction:JSON.stringify({originX:"180",targets:Array(12).fill({name:"P1",xCm:2,yCm:3})}),
+    history:JSON.stringify([parent]),judgment:JSON.stringify({toleranceMm:2,details:"세부".repeat(2000)}),
+    execution:JSON.stringify(Array(20).fill({source:"dt",status:"completed",observations:Array(10).fill(parent.run.observations[0])})),
+    support:"guided",attempts:2,question:"기준점을 어떻게 확인했나요?",conversation:Array(8).fill({role:"tutor",text:"이전 질문".repeat(300)})};
+  const safe=sanitizeFeedbackContext(context);
+  const boundedHistory=feedbackHistoryEnvelope(safe,[],[]);
+  const history=JSON.parse(boundedHistory),prior=JSON.parse(history.attempts);
+  assert.equal(prior.length,1);
+  assert.equal(prior[0].transform.originX,"190");
+  assert.match(prior[0].modelDecisionReason,/10mm/);
+  assert.match(prior[0].followupObservation.text,/기준점/);
+  assert.match(prior[0].revisionReason,/180/);
+  assert.match(prior[0].previouslyDisplayedFeedback[0].text,/10mm/);
+  assert.equal(prior[0].run.verificationCriteria.positionToleranceMm,2);
+  const request=fitFeedbackRequestBudget({...safe,history:boundedHistory});
+  assert.ok(Buffer.byteLength(JSON.stringify(request),"utf8")<30000);
+  assert.match(request.answers,/180/);
+  assert.equal(JSON.parse(request.execution).contextNote!==undefined,true);
+  for(const key of ["condition","answers","initialPrediction","history","judgment","execution"])
+    assert.doesNotThrow(()=>JSON.parse(request[key]),`${key} remains valid JSON`);
+  assert.ok(request.condition.length<=6000);
+  assert.ok(request.answers.length<=3000);
+  assert.ok(request.initialPrediction.length<=3000);
+  assert.ok(request.history.length<=6000);
+  assert.ok(request.judgment.length<=2000);
+  assert.ok(request.execution.length<=10000);
+  assert.doesNotMatch(JSON.stringify(request),/연동검수|student-id-private/);
+});
+test("HTTP request failures are not mislabeled as network outages",()=>{
+  assert.equal(feedbackFailureFromTransport(false,false),"network_error");
+  assert.equal(feedbackFailureFromTransport(true,false),"timeout");
+  assert.equal(feedbackFailureFromTransport(false,true,400),"invalid_request");
+  assert.equal(feedbackFailureFromTransport(false,true,422),"invalid_request");
+  assert.equal(feedbackFailureFromTransport(false,true,503),"invalid_response");
 });

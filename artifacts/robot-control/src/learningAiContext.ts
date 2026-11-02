@@ -28,7 +28,10 @@ export function privateText(s:string) {
 }
 function clean(v:unknown,depth=0,parent:unknown=null):unknown {
   if(depth>7)return "[상세 생략]";
-  if(typeof v==="string")return privateText(v).slice(0,1500);
+  if(typeof v==="string"){
+    const safe=privateText(v);
+    return safe.length<=1500?safe:`${safe.slice(0,1492)}…[축약]`;
+  }
   if(v===null||typeof v==="number"||typeof v==="boolean")return v;
   if(Array.isArray(v))return v.slice(-12).map(x=>clean(x,depth+1,v));
   if(v&&typeof v==="object")return Object.fromEntries(Object.entries(v).filter(([k,x])=>!isPrivateKey(k,x,v)).slice(0,40).map(([k,x])=>[k,clean(x,depth+1,v)]));
@@ -36,17 +39,97 @@ function clean(v:unknown,depth=0,parent:unknown=null):unknown {
 }
 const json=(value:unknown,max:number)=>JSON.stringify(clean(value)??null).slice(0,max);
 const jsonFields=["condition","answers","initialPrediction","history","judgment","execution"] as const;
+const feedbackJsonLimits:Record<typeof jsonFields[number],number>={
+  condition:6000,answers:3000,initialPrediction:3000,history:6000,judgment:2000,execution:10000,
+};
+type CompactState={truncated:boolean};
+function compactPromptValue(value:unknown,depth:number,maxText:number,maxArray:number,maxKeys:number,state:CompactState):unknown {
+  if(depth>6){state.truncated=true;return "[세부 근거는 원본 학습 기록에 보존됨]";}
+  if(typeof value==="string"){
+    const safe=privateText(value);
+    if(safe.length<=maxText)return safe;
+    state.truncated=true;
+    return `${safe.slice(0,Math.max(0,maxText-8))}…[축약]`;
+  }
+  if(value===null||typeof value==="number"||typeof value==="boolean")return value;
+  if(Array.isArray(value)){
+    if(value.length>maxArray)state.truncated=true;
+    return value.slice(0,maxArray).map(item=>compactPromptValue(item,depth+1,maxText,maxArray,maxKeys,state));
+  }
+  if(value&&typeof value==="object"){
+    const entries=Object.entries(value as Record<string,unknown>).filter(([key,item])=>!isPrivateKey(key,item,value));
+    if(entries.length>maxKeys)state.truncated=true;
+    return Object.fromEntries(entries.slice(0,maxKeys).map(([key,item])=>[
+      key,compactPromptValue(item,depth+1,maxText,maxArray,maxKeys,state),
+    ]));
+  }
+  return undefined;
+}
+function boundedJson(value:unknown,max:number):string {
+  const safe=value;
+  for(const [maxText,maxArray,maxKeys] of [[1200,12,40],[800,8,32],[500,6,24],[240,4,18],[120,4,12]] as const){
+    const state:CompactState={truncated:false};
+    const compacted=compactPromptValue(safe,0,maxText,maxArray,maxKeys,state);
+    const note="일부 세부 자료는 API 한도에 맞게 축약했으며 원본 기록은 보존됩니다.";
+    const candidate=state.truncated
+      ?Array.isArray(compacted)?{results:compacted,contextNote:note}
+        :compacted&&typeof compacted==="object"?{...(compacted as Record<string,unknown>),contextNote:note}
+          :{value:compacted,contextNote:note}
+      :compacted;
+    const serialized=JSON.stringify(candidate??null);
+    if(serialized.length<=max)return serialized;
+  }
+  const fallback=Array.isArray(safe)
+    ?{results:safe.slice(0,4),contextNote:"세부 자료를 API 한도에 맞게 축약했습니다. 원본 기록은 보존됩니다."}
+    :{contextNote:"세부 자료를 API 한도에 맞게 축약했습니다. 원본 기록은 보존됩니다.",data:"요약 불가"};
+  return JSON.stringify(fallback);
+}
 /** Final client-side privacy boundary for both trial and explicitly requested GPT feedback. */
 export function sanitizeFeedbackContext(context:FeedbackContext):FeedbackContext {
   const safe={...context} as FeedbackContext & {question?:string;conversation?:{role:"student"|"tutor";text:string;source?:"openai"|"rules"}[]};
   for(const field of jsonFields) {
-    try { safe[field]=JSON.stringify(clean(JSON.parse(context[field]))); }
-    catch { safe[field]=privateText(context[field]).slice(0,1500); }
+    try {
+      const value=JSON.parse(context[field]);
+      // History is compacted after displayed feedback and the direct parent are
+      // selected; keep this intermediate array intact for that exact selection.
+      safe[field]=field==="history"?JSON.stringify(clean(value)):boundedJson(value,feedbackJsonLimits[field]);
+    } catch {
+      safe[field]=boundedJson({contextNote:"해석할 수 없는 근거 자료를 제외했습니다.",text:privateText(context[field])},feedbackJsonLimits[field]);
+    }
   }
   safe.reason=privateText(context.reason).slice(0,1500);
   if(context.question!==undefined)safe.question=privateText(context.question).slice(0,1000);
   if(context.conversation)safe.conversation=context.conversation.map(turn=>({...turn,text:privateText(turn.text).slice(0,1000)}));
   return safe;
+}
+/** Keep the complete HTTP body below the API guard without dropping direct-parent math history. */
+export function fitFeedbackRequestBudget(input:FeedbackContext,limit=30_000):FeedbackContext {
+  const fitted={...input,conversation:input.conversation?.map(turn=>({...turn}))} as FeedbackContext;
+  const byteLength=()=>new TextEncoder().encode(JSON.stringify(fitted)).length;
+  for(const [count,textLimit] of [[8,1000],[6,700],[4,500],[2,300],[0,0]] as const){
+    if(byteLength()<=limit)return fitted;
+    if(fitted.conversation){
+      fitted.conversation=fitted.conversation.slice(-count).map(turn=>{
+        const text=privateText(turn.text);
+        return {...turn,text:text.length<=textLimit?text:`${text.slice(0,Math.max(0,textLimit-8))}…[축약]`};
+      });
+    }
+  }
+  const fields=["execution","condition","judgment","initialPrediction","answers"] as const;
+  for(const fraction of [0.9,0.8,0.65,0.5,0.35]){
+    for(const field of fields){
+      if(byteLength()<=limit)return fitted;
+      try{fitted[field]=boundedJson(JSON.parse(fitted[field]),Math.floor(feedbackJsonLimits[field]*fraction));}
+      catch{fitted[field]=boundedJson({contextNote:"자료를 API 한도에 맞게 축약했습니다."},Math.floor(feedbackJsonLimits[field]*fraction));}
+    }
+  }
+  return fitted;
+}
+export function feedbackFailureFromTransport(aborted:boolean,responseReceived:boolean,httpStatus?:number) {
+  if(aborted)return "timeout" as const;
+  if(!responseReceived)return "network_error" as const;
+  if(httpStatus===400||httpStatus===422)return "invalid_request" as const;
+  return "invalid_response" as const;
 }
 
 const paperHistoryKeys=[
@@ -69,7 +152,10 @@ export function squareMeasurementLinkedToMission(
 }
 function compactHistoryValue(value:unknown,depth=0,maxText=900):unknown {
   if(depth>6)return "[이전 세부 이력은 앱에 보존됨]";
-  if(typeof value==="string")return privateText(value).slice(0,maxText);
+  if(typeof value==="string"){
+    const safe=privateText(value);
+    return safe.length<=maxText?safe:`${safe.slice(0,Math.max(0,maxText-8))}…[축약]`;
+  }
   if(value===null||typeof value==="number"||typeof value==="boolean")return value;
   if(Array.isArray(value))return value.slice(-4).map(item=>compactHistoryValue(item,depth+1,maxText));
   if(value&&typeof value==="object")return Object.fromEntries(Object.entries(value as Record<string,unknown>)
@@ -91,35 +177,111 @@ function compactPaperHistoryAttempt(value:unknown,maxText=900) {
     ...(diagnosis?{diagnosis:pickKeys(diagnosis,["method","status","candidate","evidence","predictionEvidence","taskEvidence","firstMismatch","question","why"])}:{}),
   },0,maxText);
 }
+function essentialPaperParent(value:unknown) {
+  if(!value||typeof value!=="object"||Array.isArray(value))return compactHistoryValue(value,0,600);
+  const row=value as Record<string,unknown>;
+  const transform=row.transform&&typeof row.transform==="object"?row.transform as Record<string,unknown>:{};
+  const run=row.run&&typeof row.run==="object"?row.run as Record<string,unknown>:{};
+  const feedback=Array.isArray(row.previouslyDisplayedFeedback)?row.previouslyDisplayedFeedback.slice(-1):[];
+  const frame=row.frame&&typeof row.frame==="object"?row.frame as Record<string,unknown>:{};
+  const criteria=run.verificationCriteria&&typeof run.verificationCriteria==="object"
+    ?run.verificationCriteria as Record<string,unknown>:{};
+  const pick=(source:Record<string,unknown>,keys:string[])=>Object.fromEntries(keys.filter(key=>source[key]!==undefined).map(key=>[key,source[key]]));
+  const poseRows=(rows:unknown,keys:string[])=>Array.isArray(rows)?rows.slice(0,4).map(row=>{
+    if(!row||typeof row!=="object")return row;
+    const entry=row as Record<string,unknown>;
+    return {...pick(entry,keys),...(entry.pose&&typeof entry.pose==="object"?{pose:pick(entry.pose as Record<string,unknown>,["x","y","z","r"])}:{})};
+  }):[];
+  const selectedRun={
+    ...pick(run,["id","planHash","frameId","source","status","startedAt","endedAt"]),
+    commands:poseRows(run.commands,["point","source","measuredAt","seq"]),
+    observations:poseRows(run.observations,["point","source","measuredAt","seq","coordinateSystem"]),
+    verificationCriteria:pick(criteria,["positionToleranceMm","rotationToleranceDeg","rationale","independentVerificationPoints","constructionOverlaps","confirmedAt"]),
+  };
+  return compactHistoryValue({
+    recordId:row.recordId,attempt:row.attempt,taskVersion:row.taskVersion,level:row.level,targetSet:row.targetSet,
+    transform:pick(transform,["originX","originY","axisDirection","millimetersPerCentimeter","rotationDegrees","explanation"]),
+    predictions:Array.isArray(row.predictions)?row.predictions.slice(0,4):[],
+    studentHypothesis:row.studentHypothesis,
+    followupObservation:row.followupObservation&&typeof row.followupObservation==="object"
+      ?pick(row.followupObservation as Record<string,unknown>,["recordId","runId","source","text","recordedAt"]):row.followupObservation,
+    modelDecision:row.modelDecision,modelDecisionReason:row.modelDecisionReason,revisionReason:row.revisionReason,
+    revalidation:row.revalidation&&typeof row.revalidation==="object"
+      ?pick(row.revalidation as Record<string,unknown>,["result","scope","runId","criteria","tcpResult","inkResult","reason"]):row.revalidation,
+    frame:{source:frame.source,coordinateSystem:frame.coordinateSystem,
+      samples:Array.isArray(frame.samples)?frame.samples.slice(0,3):[]},
+    run:selectedRun,previouslyDisplayedFeedback:feedback,
+  },0,700);
+}
 
 /** Keep recent mathematical evidence within the provider budget without truncating JSON or stored history. */
 export function feedbackHistoryEnvelope(context:Pick<FeedbackContext,"task"|"history">,providedHints:string[],recentAnswers:unknown[]) {
   let attempts:unknown;
   try{attempts=JSON.parse(context.history);}catch{attempts=[];}
+  const originalAttemptCount=Array.isArray(attempts)?attempts.length:0;
+  let summaryNote=context.task==="paper-coordinate"&&originalAttemptCount
+    ?"직접 연결된 이전 시도의 핵심 근거를 요약합니다. 앱의 원본 학습 기록은 보존됩니다."
+    :originalAttemptCount>2?"이전 상세 시도는 요약에서 생략했습니다. 앱의 원본 학습 기록은 보존됩니다.":"";
   if(Array.isArray(attempts))attempts=context.task==="paper-coordinate"
-    ?attempts.slice(-2).map(value=>compactPaperHistoryAttempt(value))
+    ?attempts.slice(-1).map(value=>compactPaperHistoryAttempt(value))
     :attempts.slice(-2).map(value=>compactHistoryValue(value));
   let hints=providedHints.slice(-3).map(value=>compactHistoryValue(value,0,500));
   let answers=recentAnswers.slice(-2).map(value=>compactHistoryValue(value));
-  const build=()=>JSON.stringify({attempts:JSON.stringify(attempts),providedHints:hints,recentAnswers:answers});
+  const build=()=>JSON.stringify({attempts:JSON.stringify(attempts),providedHints:hints,recentAnswers:answers,
+    ...(summaryNote?{summaryNote}:{})});
   let result=build();
-  while(result.length>6000&&Array.isArray(attempts)&&attempts.length>1){attempts=attempts.slice(-1);result=build();}
+  while(result.length>6000&&Array.isArray(attempts)&&attempts.length>1){attempts=attempts.slice(-1);summaryNote="이전 상세 시도는 요약에서 생략했습니다. 앱의 원본 학습 기록은 보존됩니다.";result=build();}
   while(result.length>6000&&hints.length){hints=hints.slice(1);result=build();}
   while(result.length>6000&&answers.length){answers=answers.slice(1);result=build();}
-  if(result.length>6000&&context.task==="paper-coordinate"&&Array.isArray(attempts))
-    attempts=attempts.slice(-1).map(value=>compactPaperHistoryAttempt(value,350));
-  else if(result.length>6000&&Array.isArray(attempts))
+  if(result.length>6000&&context.task==="paper-coordinate"&&Array.isArray(attempts)&&attempts.length){
+    attempts=[essentialPaperParent(attempts.at(-1))];
+    summaryNote="직접 연결된 이전 시도의 핵심 근거만 API 한도에 맞게 요약했습니다. 원본 기록은 보존됩니다.";
+    result=build();
+  } else if(result.length>6000&&Array.isArray(attempts)){
     attempts=attempts.slice(-1).map(value=>compactHistoryValue(value,0,350));
+    summaryNote="이전 시도 세부 내역을 API 한도에 맞게 요약했습니다. 원본 기록은 보존됩니다.";
+  }
   hints=hints.slice(-1).map(value=>compactHistoryValue(value,0,250));
   answers=answers.slice(-1).map(value=>compactHistoryValue(value,0,350));
   result=build();
-  if(result.length>6000&&context.task==="paper-coordinate"&&Array.isArray(attempts))
-    attempts=attempts.slice(-1).map(value=>compactPaperHistoryAttempt(value,200));
-  if(result.length>6000&&Array.isArray(attempts))
+  if(result.length>6000&&context.task==="paper-coordinate"&&Array.isArray(attempts)&&attempts.length){
+    attempts=[essentialPaperParent(attempts.at(-1))];
+    summaryNote="직접 연결된 이전 시도의 핵심 수학 근거를 요약했습니다. 원본 기록은 보존됩니다.";
+  } else if(result.length>6000&&Array.isArray(attempts))
     attempts=attempts.slice(-1).map(value=>compactHistoryValue(value,0,100));
   result=build();
-  // An extreme unknown payload cannot break the screen; stored records remain untouched.
-  if(result.length>6000)result=JSON.stringify({attempts:JSON.stringify([]),providedHints:[],recentAnswers:[]});
+  // Never remove a linked paper parent just to fit: retain its core math and
+  // displayed feedback, explicitly stating when ancillary context was omitted.
+  if(result.length>6000&&context.task==="paper-coordinate"&&Array.isArray(attempts)&&attempts.length){
+    attempts=[essentialPaperParent(attempts.at(-1))];hints=[];answers=[];
+    summaryNote="직접 연결된 이전 시도의 모델·실행·표시된 피드백·수정 근거를 요약했습니다. 원본 학습 기록은 보존됩니다.";
+    result=build();
+  }
+  if(result.length>6000&&context.task==="paper-coordinate"&&Array.isArray(attempts)&&attempts.length){
+    attempts=[compactHistoryValue(essentialPaperParent(attempts.at(-1)),0,250)];
+    hints=[];answers=[];
+    summaryNote="직접 연결된 이전 시도의 핵심 모델·관측·피드백·수정 이유만 요약했습니다. 원본 기록은 보존됩니다.";
+    result=build();
+  }
+  if(result.length>6000&&context.task==="paper-coordinate"&&Array.isArray(attempts)&&attempts.length){
+    const compactCore=essentialPaperParent(attempts.at(-1));
+    const core=compactCore&&typeof compactCore==="object"&&!Array.isArray(compactCore)
+      ?compactCore as Record<string,unknown>:{};
+    attempts=[{
+      recordId:core.recordId,attempt:core.attempt,taskVersion:core.taskVersion,
+      transform:core.transform,modelDecision:core.modelDecision,
+      modelDecisionReason:core.modelDecisionReason,revisionReason:core.revisionReason,
+      followupObservation:core.followupObservation,run:core.run,
+      previouslyDisplayedFeedback:core.previouslyDisplayedFeedback,
+    }];
+    hints=[];answers=[];
+    summaryNote="직접 연결된 이전 시도의 핵심 모델·관측·표시 피드백·수정 근거를 축약했습니다. 원본 기록은 보존됩니다.";
+    result=build();
+  }
+  if(result.length>6000){
+    result=JSON.stringify({attempts:JSON.stringify([]),providedHints:[],recentAnswers:[],
+      summaryNote:"요청 근거를 API 한도에 맞게 축약했습니다. 원본 기록은 보존됩니다."});
+  }
   return result;
 }
 function problemOnly(v:unknown):unknown {

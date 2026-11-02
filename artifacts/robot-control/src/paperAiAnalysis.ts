@@ -20,13 +20,14 @@ export function linkedPaperAttempts(current: PaperTrialRecord, records: PaperTri
   const seen = new Set<string>();
   let item: PaperTrialRecord | undefined = current;
   while (item && item.task === current.task && item.task === "paper-coordinate"
-    && item.taskVersion === current.taskVersion && item.level === current.level
-    && chain.length < 6 && !seen.has(item.id)) {
+    && item.level === current.level && chain.length < 6 && !seen.has(item.id)) {
     seen.add(item.id);
     chain.unshift(item);
     const parent: PaperTrialRecord | undefined=item.parentAttemptId ? byId.get(item.parentAttemptId) : undefined;
-    item=parent && parent.task===current.task && parent.taskVersion===current.taskVersion && parent.level===current.level
-      ? parent : undefined;
+    // The explicit parent link is authoritative across a task-version bump:
+    // retain the actual prior model/feedback, while its taskVersion remains
+    // visible in the summary. A different level/assignment or task is excluded.
+    item=parent && parent.task===current.task && parent.level===current.level ? parent : undefined;
   }
   return chain;
 }
@@ -214,6 +215,7 @@ export function paperFeedbackContext(current: PaperTrialRecord, records: PaperTr
     condition: JSON.stringify({
       ...targetAndFrame,
       verificationPoints: classifyPaperVerificationPoints(targets),
+      taskVersion:current.taskVersion,
       analysisScope: "현재 시도와 직접 연결된 이전 시도만 포함합니다.",
       runId: run?.id ?? null,
       planHash: run?.planHash ?? null,
@@ -272,8 +274,9 @@ export function paperFeedbackContext(current: PaperTrialRecord, records: PaperTr
       commands: run.commands,
       observations: run.observations,
       comparisons,
-      inkReadings: (current.inkReadings ?? []).filter(reading => reading.recordId === current.id && reading.runId === run.id && reading.frameId === current.frame?.id),
-      inkComparisons: paperInkComparisons(current, targets),
+      // Each ink comparison contains its raw reading, source, timestamp and
+      // unit. Do not repeat the same readings in a second array.
+      inkComparisons: paperInkComparisons(current, targets).map(({targetVsCommandMm:_duplicate,...row})=>row),
       verificationCriteria: criteria,
       diagnosisMethod: diagnosis?.method ?? "rule-based",
       linkedPreviousAttemptId: current.parentAttemptId,
@@ -283,13 +286,15 @@ export function paperFeedbackContext(current: PaperTrialRecord, records: PaperTr
       modelDecision: current.modelDecision ?? null,
       modelDecisionReason: current.modelDecisionReason ?? null,
       sameAttemptEarlierRuns: (current.runHistory ?? []).filter(previousRun => previousRun.planHash === run.planHash
-        && previousRun.frameId === run.frameId).map(previousRun => ({
+        && previousRun.frameId === run.frameId).slice(-1).map(previousRun => ({
         recordId: current.id, runId: previousRun.id, planHash: previousRun.planHash,
         frameId: previousRun.frameId, source: previousRun.source, status: previousRun.status,
         startedAt: previousRun.startedAt, endedAt: previousRun.endedAt ?? null,
-        commands: previousRun.commands, observations: previousRun.observations,
+        observationCount:previousRun.observations.length,
         verificationCriteria: previousRun.verificationCriteria
-          ?canonicalPaperVerificationCriteria(previousRun.verificationCriteria,targets):null,
+          ?{positionToleranceMm:previousRun.verificationCriteria.positionToleranceMm,
+            targetSet:previousRun.verificationCriteria.targetSet,
+            confirmedAt:previousRun.verificationCriteria.confirmedAt}:null,
       })),
     }] : []),
     support: current.support === "challenge" ? "challenge" : "guided",

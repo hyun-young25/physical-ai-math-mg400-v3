@@ -148,7 +148,7 @@ test("AI context includes current frame, saved model, source, run and only paren
   assert(!context.history.includes("other-task"));
 });
 
-test("first attempt has no previous feedback and a different paper assignment cannot enter the linked chain",()=>{
+test("first attempt has no prior feedback; unrelated assignment stays isolated while a direct parent survives a task-version bump",()=>{
   const first={...current,id:"first-attempt",attempt:1,parentAttemptId:null,aiAnalyses:[]};
   const firstContext=moduleExports.paperFeedbackContext(first,[unrelated,previous,first],targets);
   assert.deepEqual(JSON.parse(firstContext.history),[]);
@@ -159,7 +159,39 @@ test("first attempt has no previous feedback and a different paper assignment ca
   const otherVersion={...previous,id:"other-version",taskVersion:"v3-paper"};
   const versionChild={...current,parentAttemptId:otherVersion.id,taskVersion:"v4-paper-merged"};
   const versionChanged=moduleExports.paperFeedbackContext(versionChild,[otherVersion,versionChild],targets);
-  assert.deepEqual(JSON.parse(versionChanged.history),[]);
+  assert.equal(JSON.parse(versionChanged.history)[0].recordId,"other-version");
+  assert.equal(JSON.parse(versionChanged.history)[0].taskVersion,"v3-paper");
+});
+
+test("same-attempt analysis carries the direct parent's model, displayed feedback, decision and fixed tolerance",()=>{
+  const parent={...previous,taskVersion:"paper-v3",level:current.level,
+    transform:{originX:"190",originY:"-60",millimetersPerCentimeter:"10",rotationDegrees:"0",explanation:"첫 모델은 원점 X=190을 기준으로 계산"},
+    revisionReason:"실행 차이 10mm를 보고 원점 가정을 다시 확인",
+    studentHypothesis:"종이 기준점이 모델의 원점과 다를 수 있음",
+    followupObservation:{recordId:previous.id,runId:previous.run.id,source:"student-report",text:"P1의 종이 좌표와 기준점 O를 다시 읽음",recordedAt:45},
+    modelDecision:"revise",modelDecisionReason:"같은 실행에서 확인한 10mm 차이와 종이 기준점 재관측을 근거로 원점을 수정",
+    aiAnalyses:[{recordId:previous.id,runId:previous.run.id,planHash:previous.run.planHash,source:previous.run.source,
+      provider:"openai",status:"provided",displayedAt:42,text:"원점 또는 축 해석을 확인해 보세요."}]};
+  const child={...current,taskVersion:"paper-v4",parentAttemptId:parent.id,
+    transform:{originX:"180",originY:"-60",millimetersPerCentimeter:"10",rotationDegrees:"0",explanation:"관측 이유를 반영해 원점 X=180으로 수정"},
+    revisionReason:"이전 실행의 차이 10mm와 새로 읽은 기준점 위치를 반영",
+    predictions:[{name:"A",xCm:3,yCm:2,robotX:30,robotY:20}],
+    run:{...run,verificationCriteria:criteria(current.id,"plan-current","revalidation",25),
+      targetSet:"revalidation"}};
+  const context=moduleExports.paperFeedbackContext(child,[parent,child],targets);
+  const condition=JSON.parse(context.condition),answers=JSON.parse(context.answers);
+  const prior=JSON.parse(context.history)[0],execution=JSON.parse(context.execution)[0];
+  assert.equal(condition.taskVersion,"paper-v4");
+  assert.equal(answers.savedStudentTransform.originX,"180");
+  assert.equal(answers.revisionReason,"이전 실행의 차이 10mm와 새로 읽은 기준점 위치를 반영");
+  assert.equal(prior.transform.originX,"190");
+  assert.match(prior.revisionReason,/10mm/);
+  assert.match(prior.followupObservation.text,/기준점/);
+  assert.match(prior.modelDecisionReason,/10mm/);
+  assert.equal(prior.previouslyDisplayedFeedback[0].provider,"openai");
+  assert.equal(prior.previouslyDisplayedFeedback[0].text,"원점 또는 축 해석을 확인해 보세요.");
+  assert.equal(execution.verificationCriteria.positionToleranceMm,2);
+  assert.equal(execution.comparisons[0].targetVsCommandMm.dx,10);
 });
 
 test("hardware feedback request carries only the current run's controller-reported pose",()=>{

@@ -8,7 +8,7 @@ import { PaperSceneMap } from "./PaperScene";
 import { publishPaperScene, clearPaperScene, selectPaperPoint, usePaperScene } from "./paperSceneStore";
 import { paperInkComparisons } from "./paperAiAnalysis";
 import { ExecutionAiAnalysis } from "./ExecutionAiAnalysis";
-import { classifyPaperVerificationPoints, type PaperPointName } from "./paperCoordinateStudy";
+import type { PaperPointName } from "./paperCoordinateStudy";
 import type { PaperCoordinateStudyViewProps, PaperLessonStage } from "./paperCoordinateViewModel";
 import "./paperCoordinateStudyView.css";
 
@@ -66,7 +66,6 @@ function revealPaperRow(row: Element) {
 }
 
 export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinateStudyViewProps) {
-  const verificationPoints=classifyPaperVerificationPoints(state.targetPoints);
   const id = useId();
   const rectangle=isPaperRectangle(state.level),merged=isMergedPaper(state.level),dtOnly=isPaperDT(state.level),grid=merged?20:10;
   const [hypothesisDraft, setHypothesisDraft] = useState(state.studentHypothesis);
@@ -356,11 +355,8 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
           </details>
           <section className="pcv-callout" aria-label="실행 전 검증 기준">
             <h3>이번 실행의 독립 검증 기준</h3>
-            <p>기준점 O/X/Y는 모델 구성점입니다. 이번 확인점: {verificationPoints.currentVerificationPoints.join("·")||"없음"}.</p>
-            <p>좌표가 겹치지 않는 독립 검증점: {verificationPoints.independentVerificationPoints.join("·")||"없음"}.
-              {verificationPoints.constructionOverlaps.length>0&&<>구성점과 같은 위치라 독립 검증에서 제외: {verificationPoints.constructionOverlaps.map(item=>`${item.targetPoint}=${item.constructionPoint}`).join("·")}.</>}
-              {" "}이 구분은 좌표로 계산하며 점 이름만으로 판단하지 않습니다. 실행 후 이 시도의 기준은 바뀌지 않습니다.</p>
-            {state.verificationCriteriaMatches && state.verificationCriteria
+            <p>기준점 O/X/Y는 모델 구성에 사용합니다. 이번 확인점 {state.targetPoints.map(point=>point.name).join("·")}은 모델 구성점과 분리해 판정합니다. 실행 후 이 기준은 바뀌지 않습니다.</p>
+            {state.verificationCriteria?.recordId===state.recordId && state.verificationCriteria.planHash===state.run?.planHash
               ? <p role="status">저장된 기준: 위치 ±{state.verificationCriteria.positionToleranceMm} mm · 방향 ±{state.verificationCriteria.rotationToleranceDeg}° · {state.verificationCriteria.rationale}</p>
               : <p>현재 설정을 저장하고 실행 전에 기준을 확인해야 합니다: 위치 ±{state.positionTolerance} mm · 방향 ±{state.rotationTolerance}°.</p>}
             <label className="pcv-field"><span>허용오차를 선택한 근거</span><textarea rows={2} value={state.verificationReasonDraft}
@@ -427,9 +423,7 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
         return <>
           <p className="pcv-lead">예측, 제어기 보고 위치, 종이에서 읽은 잉크 좌표를 구분해서 살펴봅니다.</p>
           {renderPaperGrid()}
-          {state.revalidationScope && <p className={state.revalidationResult === "physical-verified" ? "pcv-success" : "pcv-note"} role="status">
-            {state.revalidationScope}
-          </p>}
+          {state.revalidationScope && <p className="pcv-success" role="status">{state.revalidationScope}</p>}
           <PaperDiagnosisVisual state={state} cause={hypothesisDraft} onCauseChange={setHypothesisDraft} onSaveCause={()=>actions.onSaveHypothesis(hypothesisDraft)}/>
           {state.diagnosis ? <section className="pcv-interpretation" aria-label="비교 해석">
             <div className="pcv-interpretation-head"><StatusPill tone={state.diagnosis.status === "complete" ? "good" : "warn"}>{state.diagnosis.status === "complete" ? "비교 자료 준비됨" : state.diagnosis.status === "invalidated" ? "자료 다시 확인 필요" : "비교 미완료"}</StatusPill>

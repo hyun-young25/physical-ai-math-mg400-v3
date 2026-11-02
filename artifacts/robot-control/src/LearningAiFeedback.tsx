@@ -4,7 +4,7 @@ import type { LearningFeedback, LearningFeedbackInput } from "@workspace/api-cli
 import { getLearningUser } from "./learningClient";
 import { learningRecordContext } from "./learningFramework";
 import { readEvidence, writeEvidence } from "./learningEvidenceStorage";
-import { feedbackHistoryEnvelope, feedbackProblemKey, feedbackVersion, hasFeedbackExecution, privateText, sanitizeFeedbackContext, type FeedbackContext } from "./learningAiContext";
+import { feedbackFailureFromTransport, feedbackHistoryEnvelope, feedbackProblemKey, feedbackVersion, fitFeedbackRequestBudget, hasFeedbackExecution, privateText, sanitizeFeedbackContext, type FeedbackContext } from "./learningAiContext";
 import { updateTutor, unregisterTutor } from "./tutorRegistry";
 import { useTutorMode } from "./tutorMode";
 import { trialTutorFeedback } from "./trialTutorFeedback";
@@ -62,7 +62,8 @@ export function useLearningAi(context:FeedbackContext,editVersion="") {
       history:feedbackHistoryEnvelope(safeSnapshot,
         priorMessages.filter(m=>m.role==="tutor").slice(-3).map(m=>m.text),
         prior.slice(-2).map(x=>({answers:x.prediction.answers,reason:x.prediction.reason})))};
-    return {safeSnapshot,problem,question,prior,priorMessages,conversation,input};
+    const boundedInput=fitFeedbackRequestBudget(input);
+    return {safeSnapshot,problem,question,prior,priorMessages,conversation:boundedInput.conversation??[],input:boundedInput};
   };
   const cancel=()=>{
     const a=active.current;if(!a)return;
@@ -106,12 +107,16 @@ export function useLearningAi(context:FeedbackContext,editVersion="") {
     const timer=setTimeout(()=>abort.abort(),12000);
     let feedback:LearningFeedback;
     let invalidResponse=false;
+    let responseReceived=false;
+    let httpStatus:number|undefined;
     try {
       const visitId=getLearningUser()?.visitId;
       if(!visitId)throw new Error("visit");
       const response=await fetch("/api/learning/feedback",{method:"POST",credentials:"same-origin",
         signal:abort.signal,headers:{"Content-Type":"application/json","X-Learning-Request":"1"},
         body:JSON.stringify({...input,visitId,trigger})});
+      responseReceived=true;
+      httpStatus=response.status;
       if(!response.ok)throw new Error("feedback");
       invalidResponse=true;
       const data=await response.json();
@@ -123,9 +128,10 @@ export function useLearningAi(context:FeedbackContext,editVersion="") {
         ||(data.provider==="openai"&&data.failureReason!==undefined))throw new Error("schema");
       feedback=data;
     }catch {
-      const failureReason=abort.signal.aborted?"timeout":invalidResponse?"invalid_response":"network_error";
+      const failureReason=feedbackFailureFromTransport(abort.signal.aborted,responseReceived||invalidResponse,httpStatus);
       feedback={provider:"rules",status:abort.signal.aborted?"timeout":"unavailable",failureReason,
-        createdAt:new Date().toISOString(),text:`GPT 답변을 받지 못했습니다. ${feedbackFailures[failureReason].label}로 지금은 질문에 답할 수 없습니다. 자동 과제 피드백과 학습 화면은 계속 사용할 수 있습니다.`};
+        ...(httpStatus?{httpStatus}:{}),createdAt:new Date().toISOString(),
+        text:`GPT 답변을 받지 못했습니다. ${feedbackFailures[failureReason].label}${httpStatus?` (HTTP ${httpStatus})`:""}로 지금은 질문에 답할 수 없습니다. 자동 과제 피드백과 학습 화면은 계속 사용할 수 있습니다.`};
     }finally{clearTimeout(timer);}
     if(active.current?.row.id!==row.id)return;
     active.current=null;
