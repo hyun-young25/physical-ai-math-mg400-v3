@@ -501,6 +501,7 @@ export function PaperCoordinateStudyView({
     executionAllowed = true,
     retryStep?: number,
   ) => {
+    const retryExecution = retryStep !== undefined;
     const runPair = paperComparableRunPair(
       state.activeAttempt?.runHistory,
       state.run,
@@ -508,10 +509,7 @@ export function PaperCoordinateStudyView({
       state.frame?.id,
       state.targetSet,
     );
-    const renderRunCard = (
-      title: string,
-      run: PaperRunSnapshot | null,
-    ) => (
+    const renderRunCard = (title: string, run: PaperRunSnapshot | null) => (
       <article className="pcv-run-evidence-card" aria-label={title} key={title}>
         <h4>{title}</h4>
         {run ? (
@@ -545,8 +543,8 @@ export function PaperCoordinateStudyView({
                     key={`${run.id}-${observation.point}-${index}`}
                     data-source={observation.source}
                   >
-                    {observation.point} · {sourceLabel(observation.source)} ·
-                    X {numberLabel(observation.pose.x)} mm · Y{" "}
+                    {observation.point} · {sourceLabel(observation.source)} · X{" "}
+                    {numberLabel(observation.pose.x)} mm · Y{" "}
                     {numberLabel(observation.pose.y)} mm · Z{" "}
                     {numberLabel(observation.pose.z)} mm · R{" "}
                     {numberLabel(observation.pose.r)}°
@@ -556,7 +554,9 @@ export function PaperCoordinateStudyView({
             )}
           </>
         ) : (
-          <p className="pcv-note">이 저장 계획에 연결된 실행 결과가 없습니다.</p>
+          <p className="pcv-note">
+            이 저장 계획에 연결된 실행 결과가 없습니다.
+          </p>
         )}
       </article>
     );
@@ -567,21 +567,32 @@ export function PaperCoordinateStudyView({
       <section
         className="pcv-execution-controls"
         data-testid="paper-execution-controls"
-        aria-label="저장된 계획 실행"
+        data-retry-execution={retryExecution ? "true" : undefined}
+        aria-label={retryExecution ? "수정한 계획 재실행" : "저장된 계획 실행"}
         tabIndex={-1}
       >
         <div className="pcv-execution-controls__heading">
           <div>
-            <h3>저장된 계획 실행</h3>
+            <h3>
+              {retryExecution ? "수정한 계획 다시 실행" : "저장된 계획 실행"}
+            </h3>
             <p>
-              시도 {state.activeAttempt?.attempt ?? "—"} ·{" "}
-              {state.targetSet === "revalidation" ? "수정 후 재확인" : "첫 예측"}{" "}
+              {retryExecution
+                ? `시도 ${state.activeAttempt?.attempt ?? "—"} · 수정 모델과 새 예측`
+                : `시도 ${state.activeAttempt?.attempt ?? "—"} · 첫 예측`}{" "}
               ·{" "}
               {state.activeAttempt?.planHash === state.planHash &&
               !!state.planHash
                 ? "현재 계획과 저장본 일치"
                 : "저장된 예측과 기준을 확인해야 실행 가능"}
             </p>
+            {retryExecution && (
+              <p className="pcv-note">
+                이 화면에서 새 DT 실행과 준비된 경우의 실장비 재실행을
+                시작합니다. 이전 시도는 보존되며 새 결과는 별도 실행으로
+                연결됩니다.
+              </p>
+            )}
           </div>
           <button
             type="button"
@@ -629,7 +640,11 @@ export function PaperCoordinateStudyView({
                 state.running || !executionAllowed || !state.runAvailable
               }
             >
-              {state.running ? "처리 중" : "DT에서 확인"}
+              {state.running
+                ? "처리 중"
+                : retryExecution
+                  ? "DT로 다시 확인"
+                  : "DT에서 확인"}
             </button>
             {!executionAllowed ? (
               <div className="pcv-run-blockers" role="status">
@@ -650,7 +665,9 @@ export function PaperCoordinateStudyView({
                     );
                   }}
                 >
-                  {retryStep === 1 ? "관계 수정으로 이동" : "새 예측 입력으로 이동"}
+                  {retryStep === 1
+                    ? "관계 수정으로 이동"
+                    : "새 예측 입력으로 이동"}
                 </button>
               </div>
             ) : (
@@ -671,8 +688,12 @@ export function PaperCoordinateStudyView({
               }
             >
               {state.currentSource === "mock"
-                ? "모의 브리지에서 시험"
-                : "실장비에서 확인"}
+                ? retryExecution
+                  ? "모의 브리지에서 다시 시험"
+                  : "모의 브리지에서 시험"
+                : retryExecution
+                  ? "실장비로 다시 확인"
+                  : "실장비에서 확인"}
             </button>
             {!executionAllowed ? (
               <div className="pcv-run-blockers" role="status">
@@ -693,7 +714,9 @@ export function PaperCoordinateStudyView({
                     );
                   }}
                 >
-                  {retryStep === 1 ? "관계 수정으로 이동" : "새 예측 입력으로 이동"}
+                  {retryStep === 1
+                    ? "관계 수정으로 이동"
+                    : "새 예측 입력으로 이동"}
                 </button>
               </div>
             ) : dtOnly ? (
@@ -938,8 +961,8 @@ export function PaperCoordinateStudyView({
             </span>
           </div>
           <p className="pcv-note">
-            이동 버튼을 누르고 기존 확인 창에서 승인해야 한 번 이동합니다.
-            화면 이동·저장만으로 장비는 움직이지 않습니다.
+            이동 버튼을 누르고 기존 확인 창에서 승인해야 한 번 이동합니다. 화면
+            이동·저장만으로 장비는 움직이지 않습니다.
           </p>
           <dl className="pcv-tcp-jog__telemetry">
             <div>
@@ -962,9 +985,15 @@ export function PaperCoordinateStudyView({
             <div>
               <dt>연결·보고</dt>
               <dd>
-                {state.tcpJog.connection === "connected" ? "연결됨" : state.tcpJog.connection === "connecting" ? "연결 중" : "연결 안 됨"}
+                {state.tcpJog.connection === "connected"
+                  ? "연결됨"
+                  : state.tcpJog.connection === "connecting"
+                    ? "연결 중"
+                    : "연결 안 됨"}
                 {state.tcpJog.seq !== null ? ` · 보고 ${state.tcpJog.seq}` : ""}
-                {state.tcpJog.ageMs !== null ? ` · ${Math.round(state.tcpJog.ageMs)} ms 전` : ""}
+                {state.tcpJog.ageMs !== null
+                  ? ` · ${Math.round(state.tcpJog.ageMs)} ms 전`
+                  : ""}
                 {state.tcpJog.fresh ? " · 최신" : " · 새 보고 필요"}
               </dd>
             </div>
@@ -1042,9 +1071,9 @@ export function PaperCoordinateStudyView({
           <summary>교사용 선택 대안 · MG400 본체 손가이딩(Unlock)</summary>
           <p>
             이 안내는 학생 과제가 아니며 웹이 Unlock을 실행하거나 잠금 상태를
-            감지하지 않습니다. 공식 MG400 User Guide V1.7은 장비가 활성화되어 있고
-            프로그램을 실행하지 않을 때 전완부 손가이딩 버튼을 길게 눌러 수동
-            위치를 맞춘 뒤, 버튼을 다시 눌러 잠그는 절차를 설명합니다. 별도
+            감지하지 않습니다. 공식 MG400 User Guide V1.7은 장비가 활성화되어
+            있고 프로그램을 실행하지 않을 때 전완부 손가이딩 버튼을 길게 눌러
+            수동 위치를 맞춘 뒤, 버튼을 다시 눌러 잠그는 절차를 설명합니다. 별도
             Quickstart는 버튼을 눌러 해제/복귀하는 방식으로 설명해 조작 표현이
             다릅니다. 설치된 컨트롤러·펌웨어와 맞는 매뉴얼을 따르세요.
           </p>
@@ -1061,17 +1090,17 @@ export function PaperCoordinateStudyView({
             </li>
             <li>
               허용 여부가 확인된 경우에만 해당 장비 매뉴얼의 물리 버튼 절차를
-              따릅니다. MG400 Hardware User Guide는 손가이딩 중 전완부와 장착물을
-              지지하라고 안내합니다.
+              따릅니다. MG400 Hardware User Guide는 손가이딩 중 전완부와
+              장착물을 지지하라고 안내합니다.
             </li>
             <li>
               같은 매뉴얼 절차로 잠금 상태로 되돌린 뒤 표시등/장비 상태가
               손가이딩 종료를 나타내는지 확인하고 손을 뗍니다. 버전별 조작을
-              섞거나 잠금 여부가 불명확한 상태에서 실행하지 마세요.
-              V1.7 안내서의 표시등 표는 파란색 점멸을 손가이딩, 녹색 고정을
+              섞거나 잠금 여부가 불명확한 상태에서 실행하지 마세요. V1.7
+              안내서의 표시등 표는 파란색 점멸을 손가이딩, 녹색 고정을
               활성·프로그램 미실행 상태로 설명합니다. Quickstart는 녹색에서
-              파란색 점멸로 바뀌고 잠금 복귀 뒤에만 명령하라고 설명합니다.
-              다른 버전은 해당 장비 매뉴얼의 표시를 따르세요.
+              파란색 점멸로 바뀌고 잠금 복귀 뒤에만 명령하라고 설명합니다. 다른
+              버전은 해당 장비 매뉴얼의 표시를 따르세요.
             </li>
             <li>
               장비가 안정된 뒤 이 화면에서 같은 연결의 새 TCP 보고를 기다립니다.
@@ -1081,9 +1110,9 @@ export function PaperCoordinateStudyView({
             </li>
           </ol>
           <p>
-            실장비 실행 전에는 기존 연결·User/Tool·장비 준비와 새 시작 위치 확인을
-            다시 완료하세요. 웹은 본체 Unlock 버튼의 상태를 직접 읽지 않으므로,
-            교사가 공식 절차에 따른 잠금 복귀를 확인해야 합니다.
+            실장비 실행 전에는 기존 연결·User/Tool·장비 준비와 새 시작 위치
+            확인을 다시 완료하세요. 웹은 본체 Unlock 버튼의 상태를 직접 읽지
+            않으므로, 교사가 공식 절차에 따른 잠금 복귀를 확인해야 합니다.
           </p>
           <p className="pcv-hand-guiding-guide__sources">
             <a
@@ -1601,9 +1630,7 @@ export function PaperCoordinateStudyView({
                     type="button"
                     className="pcv-button pcv-button--quiet"
                     onClick={() =>
-                      setPredictionPointIndex((index) =>
-                        Math.max(0, index - 1),
-                      )
+                      setPredictionPointIndex((index) => Math.max(0, index - 1))
                     }
                     disabled={predictionIndex === 0}
                   >
@@ -1712,18 +1739,18 @@ export function PaperCoordinateStudyView({
                   </div>
                   {!dtOnly && (
                     <div className="pcv-run-action">
-                  <button
-                    type="button"
-                    className="pcv-button pcv-button--outline"
-                    onClick={actions.onRunPhysical}
-                    disabled={state.running || !state.physicalAvailable}
-                  >
-                    {state.currentSource === "mock"
-                      ? "모의 브리지에서 시험"
-                      : "실장비에서 확인"}
-                  </button>
-                  {merged &&
-                    blockers(state.physicalBlockers, "실장비 실행 전 확인")}
+                      <button
+                        type="button"
+                        className="pcv-button pcv-button--outline"
+                        onClick={actions.onRunPhysical}
+                        disabled={state.running || !state.physicalAvailable}
+                      >
+                        {state.currentSource === "mock"
+                          ? "모의 브리지에서 시험"
+                          : "실장비에서 확인"}
+                      </button>
+                      {merged &&
+                        blockers(state.physicalBlockers, "실장비 실행 전 확인")}
                     </div>
                   )}
                 </div>
@@ -2470,8 +2497,8 @@ export function PaperCoordinateStudyView({
         aria-label="이전 시도와 수정 근거"
       >
         <summary>
-          이전 시도에서 이어짐 · 시도 {state.parentAttempt?.attempt ?? "—"}
-          · 원점 ({state.parentAttempt?.transform?.originX ?? "—"},{" "}
+          이전 시도에서 이어짐 · 시도 {state.parentAttempt?.attempt ?? "—"}·
+          원점 ({state.parentAttempt?.transform?.originX ?? "—"},{" "}
           {state.parentAttempt?.transform?.originY ?? "—"}) mm
         </summary>
         <p>
@@ -2548,9 +2575,7 @@ export function PaperCoordinateStudyView({
                 runFlowAction(() => result);
                 if (result?.target === "predictions") {
                   setGuidedRetryStep(2);
-                  requestAnimationFrame(() =>
-                    focusFlowTarget("predictions"),
-                  );
+                  requestAnimationFrame(() => focusFlowTarget("predictions"));
                 }
               }}
             >
@@ -2585,7 +2610,8 @@ export function PaperCoordinateStudyView({
                   return;
                 }
                 setFlowGuidance({
-                  message: "새 모델과 예측을 저장했습니다. 이제 DT 실행 결과를 확인하세요.",
+                  message:
+                    "새 모델과 예측을 저장했습니다. 이제 DT 실행 결과를 확인하세요.",
                   target: "run",
                 });
                 setGuidedRetryStep(3);
@@ -2605,8 +2631,8 @@ export function PaperCoordinateStudyView({
           tabIndex={-1}
         >
           <p className="pcv-guided-instruction">
-            <strong>지금 할 일</strong> ‘DT에서 확인’을 눌러 새 예측을 다시 실행합니다.
-            DT는 화면 시뮬레이션이며 실측이 아닙니다.
+            <strong>지금 할 일</strong> ‘DT에서 확인’을 눌러 새 예측을 다시
+            실행합니다. DT는 화면 시뮬레이션이며 실측이 아닙니다.
           </p>
           {renderStage(4)}
           {state.run?.status === "completed" && (
@@ -2617,7 +2643,8 @@ export function PaperCoordinateStudyView({
                   {state.diagnosis?.status === "invalidated"
                     ? "비교 자료가 현재 실행과 맞지 않아 무효화되었습니다."
                     : "이 실행에 연결된 유효한 비교 해석 자료가 없습니다."}{" "}
-                  실행 비교와 관측 연결을 확인하세요. 최종 판단은 저장할 수 없습니다.
+                  실행 비교와 관측 연결을 확인하세요. 최종 판단은 저장할 수
+                  없습니다.
                 </p>
               )}
               <details className="pcv-details pcv-optional-analysis">
@@ -2746,7 +2773,9 @@ export function PaperCoordinateStudyView({
       aria-label={`따라하기 ${position}단계: ${title}`}
     >
       <div>
-        <span>따라하기 · {position} / {total}</span>
+        <span>
+          따라하기 · {position} / {total}
+        </span>
         <strong>{title}</strong>
       </div>
       <progress value={position} max={total} aria-label="수업 진행률" />
@@ -2856,7 +2885,9 @@ export function PaperCoordinateStudyView({
                 disabled={state.running}
                 onClick={() =>
                   runFlowAction(() =>
-                    actions.onStageChange((state.stage - 1) as PaperLessonStage),
+                    actions.onStageChange(
+                      (state.stage - 1) as PaperLessonStage,
+                    ),
                   )
                 }
               >
@@ -3087,8 +3118,8 @@ export function PaperCoordinateStudyView({
                   <p>
                     {state.teacherPreparationReady
                       ? "현재 연결의 기준점·높이·위치가 준비되었습니다. 실제 이동은 별도 실행 버튼에서만 시작됩니다."
-                      : state.teacherPreparationBlockers[0] ??
-                        "교사 준비 항목을 확인하세요."}
+                      : (state.teacherPreparationBlockers[0] ??
+                        "교사 준비 항목을 확인하세요.")}
                   </p>
                   <details>
                     <summary>준비 항목과 적용 기준 보기</summary>
