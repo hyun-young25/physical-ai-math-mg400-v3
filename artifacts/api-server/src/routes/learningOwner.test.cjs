@@ -93,6 +93,7 @@ test("only the live HttpOnly visit cookie restores its exact visit; login labels
     query:{visitId:otherVisit},body:{login:"다른학생",visitId:otherVisit}});
   assert.deepEqual(restored.body.user,{id:"10000000-0000-4000-8000-000000000001",role:"student",
     classCode:"",login:"연동검수01",visitId:firstVisit});
+  assert.ok(!JSON.stringify(restored.body).includes(firstProof),"the signed ownership proof is never returned to browser JavaScript");
   const otherRestored=await f.call("/learning/student/restore",undefined,{cookies:{mg400_learning_visit:otherProof}});
   assert.equal(otherRestored.body.user.login,"다른학생");
   assert.equal(otherRestored.body.user.visitId,otherVisit);
@@ -107,10 +108,14 @@ test("missing, expired, and explicitly locked visit cookies cannot restore any v
   const expired=await f.call("/learning/student/restore",undefined,{cookies:{mg400_learning_visit:proof}});
   assert.equal(expired.body.user,null);
   assert.ok(expired.cookiesCleared.includes("mg400_learning_visit"));
-  const absent=await f.call("/learning/student/restore");
+  const absent=await f.call("/learning/student/restore",undefined,{body:{login:"연동검수01"}});
   assert.equal(absent.body.user,null);
-  const locked=await f.call("/learning/lock",undefined,{cookies:{mg400_learning_visit:proof}});
+  const locked=await f.call("/learning/student/lock",undefined,{cookies:{mg400_learning_visit:proof}});
   assert.ok(locked.cookiesCleared.includes("mg400_learning_visit"));
+  assert.ok(!locked.cookiesCleared.includes("mg400_learning"),"student change must not revoke a separate owner session");
+  const ownerLock=await f.call("/learning/lock",undefined,{cookies:{mg400_learning:"OWNER_SESSION"}});
+  assert.ok(ownerLock.cookiesCleared.includes("mg400_learning"));
+  assert.ok(!ownerLock.cookiesCleared.includes("mg400_learning_visit"),"owner lock keeps student visit locking scoped");
 });
 test("missing owner binding stays closed even for a verified account; first visitor never gets elevated",async()=>{
   const f=fixture("");

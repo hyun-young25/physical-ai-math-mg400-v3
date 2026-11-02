@@ -31,7 +31,7 @@ export async function restoreStudentVisit(): Promise<LearningUser | null> {
   setLearningUser(user);return user;
 }
 export async function lockStudentVisit() {
-  await learningRequest("/lock","POST",{});
+  await learningRequest("/student/lock","POST",{});
   if(activeUser?.role==="student")setLearningUser(null);
 }
 export const getOwnerIdentity = () => learningRequest<{user:LearningUser}>("/session");

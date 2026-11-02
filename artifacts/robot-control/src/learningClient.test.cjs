@@ -28,7 +28,7 @@ test("reload restores only the cookie-backed current visit and explicit lock cle
     assert.equal(requests[0].options.credentials,"same-origin");
     assert.equal(requests[0].options.body,undefined);
     await client.lockStudentVisit();
-    assert.equal(requests[1].url,"/api/learning/lock");
+    assert.equal(requests[1].url,"/api/learning/student/lock");
     assert.equal(requests[1].options.method,"POST");
     assert.equal(client.getLearningUser(),null);
     assert.ok(requests.every(({url})=>!/robot|move|motion/i.test(url)),"restoration must never start robot movement");

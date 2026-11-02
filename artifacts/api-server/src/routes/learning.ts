@@ -32,7 +32,10 @@ router.get("/learning/session", async (req, res) => {
 router.post("/learning/lock", async (req,res) => {
   const token: unknown = req.cookies?.[COOKIE];
   if (typeof token === "string") await pool.query("DELETE FROM learning_sessions WHERE token_hash=$1",[digest(token)]);
-  eraseCookie(res); eraseLearningVisitCookie(res); res.json({ok:true});
+  eraseCookie(res); res.json({ok:true});
+});
+router.post("/learning/student/lock", (_req,res) => {
+  eraseLearningVisitCookie(res);res.json({ok:true});
 });
 router.post("/learning/student/enter", async (req, res) => {
   if (!loginLimit(req, res)) return;
@@ -56,6 +59,7 @@ router.post("/learning/student/enter", async (req, res) => {
   }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
 });
 router.get("/learning/student/restore", async (req,res) => {
+  res.set("Cache-Control","no-store");
   const visitId=readLearningVisitProof(req.cookies?.[VISIT_COOKIE]);
   if(!visitId){
     eraseLearningVisitCookie(res);res.json({user:null});return;
