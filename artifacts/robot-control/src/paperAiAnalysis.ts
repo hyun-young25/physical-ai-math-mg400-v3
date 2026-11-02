@@ -1,5 +1,6 @@
 import type { FeedbackContext } from "./learningAiContext";
-import { frameTransformPoint } from "./paperCoordinateStudy";
+import { canonicalPaperVerificationCriteria, classifyPaperVerificationPoints, frameTransformPoint,
+  paperVerificationPointsAreValid } from "./paperCoordinateStudy";
 import type { PaperDiagnosis, PaperGridPoint, PaperTrialRecord } from "./paperCoordinateStudy";
 
 type PointDelta = { dx: number; dy: number; distance: number } | null;
@@ -30,25 +31,29 @@ export function linkedPaperAttempts(current: PaperTrialRecord, records: PaperTri
   return chain;
 }
 
-export function paperAnalysisReady(current: PaperTrialRecord | null, currentPlanHash: string, diagnosis: PaperDiagnosis | null) {
+export function paperAnalysisReady(current: PaperTrialRecord | null, currentPlanHash: string, diagnosis: PaperDiagnosis | null, targets?:PaperGridPoint[]) {
   const run = current?.run;
   return !!current?.frame && !!run && run.status === "completed" && !!diagnosis && diagnosis.status === "complete"
     && current.planHash === currentPlanHash && run.planHash === currentPlanHash && run.frameId === current.frame.id
     && !!run.verificationCriteria && run.verificationCriteria.recordId === current.id
     && run.verificationCriteria.frameId === run.frameId && run.verificationCriteria.planHash === run.planHash
-    && run.verificationCriteria.confirmedAt <= run.startedAt;
+    && run.verificationCriteria.confirmedAt <= run.startedAt
+    && (!targets||paperVerificationPointsAreValid(run.verificationCriteria,targets,true));
 }
 
 export function paperRunComparisons(current: PaperTrialRecord, targets: PaperGridPoint[]) {
   const frame = current.frame;
   const run = current.run;
   if (!frame || !run) return [];
+  const verificationPoints=classifyPaperVerificationPoints(targets);
   return targets.map(target => {
     const transformed = frameTransformPoint(frame, target);
     const command = run.commands.find(entry => entry.point === target.name)?.pose ?? null;
     const observation = run.observations.find(entry => entry.point === target.name) ?? null;
     return {
       point: target.name,
+      isIndependentVerificationPoint: verificationPoints.independentVerificationPoints.includes(target.name),
+      constructionPointOverlap: verificationPoints.constructionOverlaps.find(item=>item.targetPoint===target.name)?.constructionPoint??null,
       targetPaperCm: { x: target.xCm, y: target.yCm },
       targetRobotMm: { x: transformed.x, y: transformed.y, z: transformed.z, r: transformed.r },
       commandRobotMm: command,
@@ -74,6 +79,7 @@ export function paperInkComparisons(current: PaperTrialRecord, targets: PaperGri
   const frame = current.frame;
   const run = current.run;
   if (!frame || !run) return [];
+  const verificationPoints=classifyPaperVerificationPoints(targets);
   return targets.map(target => {
     const reading = current.inkReadings?.find(item => item.point === target.name
       && item.recordId === current.id && item.runId === run.id && item.frameId === frame.id
@@ -85,6 +91,8 @@ export function paperInkComparisons(current: PaperTrialRecord, targets: PaperGri
       ? frameTransformPoint(frame, { xCm: reading.xCm!, yCm: reading.yCm! }) : null;
     return {
       point: target.name,
+      isIndependentVerificationPoint: verificationPoints.independentVerificationPoints.includes(target.name),
+      constructionPointOverlap: verificationPoints.constructionOverlaps.find(item=>item.targetPoint===target.name)?.constructionPoint??null,
       runId: run.id,
       recordId: current.id,
       frameId: frame.id,
@@ -107,6 +115,9 @@ export function paperInkComparisons(current: PaperTrialRecord, targets: PaperGri
 
 function linkedSummary(record: PaperTrialRecord) {
   const run=record.run;
+  const priorTargets=(record.predictions??[]).map(point=>({name:point.name,xCm:point.xCm,yCm:point.yCm}));
+  const criteria=run?.verificationCriteria&&priorTargets.length
+    ?canonicalPaperVerificationCriteria(run.verificationCriteria,priorTargets):run?.verificationCriteria??null;
   const displayedFeedback=(record.aiAnalyses??[])
     .filter(analysis=>!!analysis.displayedAt&&analysis.recordId===record.id&&!!run
       &&analysis.runId===run.id&&analysis.planHash===run.planHash&&analysis.source===run.source)
@@ -150,7 +161,7 @@ function linkedSummary(record: PaperTrialRecord) {
       endedAt: run.endedAt,
       commands: run.commands,
       observations: run.observations,
-      verificationCriteria: run.verificationCriteria ?? null,
+      verificationCriteria: criteria,
     } : null,
     runHistory: (record.runHistory ?? []).map(previousRun => ({
       id: previousRun.id, planHash: previousRun.planHash, frameId: previousRun.frameId,
@@ -179,6 +190,7 @@ export function paperFeedbackContext(current: PaperTrialRecord, records: PaperTr
   const comparisons = paperRunComparisons(current, targets);
   const samples = current.referenceSamples ?? current.frame?.samples ?? [];
   const run = current.run;
+  const criteria=run?.verificationCriteria?canonicalPaperVerificationCriteria(run.verificationCriteria,targets):null;
   const diagnosis = current.diagnosis;
   const targetAndFrame = {
     task: "paper-coordinate",
@@ -201,6 +213,7 @@ export function paperFeedbackContext(current: PaperTrialRecord, records: PaperTr
     task: "paper-coordinate",
     condition: JSON.stringify({
       ...targetAndFrame,
+      verificationPoints: classifyPaperVerificationPoints(targets),
       analysisScope: "현재 시도와 직접 연결된 이전 시도만 포함합니다.",
       runId: run?.id ?? null,
       planHash: run?.planHash ?? null,
@@ -241,9 +254,9 @@ export function paperFeedbackContext(current: PaperTrialRecord, records: PaperTr
       firstMismatch: diagnosis?.firstMismatch ?? null,
       question: diagnosis?.question ?? null,
       why: diagnosis?.why ?? null,
-      toleranceMm: run?.verificationCriteria?.positionToleranceMm ?? diagnosis?.toleranceMm ?? null,
-      rotationToleranceDeg: run?.verificationCriteria?.rotationToleranceDeg ?? null,
-      verificationCriteria: run?.verificationCriteria ?? null,
+      toleranceMm: criteria?.positionToleranceMm ?? diagnosis?.toleranceMm ?? null,
+      rotationToleranceDeg: criteria?.rotationToleranceDeg ?? null,
+      verificationCriteria: criteria,
       interpretation: "규칙 기반 수치 비교이며 학생의 인지 원인을 확정하거나 채점한 결과가 아닙니다.",
     }),
     execution: JSON.stringify(run ? [{
@@ -261,7 +274,7 @@ export function paperFeedbackContext(current: PaperTrialRecord, records: PaperTr
       comparisons,
       inkReadings: (current.inkReadings ?? []).filter(reading => reading.recordId === current.id && reading.runId === run.id && reading.frameId === current.frame?.id),
       inkComparisons: paperInkComparisons(current, targets),
-      verificationCriteria: run.verificationCriteria ?? null,
+      verificationCriteria: criteria,
       diagnosisMethod: diagnosis?.method ?? "rule-based",
       linkedPreviousAttemptId: current.parentAttemptId,
       revisionReason: current.revisionReason ?? null,
@@ -275,7 +288,8 @@ export function paperFeedbackContext(current: PaperTrialRecord, records: PaperTr
         frameId: previousRun.frameId, source: previousRun.source, status: previousRun.status,
         startedAt: previousRun.startedAt, endedAt: previousRun.endedAt ?? null,
         commands: previousRun.commands, observations: previousRun.observations,
-        verificationCriteria: previousRun.verificationCriteria ?? null,
+        verificationCriteria: previousRun.verificationCriteria
+          ?canonicalPaperVerificationCriteria(previousRun.verificationCriteria,targets):null,
       })),
     }] : []),
     support: current.support === "challenge" ? "challenge" : "guided",

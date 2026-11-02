@@ -5,7 +5,27 @@ new Function("exports","require",ts.transpileModule(fs.readFileSync(target,"utf8
   compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS},
 }).outputText)(moduleExports,name=>{
   assert.equal(name,"./paperCoordinateStudy");
-  return {frameTransformPoint:(frame,point)=>{
+  const classifyPaperVerificationPoints=points=>{
+    const construction=[{name:"O",xCm:0,yCm:0},{name:"X",xCm:10,yCm:0},{name:"Y",xCm:0,yCm:10}];
+    const overlaps=points.flatMap(point=>{const match=construction.find(row=>Math.hypot(point.xCm-row.xCm,point.yCm-row.yCm)<=1e-6);
+      return match?[{targetPoint:point.name,constructionPoint:match.name}]:[];});
+    const excluded=new Set(overlaps.map(row=>row.targetPoint));
+    return {currentVerificationPoints:points.map(point=>point.name),
+      independentVerificationPoints:points.filter(point=>!excluded.has(point.name)).map(point=>point.name),
+      constructionOverlaps:overlaps};
+  };
+  return {classifyPaperVerificationPoints,
+    canonicalPaperVerificationCriteria:(criteria,points)=>({...criteria,modelConstructionPoints:["O","X","Y"],...classifyPaperVerificationPoints(points)}),
+    paperVerificationPointsAreValid:(criteria,points,allowLegacy=false)=>{
+      const expected=classifyPaperVerificationPoints(points);
+      const current=JSON.stringify(criteria.currentVerificationPoints)===JSON.stringify(expected.currentVerificationPoints)
+        &&JSON.stringify(criteria.independentVerificationPoints)===JSON.stringify(expected.independentVerificationPoints)
+        &&JSON.stringify(criteria.constructionOverlaps)===JSON.stringify(expected.constructionOverlaps);
+      const legacy=allowLegacy&&criteria.currentVerificationPoints===undefined&&criteria.constructionOverlaps===undefined
+        &&JSON.stringify(criteria.independentVerificationPoints)===JSON.stringify(points.map(point=>point.name));
+      return current||legacy;
+    },
+    frameTransformPoint:(frame,point)=>{
     const o=frame.samples.find(s=>s.point==="O").pose,x=frame.samples.find(s=>s.point==="X").pose,y=frame.samples.find(s=>s.point==="Y").pose;
     return {x:o.x+(x.x-o.x)*point.xCm/10+(y.x-o.x)*point.yCm/10,
       y:o.y+(x.y-o.y)*point.xCm/10+(y.y-o.y)*point.yCm/10,z:o.z,r:o.r};
@@ -52,6 +72,23 @@ test("analysis is only ready for a complete diagnosis bound to the current plan 
   assert.equal(moduleExports.paperAnalysisReady({...current,planHash:"old-plan"},"plan-current",{status:"complete"}),false);
   assert.equal(moduleExports.paperAnalysisReady({...current,run:{...run,frameId:"old-frame"}},"plan-current",{status:"complete"}),false);
   assert.equal(moduleExports.paperAnalysisReady(current,"plan-current",{status:"incomplete"}),false);
+});
+
+test("legacy overlap criteria are corrected in the current AI evidence and never counted as independent",()=>{
+  const points=[{name:"P1",xCm:0,yCm:0},{name:"P2",xCm:4,yCm:6}];
+  const legacy={...criteria(),independentVerificationPoints:["P1","P2"]};
+  const oldRecord={...current,run:{...run,verificationCriteria:legacy}};
+  assert.equal(moduleExports.paperAnalysisReady(oldRecord,"plan-current",{status:"complete"},points),true);
+  const packet=JSON.parse(moduleExports.paperFeedbackContext(oldRecord,[oldRecord],points).execution)[0];
+  assert.deepEqual(packet.verificationCriteria.currentVerificationPoints,["P1","P2"]);
+  assert.deepEqual(packet.verificationCriteria.independentVerificationPoints,["P2"]);
+  assert.deepEqual(packet.verificationCriteria.constructionOverlaps,[{targetPoint:"P1",constructionPoint:"O"}]);
+  assert.equal(packet.comparisons.find(row=>row.point==="P1").isIndependentVerificationPoint,false);
+  assert.equal(packet.comparisons.find(row=>row.point==="P1").constructionPointOverlap,"O");
+  const mislabeledNew={...oldRecord,run:{...oldRecord.run,verificationCriteria:{
+    ...legacy,currentVerificationPoints:["P1","P2"],constructionOverlaps:[],
+  }}};
+  assert.equal(moduleExports.paperAnalysisReady(mislabeledNew,"plan-current",{status:"complete"},points),false);
 });
 
 test("comparison data keeps target, command and report pairs distinct and labels mock evidence",()=>{

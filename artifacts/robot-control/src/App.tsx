@@ -199,7 +199,7 @@ function DashboardPanel({
             ✕
           </button>
         </div>
-        <nav className="flex flex-col py-2 flex-1 min-h-0 overflow-y-auto" aria-label="학습 목차">
+        <nav id="learning-navigation-drawer" className="flex flex-col py-2 flex-1 min-h-0 overflow-y-auto" aria-label="학습 목차">
           {/* Home / 제어 패널 */}
           <button
             onClick={onGoHome}
@@ -2038,7 +2038,7 @@ function AppInner() {
             fontFamily:"'Pretendard','Apple SD Gothic Neo','Noto Sans KR',sans-serif",
             whiteSpace:"nowrap", marginRight:2,
           }}>피지컬 AI기반 수학학습 콘텐츠</span>
-          <button onClick={() => setDashboardOpen(open => !open)} style={{
+          <button aria-label="학습 목차 열기/닫기" aria-expanded={dashboardOpen} aria-controls="learning-navigation-drawer" onClick={() => setDashboardOpen(open => !open)} style={{
             background:"rgba(255,255,255,0.08)", color:"#fff",
             border:"1px solid rgba(255,255,255,0.14)", borderRadius:5,
             padding:"4px 10px", fontSize:14, cursor:"pointer",

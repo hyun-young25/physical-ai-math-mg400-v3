@@ -39,6 +39,8 @@ export function ExecutionAiAnalysis({ ai, scopeKey, attemptLabel, sourceLabel, a
   }, [scopeKey]);
 
   const question = `종이·도형 과제 ${attemptLabel}의 이번 실행자료를 근거로 검토해 주세요. 학생의 저장된 풀이와 목표-명령 차이, 명령-관측 차이를 구분하고, 출처가 실장비·DT·모의 중 무엇인지 밝히세요. 가능한 설명과 근거, 다음에 확인할 질문 하나를 제시하되 원인을 확정하거나 채점하지 마세요.`;
+  let previewText:string|null=null;
+  try{previewText=JSON.stringify(ai.previewRequest(question),null,2)??null;}catch{/* Keep the lesson usable if an optional preview cannot be formed. */}
   const resultMatches = !!request && request.scopeKey === scopeKey && request.mode === ai.mode
     && ai.feedbackQuestion === request.question && !!ai.feedback && !ai.pending;
   const resultId = resultMatches && ai.feedback
@@ -114,7 +116,9 @@ export function ExecutionAiAnalysis({ ai, scopeKey, attemptLabel, sourceLabel, a
       <details className="execution-ai-evidence">
         <summary>실제 전송 전 근거 미리보기</summary>
         <p>표시된 JSON은 분석 버튼이 같은 실행에서 구성하는 정제된 분석 입력입니다. 서버가 관리하는 방문 식별자와 요청 종류는 개인정보 보호를 위해 여기서 제외되며, 서버도 이 입력을 다시 개인정보 제거합니다.</p>
-        <pre>{JSON.stringify(ai.previewRequest(question), null, 2)}</pre>
+        {previewText
+          ? <pre>{previewText}</pre>
+          : <p role="status">요청 미리보기를 만들지 못했습니다. 저장된 학습 기록은 유지되며 화면을 계속 사용할 수 있습니다.</p>}
       </details>
     </section>
   );

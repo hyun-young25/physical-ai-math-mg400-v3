@@ -15,7 +15,8 @@ import { PaperCoordinateStudyView } from "./PaperCoordinateStudyView";
 import type { PaperCoordinateStudyViewState, PaperLessonStage } from "./paperCoordinateViewModel";
 import {
   PAPER_ANGLE_TOLERANCE_DEG, PAPER_GRID_SIZE_CM, PAPER_MEASURE_TOLERANCE_MM, PAPER_SAMPLE_MAX_AGE_MS, recoverInterruptedPaperRuns,
-  PAPER_TARGETS, comparePaperPredictionToFrame, diagnosePaperRun, frameInversePoint, frameTransformPoint,
+  PAPER_TARGETS, classifyPaperVerificationPoints, paperVerificationPointsMatch,
+  comparePaperPredictionToFrame, diagnosePaperRun, frameInversePoint, frameTransformPoint,
   getPaperFrameAngleDegrees, makePaperPlanHash, studentTransformPoint, validatePaperFrame, validatePaperRunForDiagnosis, paperRevalidationAssessment,
 } from "./paperCoordinateStudy";
 import type {
@@ -449,7 +450,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
       const criteria: PaperVerificationCriteria = {
         recordId: active.id, frameId: active.frame.id, planHash: active.planHash, targetSet: active.targetSet,
         modelConstructionPoints: ["O", "X", "Y"],
-        independentVerificationPoints: targetPoints.map(point => point.name),
+        ...classifyPaperVerificationPoints(targetPoints),
         positionToleranceMm: position, rotationToleranceDeg: rotation,
         rationale: verificationReasonDraft.trim(), confirmedAt: Date.now(),
       };
@@ -718,7 +719,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
       if (!criteria || criteria.recordId !== active.id || criteria.frameId !== active.frame.id
         || criteria.planHash !== planHash || criteria.targetSet !== active.targetSet
         || criteria.confirmedAt > now || !criteria.rationale.trim()
-        || JSON.stringify(criteria.independentVerificationPoints) !== JSON.stringify(targetPoints.map(point=>point.name))) {
+        || !paperVerificationPointsMatch(criteria,targetPoints)) {
         setPageError("이 시도의 독립 검증점과 허용오차를 실행 전에 확인·저장해야 합니다."); setStage(4); return;
       }
       const runningRecord: PaperRunSnapshot = {
@@ -799,7 +800,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     if (!criteria || criteria.recordId !== active.id || criteria.frameId !== active.frame.id
       || criteria.planHash !== planHash || criteria.targetSet !== active.targetSet
       || criteria.confirmedAt > Date.now() || !criteria.rationale.trim()
-      || JSON.stringify(criteria.independentVerificationPoints) !== JSON.stringify(targetPoints.map(point=>point.name))) {
+      || !paperVerificationPointsMatch(criteria,targetPoints)) {
       setPageError("이 시도의 독립 검증점과 허용오차를 실행 전에 확인·저장해야 합니다."); setStage(4); return;
     }
     const runningRecord: PaperRunSnapshot = {
@@ -912,7 +913,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     && active.verificationCriteria.recordId===active.id && active.verificationCriteria.frameId===active.frame.id
     && active.verificationCriteria.planHash===active.planHash && active.verificationCriteria.targetSet===active.targetSet
     && !!active.verificationCriteria.rationale.trim()
-    && JSON.stringify(active.verificationCriteria.independentVerificationPoints)===JSON.stringify(targetPoints.map(point=>point.name));
+    && paperVerificationPointsMatch(active.verificationCriteria,targetPoints);
   const dtBlockers=[...commonBlockers];
   if(!criteriaMatches)dtBlockers.push({message:"이번 실행의 독립 검증점과 위치·방향 허용오차를 실행 전에 확인·저장하세요.",target:"prediction"});
   if(hardwareConnected)dtBlockers.push({message:"다른 실장비 연결이 활성화되어 DT 실행이 잠겼습니다.",target:"connection"});
@@ -1000,7 +1001,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
   const shownDiagnosis = samePlan&&frame&&run?.status==="completed"
     ?state.diagnosis??diagnosePaperRun(run,frame,planHash,{transform:active?.transform,targets:targetPoints,toleranceMm:active?.diagnosisToleranceMm??practice.setupDraft.positionTolerance,detectOriginMissing:isMergedPaper(level),support:attemptSupport}):null;
   if (isMergedPaper(level)) state.diagnosis = shownDiagnosis;
-  const analysisReady = paperAnalysisReady(active, planHash, shownDiagnosis) && samePlan;
+  const analysisReady = paperAnalysisReady(active, planHash, shownDiagnosis,targetPoints) && samePlan;
   state.recordId = active?.id ?? null;
   state.attempt = active?.attempt ?? null;
   state.analysisReady = analysisReady;

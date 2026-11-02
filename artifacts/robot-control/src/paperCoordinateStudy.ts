@@ -66,7 +66,9 @@ export type PaperVerificationCriteria = {
   planHash: string;
   targetSet: PaperTargetSet;
   modelConstructionPoints: string[];
+  currentVerificationPoints: string[];
   independentVerificationPoints: string[];
+  constructionOverlaps: { targetPoint: string; constructionPoint: PaperPointName }[];
   positionToleranceMm: number;
   rotationToleranceDeg: number;
   rationale: string;
@@ -219,6 +221,46 @@ export const PAPER_TARGETS: Record<PaperTargetSet, PaperGridPoint[]> = {
   ],
 };
 
+export function classifyPaperVerificationPoints(targets:PaperGridPoint[]) {
+  const construction: {name:PaperPointName;xCm:number;yCm:number}[]=[
+    {name:"O",xCm:0,yCm:0},
+    {name:"X",xCm:PAPER_GRID_SIZE_CM,yCm:0},
+    {name:"Y",xCm:0,yCm:PAPER_GRID_SIZE_CM},
+  ];
+  const constructionOverlaps=targets.flatMap(target=>{
+    const match=construction.find(point=>Math.hypot(target.xCm-point.xCm,target.yCm-point.yCm)<=1e-6);
+    return match?[{targetPoint:target.name,constructionPoint:match.name}]:[];
+  });
+  const overlapped=new Set(constructionOverlaps.map(row=>row.targetPoint));
+  return {
+    currentVerificationPoints:targets.map(point=>point.name),
+    independentVerificationPoints:targets.filter(point=>!overlapped.has(point.name)).map(point=>point.name),
+    constructionOverlaps,
+  };
+}
+
+export function paperVerificationPointsMatch(criteria:PaperVerificationCriteria,targets:PaperGridPoint[]) {
+  const expected=classifyPaperVerificationPoints(targets);
+  return JSON.stringify(criteria.currentVerificationPoints)===JSON.stringify(expected.currentVerificationPoints)
+    &&JSON.stringify(criteria.independentVerificationPoints)===JSON.stringify(expected.independentVerificationPoints)
+    &&JSON.stringify(criteria.constructionOverlaps)===JSON.stringify(expected.constructionOverlaps);
+}
+
+export function paperVerificationPointsAreValid(criteria:PaperVerificationCriteria,targets:PaperGridPoint[],allowLegacy=false) {
+  if(paperVerificationPointsMatch(criteria,targets))return true;
+  // Old saved trials listed every point as independent. Accept their immutable
+  // run for viewing, but always derive the effective classification from its
+  // actual coordinates; new runs must save the corrected fields.
+  return allowLegacy
+    && criteria.currentVerificationPoints===undefined
+    && criteria.constructionOverlaps===undefined
+    && JSON.stringify(criteria.independentVerificationPoints)===JSON.stringify(targets.map(point=>point.name));
+}
+
+export function canonicalPaperVerificationCriteria(criteria:PaperVerificationCriteria,targets:PaperGridPoint[]):PaperVerificationCriteria {
+  return {...criteria,modelConstructionPoints:["O","X","Y"],...classifyPaperVerificationPoints(targets)};
+}
+
 const finite = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n);
 const pointDistance = (a: LessonPose, b: LessonPose) => Math.hypot(a.x - b.x, a.y - b.y);
 const normalizeAngle = (value: number) => ((value % 360) + 360) % 360;
@@ -336,8 +378,8 @@ export function validatePaperRunForDiagnosis(run: PaperRunSnapshot, frame: Paper
     || !Number.isFinite(criteria.positionToleranceMm) || criteria.positionToleranceMm <= 0
     || !Number.isFinite(criteria.rotationToleranceDeg) || criteria.rotationToleranceDeg <= 0
     || !criteria.rationale.trim()
-    || JSON.stringify(criteria.independentVerificationPoints) !== JSON.stringify(targets.map(point => point.name))
-    || criteria.independentVerificationPoints.some(point => criteria.modelConstructionPoints.includes(point))))
+    || JSON.stringify(criteria.modelConstructionPoints)!==JSON.stringify(["O","X","Y"])
+    || !paperVerificationPointsAreValid(criteria,targets,true)))
     return "실행 전에 확인한 독립 검증 기준과 현재 실행이 일치하지 않습니다.";
   let previousSeq = run.startSequence ?? -1;
   for (let i = 0; i < run.observations.length; i++) {

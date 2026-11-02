@@ -67,45 +67,59 @@ export function squareMeasurementLinkedToMission(
   return typeof missionDetail.planKey==="string"&&measurementDetail.planKey===missionDetail.planKey
     &&measurementDetail.runId===measurement.id&&measurementDetail.prevalidationRunId===mission.id;
 }
-function compactPaperHistoryAttempt(value:unknown) {
+function compactHistoryValue(value:unknown,depth=0,maxText=900):unknown {
+  if(depth>6)return "[이전 세부 이력은 앱에 보존됨]";
+  if(typeof value==="string")return privateText(value).slice(0,maxText);
+  if(value===null||typeof value==="number"||typeof value==="boolean")return value;
+  if(Array.isArray(value))return value.slice(-4).map(item=>compactHistoryValue(item,depth+1,maxText));
+  if(value&&typeof value==="object")return Object.fromEntries(Object.entries(value as Record<string,unknown>)
+    .filter(([key,item])=>!isPrivateKey(key,item,value)).slice(0,30)
+    .map(([key,item])=>[key,compactHistoryValue(item,depth+1,maxText)]));
+  return undefined;
+}
+function compactPaperHistoryAttempt(value:unknown,maxText=900) {
   if(!value||typeof value!=="object"||Array.isArray(value))return value;
   const row=value as Record<string,unknown>;
   const frame=row.frame&&typeof row.frame==="object"?row.frame as Record<string,unknown>:null;
   const run=row.run&&typeof row.run==="object"?row.run as Record<string,unknown>:null;
   const diagnosis=row.diagnosis&&typeof row.diagnosis==="object"?row.diagnosis as Record<string,unknown>:null;
-  return {
+  return compactHistoryValue({
     ...pickKeys(row,paperHistoryKeys),
-    ...(frame?{frame:{...pickKeys(frame,["id","source","coordinateSystem","user","tool","capturedAt","samples"])}}:{}),
-    ...(run?{run:{...pickKeys(run,["id","planHash","frameId","source","status","startedAt","endedAt","commands","observations","verificationCriteria"])}}:{}),
-    ...(Array.isArray(row.runHistory)?{runHistory:row.runHistory.slice(-2)}:{}),
-    ...(diagnosis?{diagnosis:{...pickKeys(diagnosis,["method","status","candidate","evidence","predictionEvidence","taskEvidence","firstMismatch","question","why"])}}:{}),
-  };
+    ...(frame?{frame:pickKeys(frame,["id","source","coordinateSystem","user","tool","capturedAt","samples"])}:{}),
+    ...(run?{run:pickKeys(run,["id","planHash","frameId","source","status","startedAt","endedAt","commands","observations","verificationCriteria"])}:{}),
+    ...(Array.isArray(row.runHistory)?{runHistory:row.runHistory.slice(-1)}:{}),
+    ...(diagnosis?{diagnosis:pickKeys(diagnosis,["method","status","candidate","evidence","predictionEvidence","taskEvidence","firstMismatch","question","why"])}:{}),
+  },0,maxText);
 }
 
-/** Build a parseable follow-up envelope without cutting serialized JSON mid-value. */
+/** Keep recent mathematical evidence within the provider budget without truncating JSON or stored history. */
 export function feedbackHistoryEnvelope(context:Pick<FeedbackContext,"task"|"history">,providedHints:string[],recentAnswers:unknown[]) {
   let attempts:unknown;
   try{attempts=JSON.parse(context.history);}catch{attempts=[];}
-  if(context.task==="paper-coordinate"&&Array.isArray(attempts))
-    attempts=attempts.slice(-1).map(compactPaperHistoryAttempt);
-  let hints=providedHints.slice(-3),answers=recentAnswers.slice(-2);
+  if(Array.isArray(attempts))attempts=context.task==="paper-coordinate"
+    ?attempts.slice(-2).map(value=>compactPaperHistoryAttempt(value))
+    :attempts.slice(-2).map(value=>compactHistoryValue(value));
+  let hints=providedHints.slice(-3).map(value=>compactHistoryValue(value,0,500));
+  let answers=recentAnswers.slice(-2).map(value=>compactHistoryValue(value));
   const build=()=>JSON.stringify({attempts:JSON.stringify(attempts),providedHints:hints,recentAnswers:answers});
   let result=build();
+  while(result.length>6000&&Array.isArray(attempts)&&attempts.length>1){attempts=attempts.slice(-1);result=build();}
   while(result.length>6000&&hints.length){hints=hints.slice(1);result=build();}
   while(result.length>6000&&answers.length){answers=answers.slice(1);result=build();}
-  // Paper history already contains the direct parent's displayed feedback and
-  // revision. If metadata still exceeds the API contract, preserve that record
-  // and its run while dropping duplicated outer summaries rather than truncating JSON.
-  if(result.length>6000&&context.task==="paper-coordinate"&&Array.isArray(attempts)){
-    attempts=attempts.map(value=>{
-      if(!value||typeof value!=="object"||Array.isArray(value))return value;
-      const row=value as Record<string,unknown>;
-      const diagnosis=row.diagnosis&&typeof row.diagnosis==="object"?row.diagnosis as Record<string,unknown>:null;
-      return diagnosis?{...row,diagnosis:pickKeys(diagnosis,["method","status","candidate","firstMismatch","question","why"])}:row;
-    });
-    result=build();
-  }
-  if(result.length>6000)throw new Error("Feedback history exceeds the API limit.");
+  if(result.length>6000&&context.task==="paper-coordinate"&&Array.isArray(attempts))
+    attempts=attempts.slice(-1).map(value=>compactPaperHistoryAttempt(value,350));
+  else if(result.length>6000&&Array.isArray(attempts))
+    attempts=attempts.slice(-1).map(value=>compactHistoryValue(value,0,350));
+  hints=hints.slice(-1).map(value=>compactHistoryValue(value,0,250));
+  answers=answers.slice(-1).map(value=>compactHistoryValue(value,0,350));
+  result=build();
+  if(result.length>6000&&context.task==="paper-coordinate"&&Array.isArray(attempts))
+    attempts=attempts.slice(-1).map(value=>compactPaperHistoryAttempt(value,200));
+  if(result.length>6000&&Array.isArray(attempts))
+    attempts=attempts.slice(-1).map(value=>compactHistoryValue(value,0,100));
+  result=build();
+  // An extreme unknown payload cannot break the screen; stored records remain untouched.
+  if(result.length>6000)result=JSON.stringify({attempts:JSON.stringify([]),providedHints:[],recentAnswers:[]});
   return result;
 }
 function problemOnly(v:unknown):unknown {

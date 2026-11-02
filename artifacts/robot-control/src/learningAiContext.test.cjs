@@ -99,6 +99,34 @@ test("paper follow-up history stays valid and retains displayed feedback, revisi
   assert.equal(attempts[0].runHistory[0].id,"prevalidation-dt");
   assert.equal(attempts[0].inkReadings[0].source,"student-manual-ink");
 });
+test("very long multi-attempt paper history stays parseable and keeps the latest linked math evidence",()=>{
+  const record={
+    attempt:1,level:"advanced-paper-dt",targetSet:"initial",status:"revised",dataSource:"dt",
+    transform:{originX:"190",originY:"-60",millimetersPerCentimeter:"10",rotationDegrees:"0",explanation:"x = 190 + 10u; y = -60 + 10v"},
+    predictions:[{name:"P1",xCm:0,yCm:0,robotX:"190",robotY:"-60"}],
+    studentHypothesis:"검증용 가설",revisionReason:"축과 원점을 다시 계산",
+    previouslyDisplayedFeedback:[{provider:"openai",status:"provided",text:"왜 원점과 P1이 같은지 좌표로 확인해 보세요."}],
+    run:{source:"dt",status:"completed",observations:[{point:"P1",pose:{x:190,y:-60,z:50,r:0}}]},
+    runHistory:Array.from({length:20},(_,i)=>({id:`old-${i}`,source:"dt",status:"completed",observations:[{point:"P1",pose:{x:i,y:i,z:50,r:0}}]})),
+    inkReadings:Array.from({length:20},(_,i)=>({point:`P${i}`,unit:"cm",source:"student-manual-ink",rawX:String(i),rawY:String(i)})),
+    unusedDiagnosticPayload:"이전 기록 원문 ".repeat(2000),
+  };
+  const source=JSON.stringify(Array.from({length:8},(_,i)=>({...structuredClone(record),attempt:i+1,
+    studentHypothesis:`시도 ${i+1}의 수학적 가설`,revisionReason:`시도 ${i+1}의 수정 이유`})));
+  const before=source;
+  const encoded=feedbackHistoryEnvelope({task:"paper-coordinate",history:source},["힌트 ".repeat(1000)],["답 ".repeat(1000)]);
+  assert.ok(encoded.length<=6000);
+  const envelope=JSON.parse(encoded),attempts=JSON.parse(envelope.attempts);
+  assert.ok(attempts.length>=1&&attempts.length<=2);
+  const latest=attempts.at(-1);
+  assert.equal(latest.attempt,8);
+  assert.equal(latest.studentHypothesis,"시도 8의 수학적 가설");
+  assert.equal(latest.revisionReason,"시도 8의 수정 이유");
+  assert.match(latest.transform.explanation,/x = 190/);
+  assert.equal(latest.previouslyDisplayedFeedback[0].provider,"openai");
+  assert.equal(latest.run.observations[0].pose.x,190);
+  assert.equal(source,before,"compaction must not mutate or rewrite the saved history");
+});
 test("unsaved answer and explanation edits are current context, not a new verdict or overwritten prediction",()=>{
   const record=structuredClone(original);
   const c=makeFeedbackContext(input({record,reviewDraft:{z:"55"},reasonRevision:"새 기준으로 생각 중",
