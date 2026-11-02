@@ -563,7 +563,16 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
       </main>
       </RevisionEditingLayout>
 
-      <div className="pcv-button-row"><button className="pcv-button" disabled={state.running||state.stage===1} onClick={()=>actions.onStageChange((state.stage-1) as PaperLessonStage)}>이전</button><button className="pcv-button pcv-button--primary" disabled={state.running||state.stage===7} onClick={()=>actions.onStageChange((state.stage+1) as PaperLessonStage)}>다음 단계</button></div>
+      <div className="pcv-button-row pcv-button-row--stage-nav">
+        <button className="pcv-button" disabled={state.running||state.stage===1} onClick={()=>actions.onStageChange((state.stage-1) as PaperLessonStage)}>이전</button>
+        <button className="pcv-button pcv-button--primary" disabled={state.running||state.stage===7} onClick={()=>navigateToStage((state.stage+1) as PaperLessonStage)}>다음 단계</button>
+        {navigationBlocker && <div className="pcv-navigation-guidance" role="status" aria-live="polite">
+          <p>{navigationBlocker.message}</p>
+          <button type="button" className="pcv-button" onClick={()=>focusNavigationTarget(navigationBlocker.target)}>
+            {navigationBlocker.target === "hypothesis" ? "생각 저장 입력칸으로 이동" : "비교 자료로 이동"}
+          </button>
+        </div>}
+      </div>
       </div></div>
       <details className="pcv-details pcv-records"><summary>시도 연결 기록 · {state.records.length}회</summary>
         {state.records.map(r=><article key={r.id}><h3>시도 {r.attempt} · {sourceLabel(r.run?.source??r.dataSource)}</h3><p>{isPaperRectangle(r.level)?"사각형 P1/P2/P3/P4":r.targetSet==="initial"?"첫 목표 A/B/C":"새 목표 D/E/F"} · 이전 시도 {state.records.find(p=>p.id===r.parentAttemptId)?.attempt??"없음"}</p><p>관측 {r.run?.observations.length??0}개 · {r.diagnosis?.candidate??"비교 전"}</p><p>가설: {r.studentHypothesis??"작성 전"} · 수정: {r.revisionReason??"작성 전"}</p><p>{r.revalidation?.scope??"재검증 완료 전"}</p></article>)}

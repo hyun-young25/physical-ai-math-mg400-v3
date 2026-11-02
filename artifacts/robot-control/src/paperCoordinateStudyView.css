@@ -31,6 +31,8 @@
 .pcv-navigation-guidance { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:14px 0 8px; padding:12px 14px; color:#713f12; background:#fff7e8; border:1px solid #e9c98d; border-radius:8px; }
 .pcv-navigation-guidance p { margin:0; line-height:1.5; }
 .pcv-navigation-guidance .pcv-button { flex:0 0 auto; }
+.pcv-button-row--stage-nav { flex-wrap:wrap; align-items:stretch; }
+.pcv-button-row--stage-nav > .pcv-navigation-guidance { flex:1 1 360px; margin:0; }
 
 .paper-coordinate-view *,
 .paper-coordinate-view *::before,

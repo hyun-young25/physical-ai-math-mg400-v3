@@ -149,6 +149,7 @@ async function main() {
     assert.match(await view.innerText(), /DT · 실측 아님|가상 DT/);
     await view.getByRole("button", { name: "실행 전 기준 저장으로", exact: true }).click();
     await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "실행 전 검증 기준");
+    await view.getByLabel("허용오차를 선택한 근거", { exact: true }).fill("시연용 가상 DT에서 사전에 정한 위치·방향 허용 범위입니다.");
     await click("이 시도의 실행 전 기준 저장");
     await view.getByText(/저장된 기준: 위치 ±/, { exact: false }).waitFor();
     assert.equal(await view.getByText("실행 전 검증 기준과 독립 검증점을 저장해야 DT 실행이 열립니다.", { exact: true }).count(), 0);
