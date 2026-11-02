@@ -55,6 +55,8 @@ import type {
 } from "./paperCoordinateViewModel";
 import {
   PAPER_ANGLE_TOLERANCE_DEG,
+  PAPER_BASELINE_LENGTH_TOLERANCE_DEFAULT_MM,
+  PAPER_BASELINE_LENGTH_TOLERANCE_MAX_MM,
   PAPER_GRID_SIZE_CM,
   PAPER_MEASURE_TOLERANCE_MM,
   PAPER_SAMPLE_MAX_AGE_MS,
@@ -72,6 +74,7 @@ import {
   validatePaperFrame,
   validatePaperRunForDiagnosis,
   paperRevalidationAssessment,
+  paperBaselineLengthMetrics,
 } from "./paperCoordinateStudy";
 import type {
   PaperCoordinateLevel,
@@ -91,6 +94,7 @@ import type {
   PaperInkReadingDraft,
   PaperVerificationCriteria,
   PaperTrialDrafts,
+  PaperBaselineLengthTolerance,
 } from "./paperCoordinateStudy";
 import type { PaperCoordinateStudyViewActions } from "./paperCoordinateViewModel";
 import { LearningAiFeedback, useLearningAi } from "./LearningAiFeedback";
@@ -125,6 +129,30 @@ const emptyManualInputs = () => ({
   X: { ...EMPTY_POSE },
   Y: { ...EMPTY_POSE },
 });
+const manualInputsFromSamples = (samples: readonly PaperReferenceSample[]) => {
+  const inputs = emptyManualInputs();
+  for (const sample of samples) {
+    inputs[sample.point] = {
+      x: String(sample.pose.x),
+      y: String(sample.pose.y),
+      z: String(sample.pose.z),
+      r: String(sample.pose.r),
+    };
+  }
+  return inputs;
+};
+const baselineLengthToleranceFor = (record: PaperTrialRecord | null | undefined) =>
+  record?.baselineLengthTolerance?.toleranceMm ??
+  PAPER_BASELINE_LENGTH_TOLERANCE_DEFAULT_MM;
+const paperPlanHashFor = (
+  frameId: string,
+  targetSet: PaperTargetSet,
+  transform: PaperStudentTransform,
+  predictions: PaperPredictionPoint[],
+  liftHeight: number | null,
+  baselineLengthToleranceMm: number,
+) =>
+  `${makePaperPlanHash(frameId, targetSet, transform, predictions)}|baseline-length:${baselineLengthToleranceMm}|lift:${liftHeight ?? "unset"}`;
 const isRecord = (value: unknown): value is PaperTrialRecord =>
   !!value &&
   typeof value === "object" &&
@@ -191,7 +219,13 @@ export function PaperCoordinateStudy({
   const [transformDraft, setTransformDraft] = useState<PaperStudentTransform>(
     () => initialRecord.current?.transform ?? blankTransform(level),
   );
-  const [manualInputs, setManualInputs] = useState(emptyManualInputs);
+  const [manualInputs, setManualInputs] = useState(() =>
+    manualInputsFromSamples(
+      initialRecord.current?.referenceSamples ??
+        initialRecord.current?.frame?.samples ??
+        [],
+    ),
+  );
   const [predictionDraft, setPredictionDraft] = useState<
     PaperPredictionPoint[]
   >([]);
@@ -205,6 +239,9 @@ export function PaperCoordinateStudy({
   );
   const [modelDecisionReasonDraft, setModelDecisionReasonDraft] = useState("");
   const [liftDraft, setLiftDraft] = useState("");
+  const [liftRecordFeedback, setLiftRecordFeedback] = useState("");
+  const [baselineLengthToleranceDraft, setBaselineLengthToleranceDraft] =
+    useState(String(baselineLengthToleranceFor(initialRecord.current)));
   const [saveState, setSaveState] =
     useState<PaperCoordinateStudyViewState["saveState"]>("ready");
   const [saveMessage, setSaveMessage] = useState("");
@@ -307,6 +344,7 @@ export function PaperCoordinateStudy({
     (Number.isFinite(Number(liftDraft)) && liftDraft.trim()
       ? Number(liftDraft)
       : null);
+  const baselineLengthToleranceMm = baselineLengthToleranceFor(active);
   const transformComplete =
     !!frame &&
     !!selectedTransform.axisDirection &&
@@ -322,7 +360,14 @@ export function PaperCoordinateStudy({
     frame &&
     active?.transform &&
     persistedPredictions.length === targetPoints.length
-      ? `${makePaperPlanHash(frame.id, currentTargetSet, active.transform, persistedPredictions)}|lift:${liftHeight ?? "unset"}`
+      ? paperPlanHashFor(
+          frame.id,
+          currentTargetSet,
+          active.transform,
+          persistedPredictions,
+          liftHeight,
+          baselineLengthToleranceMm,
+        )
       : "";
   const samePlan =
     !!planHash &&
@@ -473,6 +518,16 @@ export function PaperCoordinateStudy({
         dataSource: options.frame?.source ?? "teacher",
         createdAt: timeIso(),
         updatedAt: timeIso(),
+      baselineLengthTolerance: {
+        toleranceMm: PAPER_BASELINE_LENGTH_TOLERANCE_DEFAULT_MM,
+        appliedAt: Date.now(),
+        scope: "xy-baseline-length-only",
+      },
+        baselineLengthTolerance: {
+          toleranceMm: PAPER_BASELINE_LENGTH_TOLERANCE_DEFAULT_MM,
+          appliedAt: Date.now(),
+          scope: "xy-baseline-length-only",
+        },
         ...(options.frame ? { frame: options.frame } : {}),
         ...(options.referenceSamples
           ? { referenceSamples: options.referenceSamples }
@@ -596,6 +651,15 @@ export function PaperCoordinateStudy({
       active.drafts?.modelDecisionReason ?? active.modelDecisionReason ?? "",
     );
     setLiftDraft(active.liftHeight ? String(active.liftHeight.z) : "");
+    setManualInputs(
+      manualInputsFromSamples(
+        active.referenceSamples ?? active.frame?.samples ?? [],
+      ),
+    );
+    setBaselineLengthToleranceDraft(
+      String(baselineLengthToleranceFor(active)),
+    );
+    setLiftRecordFeedback("");
   }, [active?.id]);
 
   useEffect(() => {
@@ -644,8 +708,15 @@ export function PaperCoordinateStudy({
       (a, b) =>
         ["O", "X", "Y"].indexOf(a.point) - ["O", "X", "Y"].indexOf(b.point),
     );
+    const baselineLengthToleranceMm = baselineLengthToleranceFor(current);
     const validation =
-      uniqueSamples.length === 3 ? validatePaperFrame(uniqueSamples) : null;
+      uniqueSamples.length === 3
+        ? validatePaperFrame(
+            uniqueSamples,
+            Date.now(),
+            baselineLengthToleranceMm,
+          )
+        : null;
     const tilted =
       validation?.ok &&
       isMergedPaper(level) &&
@@ -662,6 +733,12 @@ export function PaperCoordinateStudy({
     const updated = upsert({
       ...current,
       referenceSamples: uniqueSamples,
+      baselineLengthTolerance:
+        current.baselineLengthTolerance ?? {
+          toleranceMm: PAPER_BASELINE_LENGTH_TOLERANCE_DEFAULT_MM,
+          appliedAt: Date.now(),
+          scope: "xy-baseline-length-only",
+        },
       ...(validFrame ? { frame: validFrame } : { frame: undefined }),
       dataSource: uniqueSamples[0]?.source ?? "teacher",
       status: validFrame ? "model" : "references",
@@ -673,6 +750,7 @@ export function PaperCoordinateStudy({
       diagnosis: undefined,
       dtRunPlanHash: undefined,
     });
+    setManualInputs(manualInputsFromSamples(uniqueSamples));
     setStage((validFrame ? 2 : 1) as PaperLessonStage);
     if (validFrame) {
       setTransformDraft(blankTransform(level));
@@ -761,7 +839,14 @@ export function PaperCoordinateStudy({
         target: "run",
       };
     }
-    const hash = `${makePaperPlanHash(active.frame.id, active.targetSet, values, valuesForPlan)}|lift:${liftHeight ?? "unset"}`;
+    const hash = paperPlanHashFor(
+      active.frame.id,
+      active.targetSet,
+      values,
+      valuesForPlan,
+      liftHeight,
+      baselineLengthToleranceFor(active),
+    );
     const modelComparison = comparePaperPredictionToFrame(
       active.frame,
       valuesForPlan,
@@ -1146,6 +1231,32 @@ export function PaperCoordinateStudy({
         setAllowMismatchedHardware(value);
     },
     onOpenConnection: () => practice.setPanelOpen(true),
+    onFocusReferencePreparation: () => {
+      setStage(1);
+      window.setTimeout(() => {
+        const element = document.getElementById(
+          "paper-coordinate-reference-preparation",
+        );
+        if (element instanceof HTMLDetailsElement) element.open = true;
+        element?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 0);
+    },
+    onFocusTcpJog: () => {
+      setStage(1);
+      window.setTimeout(() => {
+        document
+          .getElementById("paper-coordinate-tcp-jog")
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 0);
+    },
+    onFocusRevision: () => {
+      setStage(7);
+      window.setTimeout(() => {
+        document
+          .getElementById("paper-coordinate-stage-7")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 0);
+    },
     onPersistDrafts: (drafts) => {
       if (!active || active.run?.status === "running") return;
       upsert(
@@ -1792,7 +1903,14 @@ export function PaperCoordinateStudy({
         robotZ: "",
         robotR: "",
       }));
-      const hash = `${makePaperPlanHash(active.frame.id, active.targetSet, active.transform, values)}|lift:${liftHeight ?? "unset"}`;
+      const hash = paperPlanHashFor(
+        active.frame.id,
+        active.targetSet,
+        active.transform,
+        values,
+        liftHeight,
+        baselineLengthToleranceFor(active),
+      );
       const modelComparison = comparePaperPredictionToFrame(
         active.frame,
         values,
@@ -1902,9 +2020,12 @@ export function PaperCoordinateStudy({
       );
     },
     onRecordCurrentLiftHeight: () => {
-      if (running) return;
+      if (running) {
+        setLiftRecordFeedback("실행 중에는 들기 높이를 기록할 수 없습니다. 실행이 끝난 뒤 다시 시도하세요.");
+        return;
+      }
       if (active?.run) {
-        setPageError(
+        setLiftRecordFeedback(
           "이전 실행은 보존합니다. 수정 이유를 저장하고 새 시도에서 높이를 다시 기록하세요.",
         );
         return;
@@ -1916,7 +2037,7 @@ export function PaperCoordinateStudy({
         live.busy ||
         latest?.moving
       ) {
-        setPageError("장비 조작 중에는 펜 들기 높이를 기록할 수 없습니다. 정지와 새 위치 보고를 확인하세요.");
+        setLiftRecordFeedback("장비 조작 중에는 기록할 수 없습니다. 정지 상태와 새 위치 보고를 확인하세요.");
         return;
       }
       if (
@@ -1925,8 +2046,8 @@ export function PaperCoordinateStudy({
         !measurementFresh(latest) ||
         !coordinatesVerified
       ) {
-        setPageError(
-          "최신 위치와 확인된 좌표계가 필요합니다. 아래 TCP 미세 이동으로 펜을 들어 올린 뒤 새 보고 좌표를 기록하세요.",
+        setLiftRecordFeedback(
+          "연결된 최신 위치 보고와 확인된 User/Tool 좌표계가 필요합니다. 연결·준비 화면에서 새 보고를 확인하세요.",
         );
         return;
       }
@@ -1934,23 +2055,23 @@ export function PaperCoordinateStudy({
         latest.source === "hardware" &&
         frame?.source !== "hardware"
       ) {
-        setPageError(
+        setLiftRecordFeedback(
           "실장비 높이는 실장비 기준점이 있는 프레임에만 연결할 수 있습니다.",
         );
         return;
       }
       if (!live.connectionToken || latest.source !== live.source) {
-        setPageError("현재 연결 세션의 출처가 확인되지 않아 펜 들기 높이를 기록하지 않았습니다. 연결을 다시 확인하세요.");
+        setLiftRecordFeedback("현재 연결 세션의 출처가 확인되지 않아 기록하지 않았습니다. 연결·준비 화면에서 연결을 다시 확인하세요.");
         return;
       }
       if (surfaceZ === null || latest.pose.z <= surfaceZ) {
-        setPageError(
-          "펜 들기 높이는 기록한 종이 표면보다 높아야 합니다. TCP 미세 이동 후 새 위치를 확인하세요.",
+        setLiftRecordFeedback(
+          "현재 보고 Z가 종이 표면보다 높지 않습니다. 교사가 웹 TCP 미세 이동으로 위치를 맞추고 새 보고를 확인하세요.",
         );
         return;
       }
       if (!active) {
-        setPageError("먼저 O/X/Y 기준점을 저장하세요.");
+        setLiftRecordFeedback("O/X/Y 기준점 기록이 필요합니다. 기준점 기록으로 이동하세요.");
         return;
       }
       const lift = {
@@ -1969,16 +2090,34 @@ export function PaperCoordinateStudy({
         liftHeight: lift,
         planHash:
           active.transform && active.predictions
-            ? `${makePaperPlanHash(active.frame!.id, active.targetSet, active.transform, active.predictions)}|lift:${lift.z}`
+            ? paperPlanHashFor(
+                active.frame!.id,
+                active.targetSet,
+                active.transform,
+                active.predictions,
+                lift.z,
+                baselineLengthToleranceFor(active),
+              )
             : undefined,
         dtRunPlanHash: undefined,
         run: undefined,
         diagnosis: undefined,
       });
+      if (!lastSaveSucceededRef.current) {
+        setLiftRecordFeedback("저장에 실패했습니다. 현재 보고 좌표는 기록되지 않았습니다. 저장 상태를 확인하고 다시 시도하세요.");
+        return;
+      }
       setLiftDraft(String(lift.z));
-      setPageError(
-        "현재 위치의 Z를 기록했습니다. 이 값은 제조사 프로그램에서 읽은 제어기 보고 위치이며, 펜의 물리적 상태는 교사가 확인해야 합니다.",
+      const source =
+        lift.source === "hardware"
+          ? "실장비 제어기 보고"
+          : lift.source === "mock"
+            ? "모의 응답 · 실측 아님"
+            : "교사 입력 · 측정값 아님";
+      setLiftRecordFeedback(
+        `현재 보고 Z ${lift.z.toFixed(2)} mm를 들기 높이로 기록했습니다 · ${source} · ${timeIso()} · seq ${lift.seq ?? "—"} · User ${lift.user} / Tool ${lift.tool}. 이 기록 버튼은 로봇을 이동시키지 않습니다.`,
       );
+      setPageError("");
     },
     onLiftHeightChange: (value) => {
       if (running) return;
@@ -1989,6 +2128,7 @@ export function PaperCoordinateStudy({
         return;
       }
       setLiftDraft(value);
+      setLiftRecordFeedback("");
       const number = Number(value);
       if (active && !value.trim())
         upsert({
@@ -2012,13 +2152,111 @@ export function PaperCoordinateStudy({
           },
           planHash:
             active.transform && active.predictions
-              ? `${makePaperPlanHash(active.frame!.id, active.targetSet, active.transform, active.predictions)}|lift:${number}`
+              ? paperPlanHashFor(
+                  active.frame!.id,
+                  active.targetSet,
+                  active.transform,
+                  active.predictions,
+                  number,
+                  baselineLengthToleranceFor(active),
+                )
               : undefined,
           dtRunPlanHash: undefined,
           run: undefined,
           diagnosis: undefined,
         });
       }
+    },
+    onBaselineLengthToleranceDraftChange: setBaselineLengthToleranceDraft,
+    onApplyBaselineLengthTolerance: () => {
+      if (running || active?.run?.status === "running") {
+        setReferenceError("실행 중에는 기준을 바꿀 수 없습니다. 실행 종료 후 적용하세요.");
+        return;
+      }
+      const toleranceMm = Number(baselineLengthToleranceDraft);
+      if (
+        !Number.isFinite(toleranceMm) ||
+        toleranceMm <= 0 ||
+        toleranceMm > PAPER_BASELINE_LENGTH_TOLERANCE_MAX_MM
+      ) {
+        setReferenceError("기준선 길이 허용오차는 0보다 크고 100 mm 이하여야 합니다.");
+        return;
+      }
+      const current =
+        active ??
+        createTrial({
+          targetSet: currentTargetSet,
+          level,
+          parentAttemptId: null,
+        });
+      const samples = current.referenceSamples ?? current.frame?.samples ?? [];
+      const validation =
+        samples.length === 3
+          ? validatePaperFrame(samples, Date.now(), toleranceMm)
+          : null;
+      const tilted =
+        validation?.ok &&
+        isMergedPaper(current.level) &&
+        !rotationAllowed &&
+        Math.abs(getPaperFrameAngleDegrees(validation.frame)) >
+          PAPER_ANGLE_TOLERANCE_DEG;
+      const nextFrame =
+        validation?.ok && !tilted ? validation.frame : undefined;
+      const previousTolerance = baselineLengthToleranceFor(current);
+      const changed = previousTolerance !== toleranceMm;
+      const runHistory =
+        changed && current.run
+          ? [
+              ...(current.runHistory ?? []).filter(
+                (run) => run.id !== current.run!.id,
+              ),
+              current.run,
+            ]
+          : current.runHistory;
+      const result = upsert(
+        {
+          ...current,
+          baselineLengthTolerance: {
+            toleranceMm,
+            appliedAt: Date.now(),
+            scope: "xy-baseline-length-only",
+          },
+          referenceSamples: samples,
+          ...(nextFrame ? { frame: nextFrame } : { frame: undefined }),
+          ...(changed
+            ? {
+                run: undefined,
+                runHistory,
+                planHash: undefined,
+                dtRunPlanHash: undefined,
+                diagnosis: undefined,
+                verificationCriteria: undefined,
+                status: nextFrame ? "model" : "references",
+                stage: nextFrame ? current.stage ?? 2 : 1,
+              }
+            : {}),
+        },
+        `기준선 길이 허용오차 ±${toleranceMm} mm를 이 시도에 적용했습니다.`,
+      );
+      if (!lastSaveSucceededRef.current) {
+        setReferenceError("허용오차 저장에 실패했습니다. 기존 기준·실행 기록은 유지되며, 저장 상태를 확인한 뒤 다시 시도하세요.");
+        return;
+      }
+      const errorMessage = tilted
+        ? "기본 과제의 회전 기준이 맞지 않습니다. 기준선 허용오차는 길이 검사에만 적용되며 회전 기준은 그대로입니다."
+        : validation && !validation.ok
+          ? validation.reason
+          : samples.length < 3
+            ? `허용오차를 적용했습니다. 기준점 ${samples.length}/3개만 있어 가능한 기준선부터 표시합니다.`
+            : `O/X/Y 기준점을 ±${toleranceMm} mm 길이 기준으로 재평가했습니다. Z 높이차 ±${PAPER_MEASURE_TOLERANCE_MM} mm와 각도 ±${PAPER_ANGLE_TOLERANCE_DEG}° 기준은 변경하지 않았습니다.`;
+      setReferenceError(
+        changed && current.run
+          ? `${errorMessage} 이전 실행을 이력으로 보존했고 현재 계획의 DT 확인이 다시 필요합니다.`
+          : errorMessage,
+      );
+      if (changed && current.run) setStage(1);
+      setBaselineLengthToleranceDraft(String(toleranceMm));
+      void result;
     },
     onToleranceChange: (field, value) => {
       if (active?.run?.status === "running") {

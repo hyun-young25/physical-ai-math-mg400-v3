@@ -25,6 +25,24 @@ export type PaperReferenceSample = {
   verifiedCoordinates: boolean;
 };
 
+export type PaperBaselineLengthTolerance = {
+  toleranceMm: number;
+  appliedAt: number;
+  scope: "xy-baseline-length-only";
+};
+
+export type PaperBaselineLengthMetric = {
+  baseline: "O–X" | "O–Y";
+  measuredMm: number | null;
+  targetMm: 100;
+  signedDifferenceMm: number | null;
+  absoluteErrorMm: number | null;
+  toleranceMm: number;
+  status: "incomplete" | "pass" | "exceeds";
+  missingPoint: PaperPointName | null;
+  zDifferenceMm: number | null;
+};
+
 export type PaperFrame = {
   id: string;
   samples: PaperReferenceSample[];
@@ -179,6 +197,8 @@ export type PaperTrialRecord = {
   updatedAt: string;
   referenceSamples?: PaperReferenceSample[];
   frame?: PaperFrame;
+  /** Applies only to the XY length check for O–X and O–Y. */
+  baselineLengthTolerance?: PaperBaselineLengthTolerance;
   transform?: PaperStudentTransform;
   predictions?: PaperPredictionPoint[];
   planHash?: string;
@@ -220,6 +240,8 @@ export function recoverInterruptedPaperRuns(records: PaperTrialRecord[], now = D
 
 export const PAPER_GRID_SIZE_CM = 10;
 export const PAPER_MEASURE_TOLERANCE_MM = 2;
+export const PAPER_BASELINE_LENGTH_TOLERANCE_DEFAULT_MM = 2;
+export const PAPER_BASELINE_LENGTH_TOLERANCE_MAX_MM = 100;
 export const PAPER_ANGLE_TOLERANCE_DEG = 2;
 export const PAPER_SAMPLE_MAX_AGE_MS = 1_500;
 export const PAPER_FRAME_SPAN_MAX_MS = 120_000;
@@ -292,7 +314,62 @@ const pointDistance = (a: LessonPose, b: LessonPose) => Math.hypot(a.x - b.x, a.
 const normalizeAngle = (value: number) => ((value % 360) + 360) % 360;
 const angleDifference = (a: number, b: number) => Math.abs(((a - b + 540) % 360) - 180);
 
-export function validatePaperFrame(samples: PaperReferenceSample[], now = Date.now()): { ok: true; frame: PaperFrame } | { ok: false; reason: string } {
+export function paperBaselineLengthMetrics(
+  samples: readonly PaperReferenceSample[],
+  toleranceMm = PAPER_BASELINE_LENGTH_TOLERANCE_DEFAULT_MM,
+): PaperBaselineLengthMetric[] {
+  const byPoint = new Map(samples.map((sample) => [sample.point, sample]));
+  return (["O–X", "O–Y"] as const).map((baseline) => {
+    const start = byPoint.get("O");
+    const end = byPoint.get(baseline === "O–X" ? "X" : "Y");
+    const missingPoint = !start
+      ? "O"
+      : !end
+        ? baseline === "O–X"
+          ? "X"
+          : "Y"
+        : null;
+    if (!start || !end) {
+      return {
+        baseline,
+        measuredMm: null,
+        targetMm: 100,
+        signedDifferenceMm: null,
+        absoluteErrorMm: null,
+        toleranceMm,
+        status: "incomplete",
+        missingPoint,
+        zDifferenceMm: null,
+      };
+    }
+    const measuredMm = pointDistance(start.pose, end.pose);
+    const signedDifferenceMm = measuredMm - 100;
+    const absoluteErrorMm = Math.abs(signedDifferenceMm);
+    return {
+      baseline,
+      measuredMm,
+      targetMm: 100,
+      signedDifferenceMm,
+      absoluteErrorMm,
+      toleranceMm,
+      status: measuredMm >= 1 && absoluteErrorMm <= toleranceMm ? "pass" : "exceeds",
+      missingPoint: null,
+      zDifferenceMm: end.pose.z - start.pose.z,
+    };
+  });
+}
+
+export function validatePaperFrame(
+  samples: PaperReferenceSample[],
+  now = Date.now(),
+  baselineLengthToleranceMm = PAPER_BASELINE_LENGTH_TOLERANCE_DEFAULT_MM,
+): { ok: true; frame: PaperFrame } | { ok: false; reason: string } {
+  if (
+    !finite(baselineLengthToleranceMm) ||
+    baselineLengthToleranceMm <= 0 ||
+    baselineLengthToleranceMm > PAPER_BASELINE_LENGTH_TOLERANCE_MAX_MM
+  )
+    return { ok: false, reason: "기준선 길이 허용오차는 0보다 크고 100 mm 이하여야 합니다." };
   if (samples.length !== 3 || new Set(samples.map(sample => sample.point)).size !== 3
     || !(["O", "X", "Y"] as const).every(point => samples.some(sample => sample.point === point)))
     return { ok: false, reason: "O, X, Y 기준점을 각각 한 번씩 기록해야 합니다." };
@@ -321,9 +398,10 @@ export function validatePaperFrame(samples: PaperReferenceSample[], now = Date.n
   const Y = samples.find(sample => sample.point === "Y")!;
   const ox = pointDistance(O.pose, X.pose);
   const oy = pointDistance(O.pose, Y.pose);
-  if (ox < 1 || oy < 1 || Math.abs(ox - 100) > PAPER_MEASURE_TOLERANCE_MM
-    || Math.abs(oy - 100) > PAPER_MEASURE_TOLERANCE_MM)
-    return { ok: false, reason: "O–X와 O–Y는 각각 100 mm 기준선이어야 합니다. 길이 오차가 2 mm를 넘습니다." };
+  if (ox < 1 || Math.abs(ox - 100) > baselineLengthToleranceMm)
+    return { ok: false, reason: `O–X XY 거리 ${ox.toFixed(2)} mm, 기준 대비 ${(ox - 100 >= 0 ? "+" : "") + (ox - 100).toFixed(2)} mm, 허용 ±${baselineLengthToleranceMm} mm입니다. X 위치·인쇄 배율·좌표계를 확인하세요.` };
+  if (oy < 1 || Math.abs(oy - 100) > baselineLengthToleranceMm)
+    return { ok: false, reason: `O–Y XY 거리 ${oy.toFixed(2)} mm, 기준 대비 ${(oy - 100 >= 0 ? "+" : "") + (oy - 100).toFixed(2)} mm, 허용 ±${baselineLengthToleranceMm} mm입니다. Y 위치·인쇄 배율·좌표계를 확인하세요.` };
   const zSpread = Math.max(...samples.map(sample => sample.pose.z)) - Math.min(...samples.map(sample => sample.pose.z));
   if (zSpread > PAPER_MEASURE_TOLERANCE_MM)
     return { ok: false, reason: "기준점 높이가 서로 다릅니다. 종이 평면과 펜 끝 높이를 확인하세요." };

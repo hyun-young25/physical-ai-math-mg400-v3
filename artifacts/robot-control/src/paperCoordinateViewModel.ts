@@ -17,6 +17,7 @@ import type {
   PaperAiAnalysisRecord,
   PaperInkReadingDraft,
   PaperVerificationCriteria,
+  PaperBaselineLengthMetric,
   PaperTrialDrafts,
 } from "./paperCoordinateStudy";
 import type { LearningAiController } from "./LearningAiFeedback";
@@ -141,6 +142,17 @@ export type PaperCoordinateStudyViewState = {
   revisionJourney?: import("./revisionJourney").RevisionJourneyData | null;
   parentAttempt?: PaperTrialRecord | null;
   activeAttempt?: PaperTrialRecord | null;
+  baselineLengthToleranceMm: number;
+  baselineLengthToleranceAppliedAt: number | null;
+  baselineLengthToleranceDraft: string;
+  baselineLengthMetrics: PaperBaselineLengthMetric[];
+  liftCapture: {
+    canRecord: boolean;
+    message: string;
+    nextAction: "connection" | "references" | "tcp-jog" | "revision" | "none";
+    nextLabel: string;
+  };
+  liftRecordFeedback: string;
   rotationAllowed?: boolean;
   pathConcept?: { motion: string; closeX: string; closeY: string };
   gptQuestion?: string;
@@ -302,6 +314,11 @@ export type PaperCoordinateStudyViewActions = {
   onRunPhysical: () => void;
   onRecordCurrentLiftHeight: () => void;
   onLiftHeightChange: (value: string) => void;
+  onBaselineLengthToleranceDraftChange: (value: string) => void;
+  onApplyBaselineLengthTolerance: () => void;
+  onFocusReferencePreparation: () => void;
+  onFocusTcpJog: () => void;
+  onFocusRevision: () => void;
   onToleranceChange: (
     field: "positionTolerance" | "rotationTolerance",
     value: string,
