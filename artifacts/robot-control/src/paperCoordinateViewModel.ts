@@ -4,6 +4,41 @@ import type { PaperTrialRecord, PaperReferenceSource, PaperDiagnosis, PaperEvide
 import type { LearningAiController } from "./LearningAiFeedback";
 
 export type PaperLessonStage = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export type PaperStageNavigationBlocker = {
+  target: "diagnosis" | "hypothesis";
+  message: string;
+};
+
+export function paperStageNavigationRequirement(
+  nextStage: number,
+  diagnosisComplete: boolean,
+  hypothesisSaved: boolean,
+): PaperStageNavigationBlocker | null {
+  if (nextStage < 7) return null;
+  if (!diagnosisComplete) return {
+    target: "diagnosis",
+    message: "6단계 비교 자료가 아직 완성되지 않았습니다. 실행 결과와 연결된 비교 자료를 먼저 확인하세요.",
+  };
+  if (!hypothesisSaved) return {
+    target: "hypothesis",
+    message: "7단계로 가기 전에 6단계에서 관측 자료에 대한 원인 가설을 입력하고 ‘생각 저장’을 눌러야 합니다.",
+  };
+  return null;
+}
+
+export function paperVerificationCriteriaSavedForAttempt(
+  criteria: PaperVerificationCriteria | undefined,
+  recordId: string | null,
+  frameId: string | undefined,
+  planHash: string,
+  matches: boolean,
+): boolean {
+  return !!criteria && !!recordId && !!frameId && !!planHash && matches
+    && criteria.recordId === recordId
+    && criteria.frameId === frameId
+    && criteria.planHash === planHash;
+}
+
 export type PaperCoordinateStudyViewState = {
   dtBlockers?: import("./paperExecutionGuards").PaperRunBlocker[];
   physicalBlockers?: import("./paperExecutionGuards").PaperRunBlocker[];
@@ -60,6 +95,7 @@ export type PaperCoordinateStudyViewState = {
   inkReadings: PaperInkReadingDraft[];
   verificationCriteria?: PaperVerificationCriteria;
   verificationCriteriaMatches: boolean;
+  stageNavigationBlocker: PaperStageNavigationBlocker | null;
   planHash: string;
   verificationReasonDraft: string;
   diagnosis: PaperDiagnosis | null;

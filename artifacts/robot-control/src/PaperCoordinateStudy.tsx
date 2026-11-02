@@ -12,6 +12,7 @@ import { publishSquareVisual,clearSquareVisual } from "./squareVisualizationStor
 import { useCallback, useEffect, useMemo, useRef, useState, useId, useLayoutEffect } from "react";
 import type { LessonPose } from "./curriculum";
 import { PaperCoordinateStudyView } from "./PaperCoordinateStudyView";
+import { paperStageNavigationRequirement } from "./paperCoordinateViewModel";
 import type { PaperCoordinateStudyViewState, PaperLessonStage } from "./paperCoordinateViewModel";
 import {
   PAPER_ANGLE_TOLERANCE_DEG, PAPER_GRID_SIZE_CM, PAPER_MEASURE_TOLERANCE_MM, PAPER_SAMPLE_MAX_AGE_MS, recoverInterruptedPaperRuns,
@@ -277,7 +278,15 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     onPathConceptChange:(field,value)=>{if(active&&!active.run)upsert({...active,pathConcept:{motion:"",closeX:"",closeY:"",...active.pathConcept,[field]:value}});},
     onExport: () => downloadEvidence("paper-coordinate-evidence.json", {version:2,scope:"실행별 TCP 보고 좌표·학생 잉크 측정·사전 기준을 분리한 학습 기록",records}),
     onStageChange: nextStage => {
-      if (running) return;
+      if (running) {
+        setPageError("DT 실행이 끝나거나 중단될 때까지 단계 이동이 잠겨 있습니다.");
+        return;
+      }
+      const stageNavigationBlocker = paperStageNavigationRequirement(
+        nextStage,
+        (diagnosisOverride ?? active?.diagnosis)?.status === "complete",
+        !!active?.studentHypothesis?.trim(),
+      );
       const required = nextStage >= 2 && !active?.frame ? "O/X/Y 기준점을 먼저 저장하세요."
         : nextStage >= 3 && !active?.transform ? "변환 관계를 먼저 저장하세요."
         : nextStage >= 4 && !active?.predictions?.length ? "좌표 예측을 먼저 저장하세요."
@@ -285,7 +294,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
         : nextStage >= 6 && (!active?.run?.verificationCriteria || active.run.verificationCriteria.recordId !== active.id
           || active.run.verificationCriteria.frameId !== active.frame?.id || active.run.verificationCriteria.planHash !== active.run.planHash)
           ? "실행 전 확인한 기준이 없는 실행은 검증 완료로 판정할 수 없습니다."
-        : nextStage >= 7 && (!active?.studentHypothesis?.trim() || active.diagnosis?.status!=="complete") ? "관측을 비교하고 원인 가설을 먼저 저장하세요." : "";
+        : stageNavigationBlocker?.message ?? "";
       if (required) { setPageError(required); return; }
       setPageError("");
       setStage(nextStage);
@@ -915,10 +924,10 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     && !!active.verificationCriteria.rationale.trim()
     && paperVerificationPointsMatch(active.verificationCriteria,targetPoints);
   const dtBlockers=[...commonBlockers];
-  if(!criteriaMatches)dtBlockers.push({message:"이번 실행의 독립 검증점과 위치·방향 허용오차를 실행 전에 확인·저장하세요.",target:"prediction"});
+  if(!criteriaMatches)dtBlockers.push({message:"이번 실행의 독립 검증점과 위치·방향 허용오차를 실행 전에 확인·저장하세요.",target:"criteria"});
   if(hardwareConnected)dtBlockers.push({message:"다른 실장비 연결이 활성화되어 DT 실행이 잠겼습니다.",target:"connection"});
   const physicalBlockers=[...commonBlockers];
-  if(!criteriaMatches)physicalBlockers.push({message:"이번 실장비 실행의 독립 검증점과 위치·방향 허용오차를 먼저 확인·저장하세요.",target:"prediction"});
+  if(!criteriaMatches)physicalBlockers.push({message:"이번 실장비 실행의 독립 검증점과 위치·방향 허용오차를 먼저 확인·저장하세요.",target:"criteria"});
   if(isPaperDT(level))physicalBlockers.push({message:"심화 1은 DT 전용입니다.",target:"connection"});
   if(level==="advanced-paper-hardware") physicalBlockers.push(...supervisedPaperBlockers(allowMismatchedHardware,mismatchedPrediction,dtReadyForPhysical,frame,previewPoints));
   if(!dtReadyForPhysical&&!physicalBlockers.some(b=>b.target==="dt"))physicalBlockers.push({message:"같은 예측을 DT에서 먼저 끝까지 실행하세요.",target:"dt"});
@@ -953,6 +962,9 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
     revalidationResult:active?.revalidation?.result,
     verificationCriteria:active?.verificationCriteria,
     verificationCriteriaMatches:criteriaMatches,
+    stageNavigationBlocker:paperStageNavigationRequirement(
+      7, (diagnosisOverride ?? active?.diagnosis)?.status === "complete", !!active?.studentHypothesis?.trim(),
+    ),
     planHash,
     verificationReasonDraft,
     followupObservationDraft,

@@ -2,7 +2,7 @@ import type { LessonPose } from "./curriculum";
 import { frameInversePoint, frameTransformPoint, type PaperFrame } from "./paperCoordinateStudy";
 
 export const PAPER_SUPERVISED_MARGIN_MM = 30;
-export type PaperRunBlocker = { message: string; target: "prediction" | "height" | "connection" | "teacher" | "dt" };
+export type PaperRunBlocker = { message: string; target: "prediction" | "criteria" | "height" | "connection" | "teacher" | "dt" };
 
 /** Distance to the physical 20 cm sheet, in robot millimetres, including rotated frames. */
 export function paperBoundary(frame: PaperFrame, pose: LessonPose) {

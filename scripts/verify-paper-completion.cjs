@@ -79,7 +79,7 @@ async function main() {
     if (await introClose.count()) await introClose.first().click({ noWaitAfter: true });
     const lessonNav = page.getByRole("navigation", { name: "학습 목차" });
     if ((await lessonNav.evaluate(element => element.getBoundingClientRect().x)) < 0) {
-      await page.getByRole("button", { name: "☰", exact: true }).click({ noWaitAfter: true });
+      await page.getByRole("button", { name: "학습 목차 열기/닫기", exact: true }).click({ noWaitAfter: true });
     }
     await lessonNav.getByRole("button", { name: /2-4.*도형 경로 만들기/ }).click({ noWaitAfter: true });
     await page.getByText("2-4. 도형 경로 만들기", { exact: true }).waitFor();
@@ -147,6 +147,11 @@ async function main() {
     await click("다음 단계");
     await stage(4);
     assert.match(await view.innerText(), /DT · 실측 아님|가상 DT/);
+    await view.getByRole("button", { name: "실행 전 기준 저장으로", exact: true }).click();
+    await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "실행 전 검증 기준");
+    await click("이 시도의 실행 전 기준 저장");
+    await view.getByText(/저장된 기준: 위치 ±/, { exact: false }).waitFor();
+    assert.equal(await view.getByText("실행 전 검증 기준과 독립 검증점을 저장해야 DT 실행이 열립니다.", { exact: true }).count(), 0);
     await click("DT에서 확인");
     await pause(2_000);
     await page.waitForFunction(() => {
@@ -218,6 +223,12 @@ async function main() {
     await pause(5_000);
     console.log("PASS first mocked feedback displayed, saved, and request sanitized");
 
+    await click("다음 단계");
+    const navigationGuidance = view.locator(".pcv-navigation-guidance");
+    await navigationGuidance.getByText(/원인 가설을 입력하고.*생각 저장/).waitFor();
+    await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "차이가 생긴 이유");
+    console.log("PASS stage 7 explains and focuses the unsaved hypothesis instead of silently blocking");
+
     const causeInput = view.getByTestId("paper-diagnosis-visual")
       .getByRole("textbox", { name: "차이가 생긴 이유", exact: true });
     await causeInput.waitFor({ state: "visible" });
@@ -226,6 +237,7 @@ async function main() {
     console.log("PASS student hypothesis entered through visible UI");
     await click("생각 저장");
     await click("다음 단계");
+    await stage(7);
     const longRevisionReason = `이메일: qa-private@example.com; P3의 좌표 계산을 다시 확인합니다. 종이 x좌표 11 cm와 1 cm당 10 mm를 곱해 110 mm를 얻고, 원점 X 180 mm에 더합니다. 따라서 P3의 X 예측을 310 mm에서 290 mm로 수정합니다. ${"이 식의 각 항과 단위를 다시 대입해 확인합니다. ".repeat(18)}`;
     await view.getByLabel("무엇을 다시 살펴볼까요?", { exact: true })
       .fill(longRevisionReason);

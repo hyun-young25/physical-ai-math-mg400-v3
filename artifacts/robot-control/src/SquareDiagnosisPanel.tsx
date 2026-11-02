@@ -52,11 +52,11 @@ function questionReason(diagnosis:SquareDiagnosis) {
  * Summarizes observed evidence without treating a geometric mismatch as proof of a
  * learner's cognitive cause. The learner's explanation remains a saved hypothesis.
  */
-export function SquareDiagnosisPanel({ diagnosis, plan, plannedVertices, observedVertices:observedVerticesOverride, sourceLabel:sourceLabelOverride, cause, onCauseChange, causeRequired, disabled, priorSameType=0, supportMode="guided", toleranceMm, targetVertices, connectedOnly, gptQuestion, children, differenceSummary }: {
+export function SquareDiagnosisPanel({ diagnosis, plan, plannedVertices, observedVertices:observedVerticesOverride, sourceLabel:sourceLabelOverride, cause, onCauseChange, causeRequired, causeRequiredLabel, disabled, priorSameType=0, supportMode="guided", toleranceMm, targetVertices, connectedOnly, gptQuestion, children, differenceSummary }: {
   diagnosis:SquareDiagnosis; plan:SquareFeedbackPlan|null; plannedVertices?:SquareObservedVertex[]; cause?:string; onCauseChange?:(text:string)=>void;
   observedVertices?:SquareObservedVertex[]; sourceLabel?:string;
   connectedOnly?:boolean; toleranceMm?:number; targetVertices?:SquareObservedVertex[]; gptQuestion?:string; children?:ReactNode; differenceSummary?:ReactNode;
-  causeRequired?:boolean; disabled?:boolean; priorSameType?:number; supportMode?:"guided"|"challenge";
+  causeRequired?:boolean; causeRequiredLabel?:string; disabled?:boolean; priorSameType?:number; supportMode?:"guided"|"challenge";
 }) {
   const paperLabel = connectedOnly && diagnosis.label.includes("\n");
   const reason = paperLabel ? plan?.relationHint : questionReason(diagnosis);
@@ -131,8 +131,8 @@ export function SquareDiagnosisPanel({ diagnosis, plan, plannedVertices, observe
     </details>
     <section className="square-decision-section"><h3>이 질문을 보고 내가 생각한 원인</h3>
     {onCauseChange ? <label className="square-diagnosis-cause">
-      {causeRequired ? "위 피드백을 보고, 어떤 계산을 왜 바꾸려고 하나요?" : plan?.level === "self-regulation" ? "다음 과제에서 미리 점검할 방법 (선택)" : "이 차이에 대한 내 설명 (선택)"}
-      <textarea aria-label="차이가 생긴 이유" rows={2} maxLength={1000} disabled={disabled} value={cause ?? ""}
+       {causeRequired ? causeRequiredLabel ?? "위 피드백을 보고, 어떤 계산을 왜 바꾸려고 하나요?" : plan?.level === "self-regulation" ? "다음 과제에서 미리 점검할 방법 (선택)" : "이 차이에 대한 내 설명 (선택)"}
+       <textarea aria-label="차이가 생긴 이유" aria-required={causeRequired || undefined} rows={2} maxLength={1000} disabled={disabled} value={cause ?? ""}
         onChange={event => onCauseChange(event.target.value)}
         placeholder={mismatch ? "확인된 차이를 설명할 수 있는 생각을 적으세요. 확실하지 않으면 가설이라고 표시해도 됩니다." : "다음 과제에서 먼저 확인할 관계를 적어 보세요."}/>
       <span className="square-diagnosis-hypothesis-note">이 내용은 학생의 설명으로 저장되며, 관측만으로 원인을 자동 확정하지 않습니다.</span>

@@ -28,6 +28,9 @@
 .pcv-stage-details summary { cursor:pointer; color:#39438a; font-weight:700; }
 .paper-coordinate-host .pcv-stage-nav { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); padding:8px 0; }
 .pcv-success { padding:12px; color:#146b36; background:#eaf7ef; border:1px solid #a7d8b8; border-radius:8px; font-weight:700; }
+.pcv-navigation-guidance { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:14px 0 8px; padding:12px 14px; color:#713f12; background:#fff7e8; border:1px solid #e9c98d; border-radius:8px; }
+.pcv-navigation-guidance p { margin:0; line-height:1.5; }
+.pcv-navigation-guidance .pcv-button { flex:0 0 auto; }
 
 .paper-coordinate-view *,
 .paper-coordinate-view *::before,
@@ -596,6 +599,7 @@
   .pcv-reference { padding: 10px; }
   .pcv-reference-values { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .pcv-reference .pcv-button-row { display: grid; grid-template-columns: 1fr 1fr; }
+  .pcv-navigation-guidance { align-items:stretch; flex-direction:column; }
   .pcv-reference .pcv-button { padding-inline: 6px; font-size: 11px; }
   .pcv-form-grid { grid-template-columns: minmax(0, 1fr); }
   .pcv-prediction-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

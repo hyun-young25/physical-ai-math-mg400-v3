@@ -8,6 +8,7 @@ import { PaperSceneMap } from "./PaperScene";
 import { publishPaperScene, clearPaperScene, selectPaperPoint, usePaperScene } from "./paperSceneStore";
 import { paperInkComparisons } from "./paperAiAnalysis";
 import { paperVerificationPointGuide } from "./paperCoordinateStudy";
+import { paperVerificationCriteriaSavedForAttempt } from "./paperCoordinateViewModel";
 import { ExecutionAiAnalysis } from "./ExecutionAiAnalysis";
 import type { PaperPointName } from "./paperCoordinateStudy";
 import type { PaperCoordinateStudyViewProps, PaperLessonStage } from "./paperCoordinateViewModel";
@@ -131,16 +132,39 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
   useEffect(() => setDecisionReasonDraft(state.modelDecisionReasonDraft), [state.modelDecisionReasonDraft]);
 
   const activeTitle = STAGES.find(stage => stage.id === state.stage)?.title ?? "과제 이해";
+  const navigationBlocker = state.stage === 6 ? state.stageNavigationBlocker : null;
+  const focusNavigationTarget = (target: "diagnosis" | "hypothesis") => {
+    const selector = target === "hypothesis"
+      ? '[data-testid="paper-diagnosis-visual"] [aria-label="차이가 생긴 이유"], [aria-label="관측 차이에 대한 원인 가설"]'
+      : '[data-testid="paper-diagnosis-visual"], .pcv-interpretation, .pcv-empty-card';
+    const element = root.current?.querySelector<HTMLElement>(selector);
+    element?.scrollIntoView({ block: "center", behavior: "smooth" });
+    element?.focus({ preventScroll: true });
+  };
+  const navigateToStage = (nextStage: PaperLessonStage) => {
+    const requirement = state.stage === 6 && nextStage >= 7 ? state.stageNavigationBlocker : null;
+    actions.onStageChange(nextStage);
+    if (requirement) requestAnimationFrame(() => focusNavigationTarget(requirement.target));
+  };
   const sampleFor = (point: PaperPointName) => state.samples.find(sample => sample.point === point);
   const predictionFor = (name: string) => state.predictions.find(prediction => prediction.name === name);
   const resolveBlocker=(target:import("./paperExecutionGuards").PaperRunBlocker["target"])=>{
     if(target==="connection"){actions.onOpenConnection?.();return;}
     if(target==="prediction"){actions.onStageChange(3);return;}
+    if(target==="criteria"){
+      if(state.stage!==4)actions.onStageChange(4);
+      requestAnimationFrame(()=>{
+        const criteria=root.current?.querySelector<HTMLElement>('[aria-label="실행 전 검증 기준"]');
+        criteria?.scrollIntoView({block:"center",behavior:"smooth"});
+        criteria?.focus({preventScroll:true});
+      });
+      return;
+    }
     const el=root.current?.querySelector<HTMLElement>(target==="height"?'[aria-label="펜 들기 높이"]':target==="teacher"?'.pcv-teacher-setting':'.pcv-run-panel');
     if(el instanceof HTMLDetailsElement)el.open=true;
     el?.scrollIntoView({block:"center"});el?.focus();
   };
-  const blockers=(items:typeof state.dtBlockers,label:string)=>items?.length?<ul className="pcv-run-blockers" aria-label={label}>{items.map((b,i)=><li key={i}>{b.message} <button type="button" onClick={()=>resolveBlocker(b.target)}>{({height:"높이 입력으로",prediction:"예측 입력으로",connection:"연결·준비 열기",teacher:"교사 설정으로",dt:"DT 확인으로"})[b.target]}</button></li>)}</ul>:null;
+  const blockers=(items:typeof state.dtBlockers,label:string)=>items?.length?<ul className="pcv-run-blockers" aria-label={label}>{items.map((b,i)=><li key={i}>{b.message} <button type="button" onClick={()=>resolveBlocker(b.target)}>{({height:"높이 입력으로",prediction:"예측 입력으로",criteria:"실행 전 기준 저장으로",connection:"연결·준비 열기",teacher:"교사 설정으로",dt:"DT 확인으로"})[b.target]}</button></li>)}</ul>:null;
 
   const renderPaperGrid = () => merged ? null : (
     <div className="pcv-grid-wrap" aria-label={grid+"×"+grid+" cm 종이 좌표 격자"}>
@@ -355,18 +379,19 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
                 onChange={event => actions.onToleranceChange("rotationTolerance", event.target.value)} /></label>
             </div>
           </details>
-          <section className="pcv-callout" aria-label="실행 전 검증 기준">
+          <section className="pcv-callout" aria-label="실행 전 검증 기준" tabIndex={-1}>
             <h3>이번 실행의 확인점·검증 기준</h3>
             <p>기준점 O/X/Y는 모델 구성에 사용합니다. 이번 확인점: {verificationPointGuide.current}. 독립 검증점: {verificationPointGuide.independent}. 구성점과 겹쳐 제외한 점: {verificationPointGuide.excluded}. 실행 후 이 기준은 바뀌지 않습니다.</p>
-            {state.verificationCriteria?.recordId===state.recordId && state.verificationCriteria.planHash===state.run?.planHash
-              ? <p role="status">저장된 기준: 위치 ±{state.verificationCriteria.positionToleranceMm} mm · 방향 ±{state.verificationCriteria.rotationToleranceDeg}° · {state.verificationCriteria.rationale}</p>
+            {paperVerificationCriteriaSavedForAttempt(
+              state.verificationCriteria, state.recordId, state.frame?.id, state.planHash, state.verificationCriteriaMatches,
+            )
+              ? <p role="status">저장된 기준: 위치 ±{state.verificationCriteria?.positionToleranceMm ?? state.positionTolerance} mm · 방향 ±{state.verificationCriteria?.rotationToleranceDeg ?? state.rotationTolerance}° · {state.verificationCriteria?.rationale}</p>
               : <p>현재 설정을 저장하고 실행 전에 기준을 확인해야 합니다: 위치 ±{state.positionTolerance} mm · 방향 ±{state.rotationTolerance}°.</p>}
             <label className="pcv-field"><span>허용오차를 선택한 근거</span><textarea rows={2} value={state.verificationReasonDraft}
               onChange={event=>actions.onVerificationReasonChange(event.target.value)} disabled={!!state.run&&state.run.status!=="running"} /></label>
             <button type="button" className="pcv-button pcv-button--quiet" onClick={actions.onSaveVerificationCriteria}
               disabled={state.running||!!state.run}>이 시도의 실행 전 기준 저장</button>
           </section>
-          {!state.runAvailable&&state.stage===4&&<p className="pcv-alert" role="status">실행 전 검증 기준과 독립 검증점을 저장해야 DT 실행이 열립니다.</p>}
           <p className="pcv-note">DT는 가상 자료이며 실측이 아닙니다. 실장비 결과는 컨트롤러 TCP 보고 좌표 보고 위치입니다. 이것만으로 펜 접촉이나 잉크 위치를 확인할 수 없습니다.</p>
           {!merged&&!state.physicalAvailable && state.physicalUnavailableReason && <p className="pcv-callout pcv-callout--compact" role="status">{state.physicalUnavailableReason}</p>}
           {state.running && <p className="pcv-feedback" role="status">결과를 기다리는 중입니다.</p>}
@@ -460,7 +485,7 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
                 ...analysis, recordId: state.recordId, runId: run.id, planHash: run.planHash, source: run.source,
               });
             }}/>
-          {!state.comparison&&<><label className="pcv-field"><span>내가 생각하는 이유 (원인을 단정하지 않고 후보로)</span><textarea rows={4} value={hypothesisDraft}
+          {!state.comparison&&<><label className="pcv-field"><span>{state.stage===6?"7단계로 이동하기 전 저장할 원인 가설":"내가 생각하는 이유 (원인을 단정하지 않고 후보로)"}</span><textarea aria-label="관측 차이에 대한 원인 가설" aria-required={state.stage===6||undefined} rows={4} value={hypothesisDraft}
             onChange={event => setHypothesisDraft(event.target.value)} /></label>
           <button type="button" className="pcv-button pcv-button--primary" onClick={() => actions.onSaveHypothesis(hypothesisDraft)} disabled={state.running}>생각 저장</button></>}
         </>;
@@ -504,7 +529,7 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
       <nav className="pcv-stage-nav" aria-label="7단계 학습 흐름">
         {STAGES.map((stage, index) => (
           <button type="button" key={stage.id} className={`pcv-stage${state.stage === stage.id ? " is-current" : ""}`}
-            aria-current={state.stage === stage.id ? "step" : undefined} onClick={() => actions.onStageChange(stage.id)}>
+            aria-current={state.stage === stage.id ? "step" : undefined} onClick={() => navigateToStage(stage.id)}>
             <span className="pcv-stage-index">{String(index + 1).padStart(2, "0")}</span><span>{stage.title}</span>
           </button>
         ))}
