@@ -1,4 +1,10 @@
-import { EdgesGeometry, LineBasicMaterial, LineSegments, type Color, type Material, type Mesh, type Object3D } from "three";
+import { EdgesGeometry, LineBasicMaterial, LineSegments, type Color, type Material, type Mesh, type Object3D, type Texture } from "three";
+
+const GHOST_BLUE = "#60a5fa";
+const GHOST_EMISSIVE = "#1d4ed8";
+const GHOST_OPACITY = 0.5;
+const GHOST_OUTLINE = "#3b82f6";
+const GHOST_OUTLINE_OPACITY = 0.35;
 
 /** Instance-local display treatment. Never changes geometry, transforms or shared materials. */
 export function softenPaperRobot(root: Object3D) {
@@ -10,10 +16,27 @@ export function softenPaperRobot(root: Object3D) {
     if (!copy) {
       copy = original.clone();
       copy.transparent = true;
-      copy.opacity = Math.min(original.opacity, 0.42);
-      (copy as Material & { color?: Color }).color?.set("#bfdbfe");
-      (copy as Material & { emissive?: Color }).emissive?.set("#1e40af");
-      (copy as Material & { vertexColors?: boolean }).vertexColors = false;
+      copy.opacity = GHOST_OPACITY;
+      const surface = copy as Material & {
+        color?: Color; emissive?: Color; emissiveIntensity?: number; vertexColors?: boolean;
+        metalness?: number; roughness?: number; map?: Texture | null; emissiveMap?: Texture | null;
+        normalMap?: Texture | null; roughnessMap?: Texture | null; metalnessMap?: Texture | null; aoMap?: Texture | null;
+      };
+      surface.color?.set(GHOST_BLUE);
+      surface.emissive?.set(GHOST_EMISSIVE);
+      if (surface.emissiveIntensity !== undefined) surface.emissiveIntensity = 0.5;
+      surface.vertexColors = false;
+      // Neutralize the source robot's metallic, textured materials on this
+      // isolated clone so rounded parts retain the same blue body treatment.
+      if (surface.metalness !== undefined) surface.metalness = 0;
+      if (surface.roughness !== undefined) surface.roughness = 1;
+      if ("map" in surface) surface.map = null;
+      if ("emissiveMap" in surface) surface.emissiveMap = null;
+      if ("normalMap" in surface) surface.normalMap = null;
+      if ("roughnessMap" in surface) surface.roughnessMap = null;
+      if ("metalnessMap" in surface) surface.metalnessMap = null;
+      if ("aoMap" in surface) surface.aoMap = null;
+      copy.toneMapped = false;
       copy.depthWrite = false;
       copies.set(original, copy);
     }
@@ -22,8 +45,8 @@ export function softenPaperRobot(root: Object3D) {
   const outline = (mesh: Mesh) => {
     if (outlines.has(mesh)) return;
     const edges = new LineSegments(
-      new EdgesGeometry(mesh.geometry, 30),
-      new LineBasicMaterial({ color: "#3b82f6", transparent: true, opacity: 0.78, depthWrite: false }),
+      new EdgesGeometry(mesh.geometry, 50),
+      new LineBasicMaterial({ color: GHOST_OUTLINE, transparent: true, opacity: GHOST_OUTLINE_OPACITY, depthWrite: false }),
     );
     edges.name = "paper-dt-ghost-outline";
     edges.renderOrder = mesh.renderOrder + 1;
@@ -88,11 +111,29 @@ export function createPaperRobotPreview(source: Object3D) {
     // The frozen reference is never an interactive robot or a second controller.
     mesh.raycast = () => {};
   });
+  const currentMaterialState = new Map<Material, { transparent: boolean; opacity: number; depthWrite: boolean }>();
+  materials.forEach(material => currentMaterialState.set(material, {
+    transparent: material.transparent, opacity: material.opacity, depthWrite: material.depthWrite,
+  }));
+  const setCurrentOpacity = (opacity: number | null) => {
+    currentMaterialState.forEach((original, material) => {
+      const transparent = opacity === null ? original.transparent : true;
+      const nextOpacity = opacity === null ? original.opacity : opacity;
+      const depthWrite = opacity === null ? original.depthWrite : opacity >= 1 ? original.depthWrite : false;
+      if (material.transparent !== transparent || material.opacity !== nextOpacity || material.depthWrite !== depthWrite) {
+        material.transparent = transparent;
+        material.opacity = nextOpacity;
+        material.depthWrite = depthWrite;
+        material.needsUpdate = true;
+      }
+    });
+  };
   const originalVisible = source.visible;
   let frozen = false, restore: ReturnType<typeof softenPaperRobot> | undefined;
   return {
     current,
     get frozen() { return frozen; },
+    setCurrentOpacity,
     syncCurrent() {
       if (frozen) return;
       sources.forEach((object, i) => {
@@ -105,6 +146,7 @@ export function createPaperRobotPreview(source: Object3D) {
     showPreview(visible: boolean) {
       if (!frozen && visible) { frozen = true; restore = softenPaperRobot(source); }
       if (visible) restore?.refresh();
+      if (!visible) setCurrentOpacity(null);
       current.visible = frozen;
       source.visible = frozen ? visible : originalVisible;
     },

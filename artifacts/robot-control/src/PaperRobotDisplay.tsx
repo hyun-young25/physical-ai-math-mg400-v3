@@ -39,6 +39,7 @@ export function PaperRobotAppearance({ active, children, tcpRef }: { active: boo
       tcpRef?.current?.getWorldPosition(currentTip.current);
     }
     preview.current.showPreview(show);
+    preview.current.setCurrentOpacity(show && data?.running && run?.status === "running" ? 0.6 : null);
     const current = preview.current.frozen;
     if (labels.current !== current || labels.preview !== show) setLabels({ current, preview: show });
     currentLabel.current?.position.copy(currentTip.current);

@@ -4,7 +4,7 @@ import type { JourneyPoint } from "./revisionJourney";
 import { revisionSceneSeries, type RevisionPhase, type RevisionSeries } from "./revisionSceneStore";
 import { paperRotationVisual } from "./paperRotationVisual";
 
-export const PAPER_COLORS = { reference: "#64748b", target: "#22a06b", prediction: "#8b5cf6", first: "#f97316", result: "#2563eb", mismatch: "#ef4444", robotPreview: "#bfdbfe", robotOutline: "#3b82f6" } as const;
+export const PAPER_COLORS = { reference: "#64748b", target: "#22a06b", prediction: "#8b5cf6", first: "#f97316", result: "#2563eb", mismatch: "#ef4444", robotPreview: "#60a5fa", robotOutline: "#3b82f6" } as const;
 export type PaperSceneData = Pick<PaperCoordinateStudyViewState, "level" | "stage" | "frame" | "samples" | "targetPoints" | "predictions" | "revisionJourney" | "running" | "diagnosis" | "run" | "displayPose" | "displaySource">;
 export type PaperScenePoint = { x: number; y: number; z: number };
 export function paperFrameSource(data: PaperSceneData) {
