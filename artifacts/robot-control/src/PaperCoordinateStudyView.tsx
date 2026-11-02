@@ -458,7 +458,7 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
       case 5:
         return <>
           <p className="pcv-lead">컨트롤러가 보고한 TCP 좌표와 종이 위 잉크 자국은 별개의 관찰입니다. 제어기 좌표를 변환한 결과가 잉크를 측정하거나 보증하지 않습니다.</p>
-          <PaperDiagnosisVisual state={state}/>
+          {!conciseFlow&&<PaperDiagnosisVisual state={state}/>}
           <section className="pcv-controller-observations" aria-label="실행에서 받은 컨트롤러 위치 관측">
             <h3>실행에서 받은 컨트롤러 위치</h3>
             {state.run?.observations.length ? <>

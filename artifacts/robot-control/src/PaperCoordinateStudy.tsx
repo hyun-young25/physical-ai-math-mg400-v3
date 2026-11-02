@@ -916,7 +916,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
         const analyzed=diagnoseCompletedRecord(completedRecord,recordsRef.current);
         setDiagnosisOverride(analyzed.diagnosis);
         upsert(analyzed.record,`${analyzed.message} DT 자료 · 실측 아님.`);
-        setStage(analyzed.record.stage??runStage);
+        setStage((analyzed.record.stage??runStage) as PaperLessonStage);
         setPageError(analyzed.diagnosis?.status==="invalidated"
           ?`DT 이동은 완료됐지만 현재 계획과 연결해 비교할 수 없습니다. ${analyzed.diagnosis.candidate}`
           :"DT 완료 · 실측 아님. 비교 근거를 같은 화면에 저장했습니다.");
@@ -1038,7 +1038,7 @@ export function PaperCoordinateStudy({ onBack, hardwareConnected, currentPose, c
           const analyzed=diagnoseCompletedRecord(baseRecord,recordsRef.current);
           setDiagnosisOverride(analyzed.diagnosis);
           upsert(analyzed.record,`${analyzed.message} ${liveSource==="hardware"?"제어기 TCP 보고 좌표":"모의 브리지 자료"}를 같은 실행에 연결했습니다.`);
-          setStage(analyzed.record.stage??runStage);
+          setStage((analyzed.record.stage??runStage) as PaperLessonStage);
         } else upsert(baseRecord,"실행은 완료로 인정되지 않았습니다. 새 측정 근거가 부족합니다.");
         setPageError(complete
           ? liveSource === "mock" ? "모의 브리지 회신을 저장했습니다. 실측이 아니며 실제 로봇 증거로 사용할 수 없습니다." : "제어기 TCP 보고 좌표 응답을 저장했습니다. 잉크 접촉 측정은 아닙니다."

@@ -87,7 +87,9 @@ async function main() {
     await paperLesson.evaluate(element=>element.click());
     await page.getByText("2-4. 도형 경로 만들기", { exact: true }).waitFor();
     await page.waitForTimeout(300);
-    await page.getByRole("button", { name: "5. 종이 기준점 (DT)", exact: true }).click({ noWaitAfter: true });
+    const paperTaskButton=page.getByRole("button", { name: "5. 종이 기준점 (DT)", exact: true });
+    await paperTaskButton.waitFor({state:"visible"});
+    await paperTaskButton.evaluate(element=>element.click());
 
     const view = page.getByRole("region", { name: "종이 좌표 변환 학습" });
     await view.waitFor();
@@ -196,7 +198,8 @@ async function main() {
     assert.equal(first.diagnosis.pattern, "calculation");
     assert.match(first.transform.explanation, /X=180\+10×11/);
     assert.match(first.transform.explanation, /이름: 홍길동/);
-    assert.match(await page.locator(".square-type-badge").innerText(), /대입·계산 차이 · P3/);
+    assert.equal(await view.locator(".square-type-badge").count(),1,"the comparison is shown once in the combined execution/comparison screen");
+    assert.match(await view.locator(".square-type-badge").innerText(), /대입·계산 차이 · P3/);
     assert.match(await view.getByTestId("paper-diagnosis-visual").innerText(), /P3/);
     console.log("PASS first rule-based diagnosis");
 
@@ -296,7 +299,8 @@ async function main() {
     }, null, { timeout: 60_000 });
     await screen(3);
     console.log("PASS corrected prediction rerun in DT");
-    assert.match(await page.locator(".square-type-badge").innerText(), /예측과 실행 일치/);
+    assert.equal(await view.locator(".square-type-badge").count(),1,"the retry comparison is not duplicated");
+    assert.match(await view.locator(".square-type-badge").innerText(), /예측과 실행 일치/);
     all = await records();
     assert.equal(all[0].id, parentAfterReason.id);
     assert.equal(all[0].run.id, first.run.id);
@@ -332,6 +336,15 @@ async function main() {
     assert.match(await comparison.innerText(), /수정 후 실행/);
     await shot("08-linked-comparison.png");
     await page.waitForTimeout(8_000);
+    await view.getByLabel("판단 근거", {exact:true})
+      .fill("독립 검증점 네 곳의 새 DT 결과를 원래 시도에서 고정한 2 mm 기준과 비교했습니다. DT이므로 실물 검증은 아닙니다.");
+    await click("최종 판단 저장");
+    all=await records();
+    assert.equal(all[1].revalidation.result,"simulation-only");
+    assert.equal(all[1].status,"diagnosed","DT results must not be promoted to physical verification");
+    assert.deepEqual(all[1].run.verificationCriteria.independentVerificationPoints,["P1","P2","P3","P4"]);
+    assert.deepEqual(all[1].run.verificationCriteria.constructionOverlaps,[]);
+    await shot("09-independent-revalidation-judgment.png");
     assert.deepEqual(errors, [], "no browser runtime errors");
     assert.deepEqual(networkFailures, [], "no failed browser requests");
     const report = {
