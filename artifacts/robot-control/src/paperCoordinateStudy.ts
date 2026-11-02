@@ -239,6 +239,16 @@ export function classifyPaperVerificationPoints(targets:PaperGridPoint[]) {
   };
 }
 
+export function paperVerificationPointGuide(targets:PaperGridPoint[]) {
+  const classification=classifyPaperVerificationPoints(targets);
+  return {
+    current:classification.currentVerificationPoints.join("·")||"없음",
+    independent:classification.independentVerificationPoints.join("·")||"없음",
+    excluded:classification.constructionOverlaps
+      .map(item=>`${item.targetPoint}=${item.constructionPoint}`).join("·")||"없음",
+  };
+}
+
 export function paperVerificationPointsMatch(criteria:PaperVerificationCriteria,targets:PaperGridPoint[]) {
   const expected=classifyPaperVerificationPoints(targets);
   return JSON.stringify(criteria.currentVerificationPoints)===JSON.stringify(expected.currentVerificationPoints)
