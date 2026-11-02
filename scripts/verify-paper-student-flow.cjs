@@ -255,10 +255,12 @@ async function main() {
     assert.equal(await view.getByRole("button", { name: "생각 저장", exact: true }).count(),0);
     await click("수정하고 다시 확인하기로");
     await screen(3);
-    await view.getByLabel("AI 질문을 본 뒤 추가로 확인한 관측과 근거", { exact: true })
+    await view.getByLabel("추가 관측과 근거", { exact: true })
       .fill("종이 눈금에서 P3의 11 cm 위치를 다시 확인했습니다.");
-    await view.getByLabel("모델 판단", { exact: true }).selectOption("revise");
-    await view.getByLabel("유지 또는 수정 판단의 근거", { exact: true })
+    const decisionSelect=view.getByLabel("모델 판단 선택",{exact:true});
+    assert.equal(await decisionSelect.count(),1,"screen three exposes one distinctly named model decision control");
+    await decisionSelect.selectOption("revise");
+    await view.getByLabel("모델 판단 근거", { exact: true })
       .fill("P3 목표와 DT 결과의 차이를 확인하고 단위 환산식을 다시 계산했습니다.");
     const longRevisionReason = `이메일: qa-private@example.com; P3의 좌표 계산을 다시 확인합니다. 종이 x좌표 11 cm와 1 cm당 10 mm를 곱해 110 mm를 얻고, 원점 X 180 mm에 더합니다. 따라서 P3의 X 예측을 310 mm에서 290 mm로 수정합니다. ${"이 식의 각 항과 단위를 다시 대입해 확인합니다. ".repeat(18)}`;
     await view.getByLabel("무엇을 다시 살펴볼까요?", { exact: true })
@@ -329,14 +331,27 @@ async function main() {
     await shot("07-follow-up-history.png");
     await page.waitForTimeout(5_000);
 
-    const comparison = page.getByTestId("revision-scene-dock");
-    await comparison.getByRole("button", { name: /4.*재실행 결과/ }).click({ noWaitAfter: true });
+    const comparison=view.getByTestId("paper-diagnosis-visual");
     await comparison.waitFor();
-    assert.match(await comparison.innerText(), /첫 실행/);
-    assert.match(await comparison.innerText(), /수정 후 실행/);
+    assert.match(await comparison.innerText(), /✓ 예측과 실행 일치/);
+    assert.match(await comparison.innerText(), /P1/);
+    const previousAttempt=view.getByRole("region",{name:"이전 시도와 수정 근거"});
+    assert.match(await previousAttempt.innerText(),/원점 \(180, -60\) mm/);
+    assert.match(await previousAttempt.innerText(),new RegExp(firstMock.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")));
+    assert.match(await previousAttempt.innerText(),/모델 판단: 수정/);
+    assert.match(await previousAttempt.innerText(),/P3의 X 예측/);
+    const interpretation=view.locator(".pcv-interpretation").last();
+    assert.match(await interpretation.innerText(),/비교 자료 준비됨/);
+    await interpretation.locator("summary").click({noWaitAfter:true});
+    const detailedComparison=await interpretation.innerText();
+    assert.match(detailedComparison,/P1/);
+    assert.match(detailedComparison,/P4/);
     await shot("08-linked-comparison.png");
     await page.waitForTimeout(8_000);
-    await view.getByLabel("판단 근거", {exact:true})
+    const finalDecisionSelect=view.getByLabel("재검증 후 모델 판단",{exact:true});
+    assert.equal(await finalDecisionSelect.count(),1,"final revalidation judgment has a distinct accessible name");
+    await finalDecisionSelect.selectOption("retain");
+    await view.getByLabel("재검증 판단 근거", {exact:true})
       .fill("독립 검증점 네 곳의 새 DT 결과를 원래 시도에서 고정한 2 mm 기준과 비교했습니다. DT이므로 실물 검증은 아닙니다.");
     await click("최종 판단 저장");
     all=await records();

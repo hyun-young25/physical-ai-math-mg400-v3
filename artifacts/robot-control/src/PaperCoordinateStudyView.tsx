@@ -554,12 +554,12 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
         return <>
           <p className="pcv-lead">비교에서 발견한 점을 바탕으로 설명이나 좌표를 다시 살펴보고, 필요하면 새 조건으로 확인합니다.</p>
           {state.diagnosis && <div className="pcv-interpretation pcv-interpretation--compact"><StatusPill tone="warn">가능한 해석</StatusPill><p>{state.diagnosis.candidate}</p><p className="pcv-note">{state.diagnosis.question}</p></div>}
-          <label className="pcv-field"><span>AI 질문을 본 뒤 추가로 확인한 관측과 근거</span><textarea rows={3} value={followupDraft}
+          <label className="pcv-field"><span>AI 질문을 본 뒤 추가로 확인한 관측과 근거</span><textarea aria-label="추가 관측과 근거" rows={3} value={followupDraft}
             onChange={event=>{setFollowupDraft(event.target.value);actions.onFollowupObservationChange(event.target.value);}} /></label>
           {!conciseFlow&&<button type="button" className="pcv-button pcv-button--quiet" onClick={()=>actions.onSaveFollowupObservation(followupDraft)}>추가 관측 저장</button>}
-          <label className="pcv-field"><span>모델 판단</span><select value={state.modelDecision} onChange={event=>actions.onModelDecisionChange(event.target.value as "revise"|"retain")}>
+          <label className="pcv-field"><span>모델 판단</span><select aria-label="모델 판단 선택" value={state.modelDecision} onChange={event=>actions.onModelDecisionChange(event.target.value as "revise"|"retain")}>
             <option value="revise">모델 수정</option><option value="retain">현재 모델 유지</option></select></label>
-          <label className="pcv-field"><span>유지 또는 수정 판단의 근거</span><textarea rows={2} value={decisionReasonDraft}
+          <label className="pcv-field"><span>유지 또는 수정 판단의 근거</span><textarea aria-label="모델 판단 근거" rows={2} value={decisionReasonDraft}
             onChange={event=>{setDecisionReasonDraft(event.target.value);actions.onModelDecisionReasonChange(event.target.value);}} /></label>
           <label className="pcv-field"><span>어떤 피드백을 보고, 계산의 어느 부분을 바꾸나요?</span><textarea aria-label="무엇을 다시 살펴볼까요?" rows={4} value={revisionDraft}
             placeholder="받은 질문과 연결해, 바꿀 식·좌표와 그 이유를 적어 주세요."
@@ -608,11 +608,11 @@ export function PaperCoordinateStudyView({ state, actions, ai }: PaperCoordinate
         <section className="pcv-final-judgment" aria-label="재검증에 대한 학생 판단">
           <h3>새 실행을 보고 최종 판단</h3>
           <p>{state.revalidationScope ?? "저장된 기준과 독립 검증점으로 판정합니다. DT·모의 결과는 실물 검증 완료가 아닙니다."}</p>
-          <label className="pcv-field"><span>모델 판단</span><select value={state.modelDecision} onChange={event=>{
+          <label className="pcv-field"><span>모델 판단</span><select aria-label="재검증 후 모델 판단" value={state.modelDecision} onChange={event=>{
             const decision=event.target.value as "revise"|"retain";
             actions.onModelDecisionChange(decision);
           }}><option value="revise">다시 수정 필요</option><option value="retain">현재 모델 유지</option></select></label>
-          <label className="pcv-field"><span>판단 근거</span><textarea rows={3} value={finalDecisionReason} onChange={event=>{
+          <label className="pcv-field"><span>판단 근거</span><textarea aria-label="재검증 판단 근거" rows={3} value={finalDecisionReason} onChange={event=>{
             setFinalDecisionReason(event.target.value);
             actions.onModelDecisionReasonChange(event.target.value);
           }}/></label>
