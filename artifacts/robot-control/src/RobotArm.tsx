@@ -1603,6 +1603,7 @@ export function RobotArm({
           currentPose={coords}
           canReach={pose => !!onComputeIK(pose.x, pose.y, pose.z, pose.r, onGetJoints().j3)}
           runDigitalTwin={runPaperDigitalTwin}
+          stopDigitalTwin={reason => paperDtAbortRef.current?.(reason)}
         />
         <details className="pcv-details"><summary>이전 심화 과제·학습 기록 보기</summary>{[4,5].map(index=><button key={index} disabled={paperBusy||status==="running"} onClick={()=>{setPaperLevel(null);selectShapeLesson(index);}}>이전 심화 {index-3} · {getShapeLesson("사각형",index).title}</button>)}</details>
       </div>

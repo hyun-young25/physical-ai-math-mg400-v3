@@ -61,7 +61,10 @@ import {
   PAPER_MEASURE_TOLERANCE_MM,
   PAPER_SAMPLE_MAX_AGE_MS,
   archiveCompletedPaperRunForLiftEdit,
+  buildPaperPathOperations,
   paperLiftHeightDraftState,
+  paperLiftGapDraftState,
+  parsePaperLiftGapDraft,
   parsePaperLiftHeightDraft,
   recoverInterruptedPaperRuns,
   PAPER_TARGETS,
@@ -181,6 +184,7 @@ export type PaperCoordinateStudyProps = {
   currentPose: LessonPose;
   canReach: (pose: LessonPose) => boolean;
   runDigitalTwin: (commands: LessonPose[]) => Promise<void>;
+  stopDigitalTwin?: (reason?: string) => void;
 };
 
 export function PaperCoordinateStudy({
@@ -189,6 +193,7 @@ export function PaperCoordinateStudy({
   currentPose,
   canReach,
   runDigitalTwin,
+  stopDigitalTwin,
   initialLevel,
   onRunningChange,
   supportMode = "guided",
@@ -260,6 +265,13 @@ export function PaperCoordinateStudy({
     initialRecord.current?.liftHeight
       ? String(initialRecord.current.liftHeight.z)
       : "",
+  );
+  const [liftGapDraft, setLiftGapDraft] = useState(
+    () =>
+      initialRecord.current?.drafts?.liftGapMm ??
+      (initialRecord.current?.penLiftGapMm === undefined
+        ? ""
+        : String(initialRecord.current.penLiftGapMm)),
   );
   const [liftRecordFeedback, setLiftRecordFeedback] = useState("");
   const [baselineLengthToleranceDraft, setBaselineLengthToleranceDraft] =
@@ -386,9 +398,17 @@ export function PaperCoordinateStudy({
     frame?.samples.find((sample) => sample.point === "O")?.pose ?? null;
   const liftRecord = active?.liftHeight;
   const liftDraftState = paperLiftHeightDraftState(liftDraft, liftRecord);
+  const liftGapState = paperLiftGapDraftState(
+    liftGapDraft,
+    active?.penLiftGapMm,
+  );
   // Only the exact value already saved in the active trial may feed planning.
   // Raw/incomplete/unsaved text remains visible but cannot authorize a run.
-  const liftHeight = liftDraftState.value;
+  const liftHeight = autoMappedPaperLesson
+    ? surfaceZ !== null && liftGapState.value !== null
+      ? surfaceZ + liftGapState.value
+      : null
+    : liftDraftState.value;
   const baselineLengthToleranceMm = baselineLengthToleranceFor(active);
   const transformComplete =
     !!frame &&
@@ -561,6 +581,13 @@ export function PaperCoordinateStudy({
         (record) =>
           record.task === "paper-coordinate" && record.level === options.level,
       ).length;
+      const parentRecord = options.parentAttemptId
+        ? recordsRef.current.find(
+            (record) => record.id === options.parentAttemptId,
+          )
+        : undefined;
+      const inheritedLiftGap =
+        parentRecord?.penLiftGapMm ?? parsePaperLiftGapDraft(liftGapDraft);
       const created: PaperTrialRecord = {
         id: crypto.randomUUID(),
         task: "paper-coordinate",
@@ -588,6 +615,12 @@ export function PaperCoordinateStudy({
           : {}),
         ...(options.transform ? { transform: options.transform } : {}),
         ...(options.liftHeight ? { liftHeight: options.liftHeight } : {}),
+        ...(inheritedLiftGap !== null && inheritedLiftGap !== undefined
+          ? {
+              penLiftGapMm: inheritedLiftGap,
+              drafts: { liftGapMm: String(inheritedLiftGap) },
+            }
+          : {}),
       };
       upsert(created, "새 시도가 이전 기록과 연결되어 저장되었습니다.");
       if (!lastSaveSucceededRef.current) {
@@ -720,6 +753,12 @@ export function PaperCoordinateStudy({
       active.drafts?.modelDecisionReason ?? active.modelDecisionReason ?? "",
     );
     setLiftDraft(active.liftHeight ? String(active.liftHeight.z) : "");
+    setLiftGapDraft(
+      active.drafts?.liftGapMm ??
+        (active.penLiftGapMm === undefined
+          ? ""
+          : String(active.penLiftGapMm)),
+    );
     setManualInputs(
       manualInputsFromSamples(
         active.referenceSamples ?? active.frame?.samples ?? [],
@@ -2159,6 +2198,22 @@ export function PaperCoordinateStudy({
     },
     onRunDT: () => void executeRun("dt"),
     onRunPhysical: () => void executeRun("connected"),
+    onStopRun: () => {
+      if (!running) return;
+      if (active?.run?.source === "dt") {
+        stopDigitalTwin?.(
+          "학생이 DT 경로를 정지했습니다. 완료로 기록하지 않습니다.",
+        );
+        setPageError("DT 경로를 정지했습니다. 완료 자료로 기록하지 않았습니다.");
+        return;
+      }
+      if (practice.session.getSnapshot().busy) {
+        void practice.session.stop();
+        setPageError(
+          "실장비 정지 요청을 보냈습니다. 이는 소프트웨어 정지이며 물리 비상정지가 아닙니다.",
+        );
+      }
+    },
     onPreparationTcpJog: (axis, deltaMm) =>
       void runPreparationTcpJog(axis, deltaMm),
     onStopPreparationMovement: () => {
@@ -2379,6 +2434,60 @@ export function PaperCoordinateStudy({
         surfaceZ !== null && number <= surfaceZ
           ? `교사 입력 Z ${number} mm를 저장했습니다. 측정값이 아니며 종이 표면 Z ${surfaceZ.toFixed(2)} mm보다 높지 않아 실행 준비에는 사용할 수 없습니다.${priorRunArchived ? " 이전 실행은 이력에 보존했고 새 DT 확인이 필요합니다." : ""}`
           : `교사 입력 Z ${number} mm를 저장했습니다 · 측정값 아님 · 현재 연결의 실측 높이 확인을 대신하지 않습니다.${priorRunArchived ? " 이전 실행은 이력에 보존했고 새 DT 확인이 필요합니다." : ""}`,
+      );
+    },
+    onLiftGapChange: (value) => {
+      if (running || active?.run?.status === "running") {
+        setLiftRecordFeedback(
+          "경로 실행 중에는 들기 간격을 바꿀 수 없습니다. 실행이 끝난 뒤 수정하면 다음 경로에 적용됩니다.",
+        );
+        return;
+      }
+      setLiftGapDraft(value);
+      if (!active) {
+        setLiftRecordFeedback(
+          "입력은 화면에 유지됩니다. O/X/Y를 기록하면 간격을 같은 시도에 저장할 수 있습니다.",
+        );
+        return;
+      }
+      const parsedGap = parsePaperLiftGapDraft(value);
+      const liftBase = archiveCompletedPaperRunForLiftEdit(active);
+      const savedGap =
+        parsedGap === null ? active.penLiftGapMm : parsedGap;
+      const nextSurfaceZ = active.frame
+        ? Math.max(...active.frame.samples.map((sample) => sample.pose.z))
+        : null;
+      const nextLiftHeight =
+        parsedGap !== null && nextSurfaceZ !== null
+          ? nextSurfaceZ + parsedGap
+          : null;
+      const nextPlanHash =
+        nextLiftHeight !== null &&
+        active.frame &&
+        active.predictions &&
+        (active.transform || active.taskVersion === PAPER_TASK_VERSION)
+          ? paperPlanHashFor(
+              active.frame.id,
+              active.targetSet,
+              active.transform,
+              active.predictions,
+              nextLiftHeight,
+              baselineLengthToleranceFor(active),
+              active.taskVersion,
+            )
+          : undefined;
+      upsert({
+        ...liftBase,
+        penLiftGapMm: savedGap,
+        drafts: { ...liftBase.drafts, liftGapMm: value },
+        planHash: nextPlanHash,
+        dtRunPlanHash: undefined,
+        diagnosis: undefined,
+      });
+      setLiftRecordFeedback(
+        parsedGap === null
+          ? "간격 입력을 저장했습니다. 양수 mm 값을 완성하기 전에는 오래된 값으로 실행하지 않습니다."
+          : `펜 들기 간격 ${parsedGap} mm를 저장했습니다. 종이 표면 Z ${nextSurfaceZ === null ? "미기록" : `${nextSurfaceZ.toFixed(2)} mm`}에서 이동 높이를 계산하며 기존 실행 자료는 이력에 보존됩니다.`,
       );
     },
     onBaselineLengthToleranceDraftChange: setBaselineLengthToleranceDraft,
@@ -3703,7 +3812,7 @@ export function PaperCoordinateStudy({
         "연결된 실행 기록은 보존됩니다. 수정 이유를 적고 새 시도를 시작하세요.",
       target: "prediction",
     });
-  if (!paperConceptValid(active?.pathConcept))
+  if (!autoMappedPaperLesson && !paperConceptValid(active?.pathConcept))
     commonBlockers.push({
       message: "직선 이동 명령과 닫힌 경로의 ΔX·ΔY 합을 확인하세요.",
       target: "prediction",
@@ -3720,7 +3829,9 @@ export function PaperCoordinateStudy({
     });
   if (liftHeight === null || !Number.isFinite(liftHeight))
     commonBlockers.push({
-      message: "펜 들기 높이(Z)를 먼저 입력하세요.",
+      message: autoMappedPaperLesson
+        ? "펜 들기 간격(mm)을 입력하세요. 절대 Z값은 사용하지 않습니다."
+        : "펜 들기 높이(Z)를 먼저 입력하세요.",
       target: "height",
     });
   else if (surfaceZ === null || liftHeight <= surfaceZ)
@@ -3748,7 +3859,7 @@ export function PaperCoordinateStudy({
     !!active.verificationCriteria.rationale.trim() &&
     paperVerificationPointsMatch(active.verificationCriteria, targetPoints);
   const dtBlockers = [...commonBlockers];
-  if (!criteriaMatches)
+  if (!autoMappedPaperLesson && !criteriaMatches)
     dtBlockers.push({
       message:
         "이번 실행의 독립 검증점과 위치·방향 허용오차를 실행 전에 확인·저장하세요.",
@@ -3760,7 +3871,7 @@ export function PaperCoordinateStudy({
       target: "connection",
     });
   const physicalBlockers = [...commonBlockers];
-  if (!criteriaMatches)
+  if (!autoMappedPaperLesson && !criteriaMatches)
     physicalBlockers.push({
       message:
         "이번 실장비 실행의 독립 검증점과 위치·방향 허용오차를 먼저 확인·저장하세요.",
@@ -3771,7 +3882,7 @@ export function PaperCoordinateStudy({
       message: "심화 1은 DT 전용입니다.",
       target: "connection",
     });
-  if (level === "advanced-paper-hardware")
+  if (level === "advanced-paper-hardware" && !autoMappedPaperLesson)
     physicalBlockers.push(
       ...supervisedPaperBlockers(
         allowMismatchedHardware,
@@ -3781,7 +3892,11 @@ export function PaperCoordinateStudy({
         previewPoints,
       ),
     );
-  if (!dtReadyForPhysical && !physicalBlockers.some((b) => b.target === "dt"))
+  if (
+    !autoMappedPaperLesson &&
+    !dtReadyForPhysical &&
+    !physicalBlockers.some((b) => b.target === "dt")
+  )
     physicalBlockers.push({
       message: "같은 예측을 DT에서 먼저 끝까지 실행하세요.",
       target: "dt",
@@ -3817,12 +3932,13 @@ export function PaperCoordinateStudy({
         target: "references",
       });
     if (
-      !liftRecord ||
-      liftRecord.source !== source ||
-      !connectionToken ||
-      liftRecord.connectionToken !== connectionToken ||
-      liftRecord.ageMsAtCapture === null ||
-      liftRecord.ageMsAtCapture > PAPER_SAMPLE_MAX_AGE_MS
+      !autoMappedPaperLesson &&
+      (!liftRecord ||
+        liftRecord.source !== source ||
+        !connectionToken ||
+        liftRecord.connectionToken !== connectionToken ||
+        liftRecord.ageMsAtCapture === null ||
+        liftRecord.ageMsAtCapture > PAPER_SAMPLE_MAX_AGE_MS)
     )
       physicalBlockers.push({
         message:
@@ -3840,11 +3956,12 @@ export function PaperCoordinateStudy({
         !frame?.samples.every(
           (s) => s.user === setup.user && s.tool === setup.tool,
         ) ||
-        !liftRecord ||
-        liftRecord.user !== setup.user ||
-        liftRecord.tool !== setup.tool ||
-        liftRecord.coordinateSystem !==
-          `User ${setup.user} / Tool ${setup.tool}`
+        (!autoMappedPaperLesson &&
+          (!liftRecord ||
+            liftRecord.user !== setup.user ||
+            liftRecord.tool !== setup.tool ||
+            liftRecord.coordinateSystem !==
+              `User ${setup.user} / Tool ${setup.tool}`))
       )
         physicalBlockers.push({
           message: "기준점·높이·실행의 User/Tool 설정이 모두 같아야 합니다.",

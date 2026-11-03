@@ -74,6 +74,7 @@ export type PaperTrialDrafts = {
   revisionReason?: string;
   inkReadings?: PaperInkReadingDraft[];
   verificationReason?: string;
+  liftGapMm?: string;
 };
 
 export type PaperPredictionPoint = PaperGridPoint & {
@@ -219,6 +220,8 @@ export type PaperTrialRecord = {
   revalidationTarget?: PaperTargetSet | null;
   invalidatedRunIds?: string[];
   liftHeight?: { z: number; source: PaperReferenceSource; connectionToken?: string; seq: number | null; capturedAt: number; ageMsAtCapture: number | null; user: number; tool: number; coordinateSystem: string };
+  /** New paper lessons store a relative clearance, never an absolute TCP Z. */
+  penLiftGapMm?: number;
   predictionModelComparison?: Array<{ point: string; dx: number; dy: number; distance: number }>;
   revalidation?: { parentAttemptId: string; runId: string; source: PaperEvidenceSource; checkedAt: number; scope: string;
     result: "physical-verified" | "simulation-only" | "incomplete"; tcpWithinTolerance?: boolean; inkWithinTolerance?: boolean };
@@ -252,6 +255,77 @@ export function paperLiftHeightDraftState(
     source: isSaved ? saved?.source ?? null : null,
     sequence: isSaved ? saved?.seq ?? null : null,
   };
+}
+
+/** Parse a relative pen clearance; transient editing strings remain invalid. */
+export function parsePaperLiftGapDraft(value: string): number | null {
+  const parsed = parsePaperLiftHeightDraft(value);
+  return parsed !== null && parsed > 0 ? parsed : null;
+}
+
+export function paperLiftGapDraftState(input: string, saved: number | undefined) {
+  const parsed = parsePaperLiftGapDraft(input);
+  const isSaved = parsed !== null && saved === parsed;
+  return {
+    input,
+    value: isSaved ? parsed : null,
+    saved: isSaved,
+  };
+}
+
+export type PaperPathMove = {
+  kind: "move";
+  motion: "MoveL";
+  target: LessonPose;
+};
+
+/**
+ * Build the exact ordered moves consumed by the paper lesson's runOps call.
+ * Contact Z comes from the O/X/Y-mapped paper plane; clearance is relative to
+ * its highest recorded point, and a higher measured start pose is preserved.
+ */
+export function buildPaperPathOperations(
+  startPose: LessonPose,
+  originPose: LessonPose,
+  points: Array<{ point: string; pose: LessonPose }>,
+  paperSurfaceZ: number,
+  liftGapMm: number,
+) {
+  if (
+    ![...Object.values(startPose), ...Object.values(originPose), paperSurfaceZ, liftGapMm]
+      .every(Number.isFinite) ||
+    liftGapMm <= 0 ||
+    points.length === 0 ||
+    points.some((point) => !Object.values(point.pose).every(Number.isFinite))
+  ) {
+    throw new Error("종이 기준과 펜 들기 간격으로 유효한 경로를 만들 수 없습니다.");
+  }
+  const safeZ = Math.max(startPose.z, paperSurfaceZ + liftGapMm);
+  const operations: PaperPathMove[] = [
+    {
+      kind: "move",
+      motion: "MoveL",
+      target: { x: startPose.x, y: startPose.y, z: safeZ, r: originPose.r },
+    },
+  ];
+  const capturePointByOperationIndex: Record<number, string> = {};
+  for (const { point, pose } of points) {
+    const raised = { x: pose.x, y: pose.y, z: safeZ, r: originPose.r };
+    operations.push({ kind: "move", motion: "MoveL", target: raised });
+    operations.push({
+      kind: "move",
+      motion: "MoveL",
+      target: { ...pose, r: originPose.r },
+    });
+    capturePointByOperationIndex[operations.length - 1] = point;
+    operations.push({ kind: "move", motion: "MoveL", target: raised });
+  }
+  operations.push({
+    kind: "move",
+    motion: "MoveL",
+    target: { x: originPose.x, y: originPose.y, z: safeZ, r: originPose.r },
+  });
+  return { safeZ, operations, capturePointByOperationIndex };
 }
 
 /**

@@ -144,6 +144,7 @@ export function paperVerificationCriteriaSavedForAttempt(
 }
 
 export type PaperCoordinateStudyViewState = {
+  simplePaperLesson?: boolean;
   dtBlockers?: import("./paperExecutionGuards").PaperRunBlocker[];
   physicalBlockers?: import("./paperExecutionGuards").PaperRunBlocker[];
   allowMismatchedHardware?: boolean;
@@ -218,6 +219,9 @@ export type PaperCoordinateStudyViewState = {
   liftHeightInput: string;
   liftHeightInputSaved: boolean;
   liftHeight: number | null;
+  liftGapInput?: string;
+  liftGapMm?: number | null;
+  liftGapSaved?: boolean;
   liftHeightSource: PaperReferenceSource | null;
   liftHeightSequence: number | null;
   paperSurfaceZ: number | null;
@@ -340,8 +344,10 @@ export type PaperCoordinateStudyViewActions = {
   onSavePrediction: () => void;
   onRunDT: () => void;
   onRunPhysical: () => void;
+  onStopRun: () => void;
   onRecordCurrentLiftHeight: () => void;
   onLiftHeightChange: (value: string) => void;
+  onLiftGapChange?: (value: string) => void;
   onBaselineLengthToleranceDraftChange: (value: string) => void;
   onApplyBaselineLengthTolerance: () => void;
   onFocusReferencePreparation: () => void;
