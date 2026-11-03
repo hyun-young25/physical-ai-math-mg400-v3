@@ -885,6 +885,12 @@ export function PaperCoordinateStudyView({
   const renderReferencePreparation = () => (
     <section className="pcv-alignment">
       <h3>종이 정렬과 기준점 기록</h3>
+      <p className="pcv-callout">
+        실제 출력물의 격자 교차점에 펜 끝을 맞춰 기록합니다. O는 (0,0),
+        X는 (10 cm,0), Y는 (0,10 cm)입니다. 20×20 cm 격자의 맨 끝이 아니라
+        O에서 각 축으로 10 cm 떨어진 인쇄 표시를 사용하세요. 화면의 P1~P4는
+        과제 점이며 기준점 O/X/Y와 구분합니다.
+      </p>
       <p>
         교사는 종이를 고정하고 안전 상태를 확인한 뒤, 웹 TCP 미세 이동이나 현재
         장비에서 허용되는 공식 손가이딩(Unlock) 절차로 펜 끝을 O, X, Y에
@@ -1094,6 +1100,51 @@ export function PaperCoordinateStudyView({
       <div className="pcv-reference-grid">
         {POINTS.map(renderReferenceEntry)}
       </div>
+      <fieldset className="pcv-callout" disabled={state.running}>
+        <legend>교사용 기준선 길이 허용오차</legend>
+        <p>
+          O–X와 O–Y의 기준 길이는 각각 100 mm입니다. 현장 테스트 결과에 따라
+          길이 허용오차를 조정한 뒤 적용하세요. 입력만으로는 변경되지 않습니다.
+        </p>
+        <label htmlFor={`${id}-baseline-tolerance`}>
+          기준선 길이 허용오차 ± (mm)
+          <input
+            id={`${id}-baseline-tolerance`}
+            type="number"
+            inputMode="decimal"
+            min="0.1"
+            max="100"
+            step="any"
+            value={state.baselineLengthToleranceDraft}
+            onChange={(event) =>
+              actions.onBaselineLengthToleranceDraftChange(event.target.value)
+            }
+          />
+        </label>
+        <button className="pcv-button" type="button" onClick={actions.onApplyBaselineLengthTolerance}>
+          허용오차 저장·적용
+        </button>
+        <p>현재 적용: ±{state.baselineLengthToleranceMm} mm · {state.baselineLengthToleranceAppliedAt ? timeLabel(state.baselineLengthToleranceAppliedAt) : "기본값"}</p>
+        <ul>
+          {state.baselineLengthMetrics.map((metric) => (
+            <li key={metric.baseline}>
+              {metric.baseline}: {metric.measuredMm === null
+                ? `${metric.missingPoint} 기록 필요`
+                : `${numberLabel(metric.measuredMm)} mm · 기준 대비 ${metric.signedDifferenceMm! >= 0 ? "+" : ""}${numberLabel(metric.signedDifferenceMm!)} mm · ${metric.status === "pass" ? "길이 허용범위 안" : "길이 허용범위 초과"}`}
+            </li>
+          ))}
+        </ul>
+        <p className="pcv-note">
+          허용오차는 이 시도에 저장되며 기준점 XY 길이 검사에만 적용됩니다.
+          Z 높이·종이 축 직각·User/Tool 검사는 그대로입니다. 기준을 바꾸면
+          이전 실행은 이력으로 보존하고 DT 확인과 실행 승인을 다시 받아야 합니다.
+        </p>
+        <p className="pcv-note">
+          Unlock 중 달라진 O/X/Y의 R 차이는 종이 좌표계 판정에 사용하지 않습니다.
+          R은 기록에 남으며 이동 목표의 방향은 O의 R을 유지합니다.
+          펜 끝 TCP가 올바르게 교정되어 있는지 확인하세요.
+        </p>
+      </fieldset>
       <div className="pcv-callout">
         <strong>기준 자료의 출처</strong>
         <p>

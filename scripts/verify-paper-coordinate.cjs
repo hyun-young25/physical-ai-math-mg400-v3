@@ -5,6 +5,32 @@ const m=new Module(file); m.filename=file; m.paths=Module._nodeModulePaths(path.
 const p=m.exports, now=Date.now();
 function frame(deg=0){const a=deg*Math.PI/180;const samples=[['O',0,0],['X',100,0],['Y',0,100]].map(([point,x,y],i)=>({point,pose:{x:225+x*Math.cos(a)-y*Math.sin(a),y:-90+x*Math.sin(a)+y*Math.cos(a),z:60,r:0},source:'mock',seq:i+1,capturedAt:now-100+i,ageMsAtCapture:0,user:0,tool:0,coordinateSystem:'User 0 / Tool 0',verifiedCoordinates:true}));const result=p.validatePaperFrame(samples,now);assert.ok(result.ok);return result.frame;}
 function transform(deg=0,scale=10,x=225){return {originX:String(x),originY:'-90',axisDirection:'x+',millimetersPerCentimeter:String(scale),rotationDegrees:String(deg),explanation:'축, 원점과 단위를 적용했다.'};}
+test('Unlock wrist rotation does not reject XY teaching or rotate paper targets',()=>{
+ const samples=structuredClone(frame().samples);
+ [127.416519,100.742805,120.379142].forEach((r,i)=>samples[i].pose.r=r);
+ const result=p.validatePaperFrame(samples,now);
+ assert.ok(result.ok, result.reason);
+ assert.deepEqual(result.frame.samples,samples);
+ assert.deepEqual(p.frameTransformPoint(result.frame,{xCm:10,yCm:10}),{x:325,y:10,z:60,r:127.416519});
+ const wrongTool=structuredClone(samples);wrongTool[1].tool++;
+ assert.equal(p.validatePaperFrame(wrongTool,now).ok,false);
+ const invalidR=structuredClone(samples);invalidR[1].pose.r=NaN;
+ assert.equal(p.validatePaperFrame(invalidR,now).ok,false);
+});
+test('field length tolerance accepts shorter baselines without relaxing plane or axis checks',()=>{
+ const samples=structuredClone(frame().samples);
+ samples[1].pose.x=samples[0].pose.x+88.3;
+ samples[2].pose.y=samples[0].pose.y+88.3;
+ assert.equal(p.validatePaperFrame(samples,now).ok,false);
+ assert.equal(p.validatePaperFrame(samples,now,12).ok,true);
+ assert.ok(p.paperBaselineLengthMetrics(samples,12).every(m=>m.status==='pass'));
+ assert.ok(p.paperBaselineLengthMetrics(samples,2).every(m=>m.status==='exceeds'));
+ for(const value of [0,-1,NaN,Infinity,101])assert.equal(p.validatePaperFrame(samples,now,value).ok,false);
+ const high=structuredClone(samples);high[2].pose.z+=3;
+ assert.equal(p.validatePaperFrame(high,now,12).ok,false);
+ const swapped=[samples[0],{...samples[2],point:'X'},{...samples[1],point:'Y'}];
+ assert.equal(p.validatePaperFrame(swapped,now,12).ok,false);
+});
 function run(f,t,set='initial'){const commands=p.PAPER_TARGETS[set].map(point=>({point:point.name,pose:{...p.studentTransformPoint(t,point),z:60}}));return {id:crypto.randomUUID(),frameId:f.id,planHash:'plan',targetSet:set,source:'mock',status:'completed',startedAt:now,endedAt:now+100,startSequence:10,commands,observations:commands.map((c,i)=>({...c,command:c.pose,source:'mock',kind:'mock-bridge',seq:11+i,ageMs:0,measuredAt:now+10+i}))};}
 test('translation, quarter turn, and 10 degree transform agree with measured frame',()=>{for(const deg of [0,90,10]){const f=frame(deg),t=transform(deg),r=run(f,t);assert.equal(p.diagnosePaperRun(r,f,'plan',{transform:t}).pattern,'match');}});
 test('obeying an incorrect command is not task success; omitted rotation is identified',()=>{const f=frame(10),t=transform(0),d=p.diagnosePaperRun(run(f,t),f,'plan',{transform:t});assert.equal(d.pattern,'rotation');assert.ok(d.evidence.every(e=>e.distance===0));assert.ok(d.taskEvidence.some(e=>e.distance>10));});
