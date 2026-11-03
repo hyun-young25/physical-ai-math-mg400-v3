@@ -2,7 +2,10 @@ import {
   PAPER_GRID_SIZE_CM,
   frameTransformPoint,
   type PaperFrame,
+  type PaperPredictionPoint,
+  type PaperV6StudentModel,
 } from "./paperCoordinateStudy";
+import { paperV6EquationTerms, paperV6ModelFromDraft } from "./paperV6Model";
 import type { PaperCoordinateStudyViewState } from "./paperCoordinateViewModel";
 import type { JourneyPoint } from "./revisionJourney";
 import { revisionSceneSeries, type RevisionPhase, type RevisionSeries } from "./revisionSceneStore";
@@ -39,15 +42,93 @@ export function paperSceneGridSize(data: PaperSceneData) {
   return PAPER_GRID_SIZE_CM;
 }
 const number = (text: string) => text.trim() && Number.isFinite(Number(text)) ? Number(text) : null;
+
+export function paperFrameAngleDegrees(frame: PaperFrame | null): number | null {
+  if (!frame) return null;
+  const origin = frameTransformPoint(frame, { xCm: 0, yCm: 0 });
+  const xUnit = frameTransformPoint(frame, { xCm: 1, yCm: 0 });
+  const dx = xUnit.x - origin.x;
+  const dy = xUnit.y - origin.y;
+  if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.hypot(dx, dy) < 1e-6)
+    return null;
+  return (Math.atan2(dy, dx) * 180) / Math.PI;
+}
+
+export function paperSceneLiveModel(data: PaperSceneData): PaperV6StudentModel | null {
+  const attempt = data.activeAttempt;
+  if (
+    !data.frame ||
+    attempt?.taskVersion !== "v6-paper-transform"
+  )
+    return null;
+  const draft = attempt.drafts?.v6;
+  const model = draft
+    ? paperV6ModelFromDraft({
+        ...draft,
+        thetaDeg:
+          draft.thetaAssumption === "zero"
+            ? "0"
+            : draft.thetaDeg?.trim() ||
+              (() => {
+                const dx = number(draft.deltaXmm ?? "");
+                const dy = number(draft.deltaYmm ?? "");
+                return dx !== null && dy !== null && Math.hypot(dx, dy) > 1e-6
+                  ? String((Math.atan2(dy, dx) * 180) / Math.PI)
+                  : "";
+              })(),
+      }).model
+    : attempt.v6?.model ?? null;
+  return model;
+}
+
+export function paperSceneLivePredictions(data: PaperSceneData): PaperPredictionPoint[] {
+  if (!data.frame) return [];
+  const model = paperSceneLiveModel(data);
+  if (!model) return [];
+  const attempt = data.activeAttempt!;
+  const draft = attempt.drafts?.v6;
+  const first = data.targetPoints[0];
+  return data.targetPoints.map((point) => {
+    const terms = paperV6EquationTerms(point, model);
+    const manuallyEntered = draft?.formulaWork?.[point.name];
+    const x = point.name === first?.name
+      ? number(manuallyEntered?.robotX ?? "") ?? terms.robotX
+      : terms.robotX;
+    const y = point.name === first?.name
+      ? number(manuallyEntered?.robotY ?? "") ?? terms.robotY
+      : terms.robotY;
+    const plane = frameTransformPoint(data.frame!, point);
+    return {
+      ...point,
+      robotX: String(x),
+      robotY: String(y),
+      robotZ: String(plane.z),
+    };
+  });
+}
+
 export function paperSceneSeries(data: PaperSceneData, phase: RevisionPhase): RevisionSeries[] {
   if (!data.frame) return [];
   const targets = data.targetPoints.map(p=>({label:p.name,...paperPoint(data.frame,p.xCm,p.yCm)}));
   const target: RevisionSeries = {label:"목표점",points:targets,color:PAPER_COLORS.target,dashed:false,source:"과제 조건"};
-  if (!data.revisionJourney) return [target, {label:"입력 중 예측",points:data.predictions.map(p=>({label:p.name,x:number(p.robotX),y:number(p.robotY)})),color:PAPER_COLORS.prediction,dashed:true,source:"예측 · 실행 전"}];
+  const livePredictions = paperSceneLivePredictions(data);
+  if (!data.revisionJourney) return [target, {label:"입력 중 예측",points:(livePredictions.length ? livePredictions : data.predictions).map(p=>({label:p.name,x:number(p.robotX),y:number(p.robotY)})),color:PAPER_COLORS.prediction,dashed:true,source:"예측 · 실행 전"}];
   const result = revisionSceneSeries(data.revisionJourney,phase);
   // Never overlay an old frame/target set onto today's sheet.
   if (JSON.stringify(result[0].points.map(({label,x,y})=>({label,x,y}))) !== JSON.stringify(targets.map(({label,x,y})=>({label,x,y})))) return [target];
-  return [target,...result.slice(1).map(s=>({...s,color:s.dashed?PAPER_COLORS.prediction:s.label==="수정 후 실행"?PAPER_COLORS.result:PAPER_COLORS.first}))];
+  return [
+    target,
+    ...result.slice(1).map(s=>({...s,color:s.dashed?PAPER_COLORS.prediction:s.label==="수정 후 실행"?PAPER_COLORS.result:PAPER_COLORS.first})),
+    ...(livePredictions.length
+      ? [{
+          label: "현재 식 미리보기",
+          points: livePredictions.map((p) => ({ label: p.name, x: number(p.robotX), y: number(p.robotY) })),
+          color: PAPER_COLORS.robotPreview,
+          dashed: true,
+          source: "학생 식 · 입력 중",
+        }]
+      : []),
+  ];
 }
 export function paperMismatchPoints(data: PaperSceneData, series: RevisionSeries[]): string[] {
   // Reuse the recorded diagnosis evidence. Do not create a new grade from the drawing.

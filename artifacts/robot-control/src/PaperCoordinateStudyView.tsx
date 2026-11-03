@@ -213,6 +213,7 @@ export function PaperCoordinateStudyView({
         run: state.run,
         displayPose: state.displayPose,
         displaySource: state.displaySource,
+        activeAttempt: state.activeAttempt,
       });
     else clearPaperScene(id);
   });

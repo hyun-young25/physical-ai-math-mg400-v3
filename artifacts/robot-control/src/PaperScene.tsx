@@ -3,8 +3,9 @@ import { Html, Line } from "@react-three/drei";
 import { DoubleSide } from "three";
 import { CoordinateStudyCamera } from "./CoordinateStudyCamera";
 import { shapeWorldPoint } from "./shapeKinematics";
-import { PAPER_COLORS as C, paperCorners, paperGrid, paperMismatchPoints, paperPoint, paperSceneReadout, paperSceneRotation, paperSceneSeries, paperSeriesSegments, paperFrameSource, paperSceneSourceText, validPaperPoint, type PaperScenePoint } from "./paperSceneModel";
+import { PAPER_COLORS as C, paperCorners, paperGrid, paperMismatchPoints, paperPoint, paperFrameAngleDegrees, paperSceneLiveModel, paperSceneLivePredictions, paperSceneReadout, paperSceneRotation, paperSceneSeries, paperSeriesSegments, paperFrameSource, paperSceneSourceText, validPaperPoint, type PaperScenePoint } from "./paperSceneModel";
 import { requestPaperCamera, selectPaperPoint, usePaperScene } from "./paperSceneStore";
+import { paperV6EquationTerms } from "./paperV6Model";
 import "./paperScene.css";
 
 const references=[{name:"O",x:0,y:0},{name:"X",x:10,y:0},{name:"Y",x:0,y:10}];
@@ -71,45 +72,104 @@ export function PaperSceneCaption(){
 }
 /** Shared measured-frame geometry, placed at the recorded paper Z (never changes robot pose). */
 export function PaperSceneOverlay(){
-  const {data,point,reference,phase,cameraKey}=usePaperScene();
+  const {data,point,reference,phase,cameraKey,formulaTerm}=usePaperScene();
   const frame=data?.frame??null;
-  const center=paperPoint(frame,10,10);
-  const position=(p:PaperScenePoint):[number,number,number]=>shapeWorldPoint(frame?p:{x:p.x+180,y:p.y-60,z:p.z});
+  const displayPoint=(xCm:number,yCm:number):PaperScenePoint=>{
+    if(frame)return paperPoint(frame,xCm,yCm);
+    const angle=(28.6*Math.PI)/180,a=xCm*10,b=yCm*10;
+    return {x:200+a*Math.cos(angle)-b*Math.sin(angle),y:50+a*Math.sin(angle)+b*Math.cos(angle),z:0};
+  };
+  const center=displayPoint(5,5);
+  const position=(p:PaperScenePoint):[number,number,number]=>shapeWorldPoint(p);
   const centerWorld=position(center);
-  // Camera changes only on entry, frame change or an explicit reset; not on keystrokes.
   const view=useMemo(()=>({position:[centerWorld[0]-30,centerWorld[1]+480,centerWorld[2]+230] as const,target:[centerWorld[0]-30,centerWorld[1],centerWorld[2]] as const}),[frame?.id]);
-  const corners=paperCorners(frame);
+  const corners=[[0,0],[10,0],[10,10],[0,10]].map(([x,y])=>displayPoint(x,y));
   const vertices=new Float32Array([0,1,2,0,2,3].flatMap(i=>position(corners[i])));
   if(!data)return null;
   const series=paperSceneSeries(data,phase),mismatch=paperMismatchPoints(data,series);
   const rotation=paperSceneRotation(data,series);
+  const measuredAngle=paperFrameAngleDegrees(frame);
+  const displayAngle=measuredAngle??28.6;
+  const grid=Array.from({length:11},(_,i)=>[
+    [displayPoint(i,0),displayPoint(i,10)],
+    [displayPoint(0,i),displayPoint(10,i)],
+  ]).flat();
   const raised=(p:PaperScenePoint):[number,number,number]=>{const v=position(p);return [v[0],v[1]+1.5,v[2]];};
   const wp=(p:{x:number;y:number})=>raised({...p,z:center.z});
   const selected=(label:string)=>reference?reference===label:point!==null&&`P${point+1}`===label;
+  const liveModel=paperSceneLiveModel(data);
+  const livePredictions=paperSceneLivePredictions(data);
+  const firstTarget=data.targetPoints[0];
+  const firstTerms=liveModel&&firstTarget?paperV6EquationTerms(firstTarget,liveModel):null;
+  const livePoint=livePredictions[0];
+  const livePose=livePoint?{x:Number(livePoint.robotX),y:Number(livePoint.robotY),z:Number(livePoint.robotZ??center.z)}:null;
+  const origin=liveModel?{x:liveModel.originXmm,y:liveModel.originYmm,z:center.z}:null;
+  const modelVectorSegments=origin&&firstTerms?[
+    {id:"aCos",a:origin,b:{x:origin.x+firstTerms.aCos,y:origin.y,z:origin.z},color:"#db2777"},
+    {id:"bSin",a:{x:origin.x+firstTerms.aCos,y:origin.y,z:origin.z},b:{x:origin.x+firstTerms.aCos-firstTerms.bSin,y:origin.y,z:origin.z},color:"#ea580c"},
+    {id:"aSin",a:{x:origin.x+firstTerms.aCos-firstTerms.bSin,y:origin.y,z:origin.z},b:{x:origin.x+firstTerms.aCos-firstTerms.bSin,y:origin.y+firstTerms.aSin,z:origin.z},color:"#7c3aed"},
+    {id:"bCos",a:{x:origin.x+firstTerms.aCos-firstTerms.bSin,y:origin.y+firstTerms.aSin,z:origin.z},b:{x:origin.x+firstTerms.aCos-firstTerms.bSin,y:origin.y+firstTerms.aSin+firstTerms.bCos,z:origin.z},color:"#0891b2"},
+  ]:[];
+  const arc=(originPoint:PaperScenePoint,degrees:number,radius=20)=>{
+    const radians=(degrees*Math.PI)/180;
+    return Array.from({length:13},(_,i)=>{const a=radians*i/12;return {x:originPoint.x+radius*Math.cos(a),y:originPoint.y+radius*Math.sin(a),z:originPoint.z};});
+  };
+  const frameOrigin=displayPoint(0,0);
+  const frameArc=arc(frameOrigin,displayAngle);
+  const studentArc=origin?arc(origin,liveModel!.thetaDeg):[];
+  const evidence=data.diagnosis?.taskEvidence??[];
+  const worst=evidence.reduce<(typeof evidence)[number]|null>((best,item)=>!best||item.distance>best.distance?item:best,null);
+  const latestAi=data.activeAttempt?.aiAnalyses?.filter(item=>item.runId===data.run?.id&&!!item.displayedAt).at(-1);
+  const aiAnchor=worst?data.run?.observations.find(item=>item.point===worst.point)?.pose:null;
   return <group name="measured-paper-sheet">
     <CoordinateStudyCamera requestKey={cameraKey} preset="free" view={view} minimumAspect={1.05}/>
-    <mesh renderOrder={5}><bufferGeometry><bufferAttribute attach="attributes-position" args={[vertices,3]}/></bufferGeometry><meshBasicMaterial color="#f8fafc" transparent opacity={frame ? .92 : .25} side={DoubleSide} depthWrite={false}/></mesh>
-    {paperGrid(frame).map((line,i)=><Line key={i} points={line.map(raised)} color={i%10===0?"#94a3b8":"#cbd5e1"} lineWidth={i%10===0?1.1:.65} transparent opacity={frame ? .8 : .3}/>)}
+    <mesh renderOrder={5}><bufferGeometry><bufferAttribute attach="attributes-position" args={[vertices,3]}/></bufferGeometry><meshBasicMaterial color="#f8fafc" transparent opacity={frame ? .82 : .23} side={DoubleSide} depthWrite={false}/></mesh>
+    {grid.map((line,i)=><Line key={i} points={line.map(raised)} color={i%2===0?"#cbd5e1":"#94a3b8"} lineWidth={i%2===0?.55:1} transparent opacity={frame ? .75 : .2}/>)}
     <Line points={[...corners,corners[0]].map(raised)} color={C.reference} lineWidth={2} dashed={!frame}/>
-    {rotation&&<group name="paper-observed-rotation">
-      <Line points={rotation.arc.map(raised)} color="#b45309" lineWidth={4} depthTest={false} renderOrder={220}/>
-      {[rotation.arc[0],rotation.arc.at(-1)!].map((p,i)=><Line key={i} points={[raised(rotation.start),raised(p)]} color="#b45309" lineWidth={2} dashed depthTest={false} renderOrder={220}/>)}
+    {frameArc.length>1&&<group name="paper-measured-x-axis">
+      <Line points={[position(frameOrigin),position(displayPoint(2,0))]} color="#0f766e" lineWidth={3} depthTest={false} renderOrder={219}/>
+      <Line points={[position(frameOrigin),position(displayPoint(0,2))]} color="#0284c7" lineWidth={3} depthTest={false} renderOrder={219}/>
+      <Line points={frameArc.map(raised)} color={measuredAngle===null?"#94a3b8":"#f59e0b"} lineWidth={measuredAngle===null?2:3} dashed={measuredAngle===null} depthTest={false} renderOrder={220}/>
+      <Html position={raised(displayPoint(2,0))} zIndexRange={[20,0]}><span className="paper-axis-tag paper-axis-tag--x">종이 x+</span></Html>
+      <Html position={raised(displayPoint(0,2))} zIndexRange={[20,0]}><span className="paper-axis-tag paper-axis-tag--y">종이 y+</span></Html>
+      <Html position={raised(frameOrigin)} zIndexRange={[20,0]}><span className="paper-angle-tag">{measuredAngle===null?"예시 θ 28.6°":`측정 θ ${measuredAngle.toFixed(1)}°`}</span></Html>
     </group>}
+    {rotation&&<Line points={rotation.arc.map(raised)} color="#b45309" lineWidth={3} depthTest={false} renderOrder={220}/>}
     {series.map(s=><group key={s.label}>
       {paperSeriesSegments(s.points).map((segment,i)=><Line key={i} points={segment.map(wp)} color={s.color} lineWidth={s.label==="목표점"?2:3} dashed={s.dashed} dashSize={5} gapSize={4} transparent depthTest={false} renderOrder={200}/>)}
       {s.points.filter(validPaperPoint).map(p=><mesh key={p.label} position={wp(p)} renderOrder={210}><sphereGeometry args={[s.label==="목표점"?3.8:2.7,12,8]}/><meshBasicMaterial color={s.color} transparent depthTest={false}/></mesh>)}
     </group>)}
-    {frame&&data.targetPoints.map(p=>{const pos=paperPoint(frame,p.xCm,p.yCm),bad=mismatch.includes(p.name);return <Html key={p.name} position={raised(pos)} center zIndexRange={[16,0]}><button type="button" data-point={p.name} className={`paper-point-label${bad?" paper-mismatch-pulse":""}`} style={{borderColor:bad?C.mismatch:C.target}} aria-label={`장면에서 ${p.name} 선택`} aria-pressed={selected(p.name)} onClick={()=>selectPaperPoint(p.name,"scene")}>{p.name}</button></Html>;})}
+    {frame&&data.targetPoints.map(p=>{const pos=displayPoint(p.xCm,p.yCm),bad=mismatch.includes(p.name);return <Html key={p.name} position={raised(pos)} center zIndexRange={[16,0]}><button type="button" data-point={p.name} className={`paper-point-label${bad?" paper-mismatch-pulse":""}`} style={{borderColor:bad?C.mismatch:C.target}} aria-label={`장면에서 ${p.name} 선택`} aria-pressed={selected(p.name)} onClick={()=>selectPaperPoint(p.name,"scene")}>{p.name}</button></Html>;})}
+    {!frame&&data.targetPoints.map(p=>{const pos=displayPoint(p.xCm,p.yCm);return <Html key={`example-${p.name}`} position={raised(pos)} center zIndexRange={[14,0]}><span className="paper-point-label paper-point-label--example">{p.name}</span></Html>;})}
     {mismatch.map(label=>{const target=series[0]?.points.find(p=>p.label===label),observed=data.run?.observations.find(p=>p.point===label);return target&&validPaperPoint(target)&&observed?<Line key={label} points={[wp(target),wp(observed.pose)]} color={C.mismatch} lineWidth={4} transparent depthTest={false} renderOrder={215}/>:null;})}
     {references.map(r=>{
        const sample=data.samples.find(s=>s.point===r.name);
-       const p=frame?raised(paperPoint(frame,r.x,r.y)):sample?shapeWorldPoint({...sample.pose,z:sample.pose.z+2}):raised(paperPoint(null,r.x,r.y));
-       return <group key={r.name}><mesh position={p}><sphereGeometry args={[3,12,8]}/><meshBasicMaterial color={C.reference} depthTest={false}/></mesh><Html position={p} zIndexRange={[15,0]}><button type="button" className="paper-reference-label" aria-label={`장면에서 ${r.name} 기준점 선택`} aria-pressed={reference===r.name} onClick={()=>selectPaperPoint(r.name,"scene")}>{r.name}</button></Html></group>;
+       const p=frame?raised(displayPoint(r.x,r.y)):sample?shapeWorldPoint({...sample.pose,z:sample.pose.z+2}):raised(displayPoint(r.x,r.y));
+       return <group key={r.name}><mesh position={p}><sphereGeometry args={[sample?4:3,12,8]}/><meshBasicMaterial color={sample?.source==="mock"?C.robotPreview:C.reference} depthTest={false}/></mesh><Html position={p} zIndexRange={[15,0]}><button type="button" className="paper-reference-label" aria-label={`장면에서 ${r.name} 기준점 선택`} aria-pressed={reference===r.name} onClick={()=>selectPaperPoint(r.name,"scene")}>{r.name}</button></Html></group>;
     })}
-    {!frame&&<Html position={raised(center)} center><b className="paper-unknown">위치 미확인<br/><small>배치 예시 · O/X/Y 기록 필요</small></b></Html>}
-    {/* World-aligned robot axes outside the sheet; independent of paper rotation. */}
-    <Line points={[[centerWorld[0]-160,centerWorld[1]+4,centerWorld[2]+145],[centerWorld[0]-100,centerWorld[1]+4,centerWorld[2]+145]]} color={C.reference} lineWidth={2}/>
-    <Line points={[[centerWorld[0]-160,centerWorld[1]+4,centerWorld[2]+145],[centerWorld[0]-160,centerWorld[1]+4,centerWorld[2]+85]]} color={C.reference} lineWidth={2}/>
+    {data.displayPose&&<group>
+      <mesh position={position({x:data.displayPose.x,y:data.displayPose.y,z:data.displayPose.z+3})} renderOrder={230}><sphereGeometry args={[4.5,16,12]}/><meshBasicMaterial color={data.displaySource==="mock"?C.robotPreview:C.reference} transparent opacity={.9} depthTest={false}/></mesh>
+      {data.displaySource==="mock"&&<Html position={position({x:data.displayPose.x,y:data.displayPose.y,z:data.displayPose.z+8})} zIndexRange={[24,0]}><span className="paper-robot-tip-tag">연습 펜 끝</span></Html>}
+    </group>}
+    {livePose&&<group name="student-equation-ghost">
+      <Line points={[raised(displayPoint(firstTarget.xCm,firstTarget.yCm)),raised({x:livePose.x,y:livePose.y,z:livePose.z})]} color={C.robotPreview} lineWidth={2} dashed depthTest={false} renderOrder={226}/>
+      <mesh position={position({x:livePose.x,y:livePose.y,z:livePose.z+4})} renderOrder={230}><sphereGeometry args={[5,16,12]}/><meshBasicMaterial color={C.robotPreview} transparent opacity={.9} depthTest={false}/></mesh>
+      <Html position={position({x:livePose.x,y:livePose.y,z:livePose.z+10})} zIndexRange={[26,0]}><span className="paper-robot-tip-tag">내 식 · {livePoint?.name}</span></Html>
+    </group>}
+    {origin&&<group name="student-origin-and-components">
+      <Line points={[position({x:0,y:0,z:origin.z}),position(origin)]} color={formulaTerm==="originX"||formulaTerm==="originY"?"#7c3aed":"#a78bfa"} lineWidth={formulaTerm?.startsWith("origin")?4:2} dashed depthTest={false} renderOrder={217}/>
+      {studentArc.length>1&&<Line points={studentArc.map(raised)} color="#7c3aed" lineWidth={formulaTerm==="theta"?4:2} transparent depthTest={false} renderOrder={221}/>}
+      {modelVectorSegments.map(segment=><Line key={segment.id} points={[position(segment.a),position(segment.b)]} color={segment.color} lineWidth={formulaTerm===segment.id?5:formulaTerm?1.5:2.3} transparent opacity={formulaTerm&&formulaTerm!==segment.id?0.25:1} depthTest={false} renderOrder={218}/>)}
+      <Html position={position(origin)} zIndexRange={[22,0]}><span className="paper-origin-tag">O · {liveModel?.thetaDeg.toFixed(1)}°</span></Html>
+    </group>}
+    {worst&&latestAi?.question&&aiAnchor&&<group name="ai-question-anchor">
+      <Line points={[position(aiAnchor),position({x:aiAnchor.x+28,y:aiAnchor.y+24,z:aiAnchor.z+3})]} color="#7c3aed" lineWidth={2} dashed depthTest={false} renderOrder={232}/>
+      <Html position={position({x:aiAnchor.x+28,y:aiAnchor.y+24,z:aiAnchor.z+4})} zIndexRange={[30,0]}><span className="paper-ai-anchor">AI · {latestAi.question.slice(0,76)}</span></Html>
+    </group>}
+    {!frame&&<Html position={raised(center)} center><b className="paper-unknown">배치 예시<br/><small>비스듬한 종이 · 아직 실측 전</small></b></Html>}
+    <Html position={[centerWorld[0],centerWorld[1]+120,centerWorld[2]]} zIndexRange={[18,0]}>
+      <div className="paper-scene-mini-legend"><span>종이 10×10</span><span>내 식 · 파랑</span><span>O/X/Y·로봇</span></div>
+    </Html>
   </group>;
 }
 

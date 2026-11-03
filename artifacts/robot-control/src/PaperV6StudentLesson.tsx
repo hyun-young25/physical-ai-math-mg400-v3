@@ -8,6 +8,7 @@ import type {
   PaperCoordinateStudyViewActions,
   PaperCoordinateStudyViewState,
 } from "./paperCoordinateViewModel";
+import { selectPaperFormulaTerm } from "./paperSceneStore";
 import "./paperV6StudentLesson.css";
 
 type Props = {
@@ -43,6 +44,31 @@ function field(
         onChange={(event) => onChange(event.target.value)}
       />
     </label>
+  );
+}
+
+function linkedFormulaTerm(term: string, label: string) {
+  const select = () => selectPaperFormulaTerm(term);
+  const clear = () => selectPaperFormulaTerm(null);
+  return (
+    <span
+      className="paper-v6-formula-link"
+      role="button"
+      tabIndex={0}
+      aria-label={`${label} 항을 3D 장면에서 강조`}
+      data-formula-term={term}
+      onMouseEnter={select}
+      onMouseLeave={clear}
+      onFocus={select}
+      onBlur={clear}
+      onTouchStart={select}
+      onClick={select}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") clear();
+      }}
+    >
+      {label}
+    </span>
   );
 }
 
@@ -526,9 +552,9 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
               </select>
             </label>
             <p className="paper-v6-equation">
-              x = xO + a·cosθ − b·sinθ
+              x = {linkedFormulaTerm("originX", "xO")} + {linkedFormulaTerm("aCos", "a·cosθ")} − {linkedFormulaTerm("bSin", "b·sinθ")}
               <br />
-              y = yO + a·sinθ + b·cosθ
+              y = {linkedFormulaTerm("originY", "yO")} + {linkedFormulaTerm("aSin", "a·sinθ")} + {linkedFormulaTerm("bCos", "b·cosθ")}
               <small>a, b는 종이 좌표를 mm로 바꾼 값입니다. 1 cm = 10 mm.</small>
             </p>
             {!v6?.model && (

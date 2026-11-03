@@ -986,31 +986,30 @@
   overflow-wrap: anywhere;
 }
 
-/* The robot viewport belongs to scene 3 only; other scenes use the full lesson panel. */
+/* Keep the robot and the current lesson scene visible together throughout v6. */
 .learning-workspace:has(.paper-v6-student[data-scene]) {
   flex-direction: row !important;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-scene {
-  display: none !important;
+  display: flex !important;
+  flex: 0 0 50% !important;
+  width: 50%;
+  min-width: 0;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
 }
 
 .learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-panel {
-  flex: 1 1 100%;
-  width: 100%;
+  flex: 1 1 50%;
+  width: auto;
+  max-width: 50%;
   min-width: 0;
   min-height: 0;
-}
-
-.learning-workspace:has(.paper-v6-student[data-scene="3"]) .curriculum-scene {
-  display: block !important;
-  flex: 0 0 56% !important;
-  min-width: 0;
-}
-
-.learning-workspace:has(.paper-v6-student[data-scene="3"]) .curriculum-panel {
-  flex: 1 1 44%;
-  width: auto;
+  overflow: auto;
 }
 
 .learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-scene :is(
@@ -1026,15 +1025,18 @@
   .learning-workspace:has(.paper-v6-student[data-scene]) {
     flex-direction: column !important;
   }
-  .learning-workspace:has(.paper-v6-student[data-scene="3"]) .curriculum-scene {
-    flex: 0 0 min(34vh, 310px) !important;
+  .learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-scene {
+    display: flex !important;
+    flex: 0 0 40vh !important;
     width: 100%;
-    min-height: 220px;
+    height: 40vh;
+    min-height: 230px;
+    max-height: 40vh;
   }
-  .learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-panel,
-  .learning-workspace:has(.paper-v6-student[data-scene="3"]) .curriculum-panel {
+  .learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-panel {
     flex: 1 1 0%;
     width: 100%;
+    max-width: none;
     min-height: 0;
   }
 }
