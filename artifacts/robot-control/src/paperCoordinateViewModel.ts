@@ -31,6 +31,24 @@ export type PaperStudentScreen = 1 | 2 | 3;
 export function paperStudentScreenForStage(stage: number): PaperStudentScreen {
   return stage <= 3 ? 1 : stage <= 6 ? 2 : 3;
 }
+
+export function paperTeacherPreparationPanelForTarget(
+  target: string,
+): "references" | "execution" | null {
+  if (target === "references") return "references";
+  if (["height", "criteria", "teacher", "connection"].includes(target))
+    return "execution";
+  return null;
+}
+
+export function paperVerificationCriteriaInheritedFromParent(
+  criteria: PaperVerificationCriteria | undefined,
+  parentAttemptId: string | null | undefined,
+): boolean {
+  return !!parentAttemptId &&
+    criteria?.inheritedFromAttemptId === parentAttemptId;
+}
+
 export function paperRetryInitialStep(
   status: PaperRunSnapshot["status"] | null,
   hasPlanHash: boolean,
@@ -213,6 +231,7 @@ export type PaperCoordinateStudyViewState = {
   inkReadings: PaperInkReadingDraft[];
   verificationCriteria?: PaperVerificationCriteria;
   verificationCriteriaMatches: boolean;
+  verificationCriteriaPlanReady: boolean;
   stageNavigationBlocker: PaperStageNavigationBlocker | null;
   planHash: string;
   verificationReasonDraft: string;
@@ -318,7 +337,6 @@ export type PaperCoordinateStudyViewActions = {
   onBaselineLengthToleranceDraftChange: (value: string) => void;
   onApplyBaselineLengthTolerance: () => void;
   onFocusReferencePreparation: () => void;
-  onFocusExecutionCriteria: () => void;
   onFocusTcpJog: () => void;
   onFocusRevision: () => void;
   onToleranceChange: (

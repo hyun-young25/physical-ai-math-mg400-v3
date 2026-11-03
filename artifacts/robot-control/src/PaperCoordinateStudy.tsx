@@ -859,6 +859,7 @@ export function PaperCoordinateStudy({
         retryCriteria = {
           ...prior,
           recordId: active.id,
+          inheritedFromAttemptId: parent!.id,
           frameId: active.frame.id,
           planHash: hash,
           targetSet: active.targetSet,
@@ -1259,18 +1260,6 @@ export function PaperCoordinateStudy({
         );
         if (element instanceof HTMLDetailsElement) element.open = true;
         element?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 0);
-    },
-    onFocusExecutionCriteria: () => {
-      setStage(4);
-      window.setTimeout(() => {
-        const element = document.querySelector<HTMLElement>(
-          '[aria-label="실행 전 검증 기준"]',
-        );
-        const details = element?.closest("details");
-        if (details) details.open = true;
-        element?.scrollIntoView({ behavior: "smooth", block: "center" });
-        element?.focus({ preventScroll: true });
       }, 0);
     },
     onFocusTcpJog: () => {
@@ -3912,6 +3901,8 @@ export function PaperCoordinateStudy({
     revalidationResult: active?.revalidation?.result,
     verificationCriteria: active?.verificationCriteria,
     verificationCriteriaMatches: criteriaMatches,
+    verificationCriteriaPlanReady:
+      !!active?.planHash && samePlan && predictionsComplete,
     stageNavigationBlocker: paperStageNavigationRequirement(
       7,
       (diagnosisOverride ?? active?.diagnosis)?.status === "complete",

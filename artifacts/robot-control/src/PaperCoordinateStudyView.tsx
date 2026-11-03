@@ -19,6 +19,8 @@ import { paperVerificationPointGuide } from "./paperCoordinateStudy";
 import {
   paperComparableRunPair,
   paperRetryComparisonReady,
+  paperTeacherPreparationPanelForTarget,
+  paperVerificationCriteriaInheritedFromParent,
   paperVerificationCriteriaSavedForAttempt,
 } from "./paperCoordinateViewModel";
 import { ExecutionAiAnalysis } from "./ExecutionAiAnalysis";
@@ -143,6 +145,10 @@ export function PaperCoordinateStudyView({
   const [flowGuidance, setFlowGuidance] = useState<{
     message: string;
     target?: string;
+  } | null>(null);
+  const [inlineTeacherPreparation, setInlineTeacherPreparation] = useState<{
+    panel: "references" | "execution";
+    target: string;
   } | null>(null);
   const [finalDecisionReason, setFinalDecisionReason] = useState(
     state.modelDecisionReasonDraft,
@@ -279,6 +285,12 @@ export function PaperCoordinateStudyView({
     state.planHash,
     state.verificationCriteriaMatches,
   );
+  const criteriaPlanReady = state.verificationCriteriaPlanReady;
+  const criteriaInheritedFromParent =
+    paperVerificationCriteriaInheritedFromParent(
+      state.verificationCriteria,
+      state.parentAttempt?.id,
+    );
 
   useEffect(
     () => setHypothesisDraft(state.studentHypothesis),
@@ -316,7 +328,32 @@ export function PaperCoordinateStudyView({
     element?.scrollIntoView({ block: "center", behavior: "smooth" });
     element?.focus({ preventScroll: true });
   };
+  const openTeacherPreparationTarget = (target: string) => {
+    if (!conciseFlow) return false;
+    const panel = paperTeacherPreparationPanelForTarget(target);
+    if (!panel) return false;
+    setInlineTeacherPreparation({ panel, target });
+    requestAnimationFrame(() => {
+      const selectors: Record<string, string> = {
+        references:
+          ".pcv-teacher-prep--references, .pcv-inline-teacher-prep__references",
+        height: '[aria-label="펜 들기 높이"]',
+        criteria: '[aria-label="실행 전 검증 기준"]',
+        teacher: ".pcv-teacher-setting",
+        connection: ".pcv-inline-teacher-prep",
+      };
+      const element = root.current?.querySelector<HTMLElement>(
+        selectors[target] ?? ".pcv-inline-teacher-prep",
+      );
+      const details = element?.closest("details");
+      if (details) details.open = true;
+      element?.scrollIntoView({ block: "center", behavior: "smooth" });
+      element?.focus({ preventScroll: true });
+    });
+    return true;
+  };
   const focusFlowTarget = (target?: string) => {
+    if (target && openTeacherPreparationTarget(target)) return;
     const selectors: Record<string, string> = {
       references: ".pcv-teacher-prep--references",
       transform:
@@ -339,6 +376,7 @@ export function PaperCoordinateStudyView({
     target: import("./paperExecutionGuards").PaperRunBlocker["target"],
   ) => {
     if (target === "connection") {
+      if (conciseFlow) openTeacherPreparationTarget("connection");
       actions.onOpenConnection?.();
       return;
     }
@@ -362,6 +400,7 @@ export function PaperCoordinateStudyView({
       });
       return;
     }
+    if (openTeacherPreparationTarget(target)) return;
     const stage: PaperLessonStage =
       target === "references" ? 1 : target === "prediction" ? 3 : 4;
     if (state.stage !== stage) {
@@ -1107,7 +1146,10 @@ export function PaperCoordinateStudyView({
     </label>
   );
 
-  const renderStage = (renderStageId: PaperLessonStage) => {
+  const renderStage = (
+    renderStageId: PaperLessonStage,
+    openExecutionPreparation = false,
+  ) => {
     switch (renderStageId) {
       case 1:
         return (
@@ -1209,7 +1251,12 @@ export function PaperCoordinateStudyView({
             ) : merged ? (
               <details
                 className="pcv-details pcv-teacher-prep pcv-teacher-prep--references"
-                open={!state.frame}
+                tabIndex={-1}
+                open={
+                  !state.frame ||
+                  (screenIndex === 1 &&
+                    inlineTeacherPreparation?.panel === "references")
+                }
               >
                 <summary>교사용 수업 준비 · 종이 정렬과 O/X/Y 기준점</summary>
                 <p className="pcv-prep-status">
@@ -1668,7 +1715,10 @@ export function PaperCoordinateStudyView({
               </>
             )}
             {merged && (
-              <details className="pcv-details pcv-teacher-prep pcv-teacher-prep--execution">
+              <details
+                className="pcv-details pcv-teacher-prep pcv-teacher-prep--execution"
+                open={openExecutionPreparation || undefined}
+              >
                 <summary>교사용 수업 준비 · 높이, 허용오차와 감독</summary>
                 <ul className="pcv-prep-list">
                   {state.preparationSummary.map((item) => (
@@ -1817,7 +1867,10 @@ export function PaperCoordinateStudyView({
                     state.verificationCriteriaMatches,
                   ) ? (
                     <p role="status">
-                      저장된 기준: 위치 ±
+                      {criteriaInheritedFromParent
+                        ? `이전 시도 ${state.parentAttempt?.attempt ?? "—"}의 기준을 재사용했습니다. 최초 확정 근거를 유지했습니다. `
+                        : "이번 시도에서 저장한 기준입니다. "}
+                      위치 ±
                       {state.verificationCriteria?.positionToleranceMm ??
                         state.positionTolerance}{" "}
                       mm · 방향 ±
@@ -1830,6 +1883,18 @@ export function PaperCoordinateStudyView({
                       현재 설정을 저장하고 실행 전에 기준을 확인해야 합니다:
                       위치 ±{state.positionTolerance} mm · 방향 ±
                       {state.rotationTolerance}°.
+                    </p>
+                  )}
+                  {conciseFlow && !criteriaPlanReady && (
+                    <p className="pcv-guided-blocker" role="status">
+                      현재 학생 화면의 관계·예측 계획이 아직 저장되지 않았습니다.
+                      작성 중인 입력과 이전 시도 연결은 유지됩니다. 먼저{" "}
+                      {screenIndex === 1
+                        ? "‘관계와 예측 저장 후 실행으로’"
+                        : screenIndex === 3
+                          ? "‘수정 모델과 새 예측 저장’"
+                          : "예측 화면에서 계획을 저장한 뒤"}
+                      을 눌러 계획을 저장한 뒤 이 기준을 확정하세요.
                     </p>
                   )}
                   <label className="pcv-field">
@@ -1847,7 +1912,11 @@ export function PaperCoordinateStudyView({
                     type="button"
                     className="pcv-button pcv-button--quiet"
                     onClick={actions.onSaveVerificationCriteria}
-                    disabled={state.running || !!state.run}
+                    disabled={
+                      state.running ||
+                      !!state.run ||
+                      (conciseFlow && !criteriaPlanReady)
+                    }
                   >
                     이 시도의 실행 전 기준 저장
                   </button>
@@ -2452,6 +2521,7 @@ export function PaperCoordinateStudyView({
         "수정한 모델과 모든 새 예측을 한 번에 저장하면 실행 버튼을 사용할 수 있습니다.",
         3,
       )}
+      {renderInlineTeacherPreparation()}
       <section
         className="pcv-flow-section pcv-retry-plan"
         aria-label="수정 모델과 새 예측"
@@ -2613,6 +2683,77 @@ export function PaperCoordinateStudyView({
     </>
   );
 
+  const renderInlineTeacherPreparation = () => {
+    if (!inlineTeacherPreparation) return null;
+    if (
+      screenIndex === 1 &&
+      inlineTeacherPreparation.panel === "references"
+    )
+      return null;
+    return (
+      <section
+        className="pcv-flow-section pcv-inline-teacher-prep"
+        aria-label="현재 화면 안의 교사 준비"
+        data-testid="inline-teacher-preparation"
+        data-prep-target={inlineTeacherPreparation.target}
+      >
+        <div className="pcv-inline-teacher-prep__heading">
+          <div>
+            <span className="pcv-eyebrow">학생 입력과 시도 연결 유지</span>
+            <h3>
+              {inlineTeacherPreparation.panel === "references"
+                ? "교사 준비 · 종이 기준점"
+                : "교사 준비 · 실행 기준과 높이"}
+            </h3>
+          </div>
+          <button
+            type="button"
+            className="pcv-button pcv-button--quiet"
+            onClick={() => setInlineTeacherPreparation(null)}
+          >
+            준비 접기
+          </button>
+        </div>
+        <p>
+          이 영역을 확인해도 현재 화면, 수정 입력, 이전 시도 연결은 유지됩니다.
+          기준은 교사가 명시적으로 확인·저장해야 적용됩니다.
+        </p>
+        <button
+          type="button"
+          className="pcv-button pcv-button--quiet"
+          onClick={actions.onOpenConnection}
+        >
+          연결·User/Tool 설정 열기
+        </button>
+        <div className="pcv-inline-teacher-prep__switches">
+          <button
+            type="button"
+            className="pcv-button pcv-button--quiet"
+            onClick={() => openTeacherPreparationTarget("references")}
+          >
+            O/X/Y 기준점 준비
+          </button>
+          <button
+            type="button"
+            className="pcv-button pcv-button--quiet"
+            onClick={() => openTeacherPreparationTarget("criteria")}
+          >
+            높이·검증 기준 준비
+          </button>
+        </div>
+        {inlineTeacherPreparation.panel === "references" ? (
+          <div className="pcv-inline-teacher-prep__references">
+            {renderReferencePreparation()}
+          </div>
+        ) : (
+          <div className="pcv-inline-teacher-prep__execution">
+            {renderStage(4, true)}
+          </div>
+        )}
+      </section>
+    );
+  };
+
   const renderGuidedProgress = (
     position: number,
     title: string,
@@ -2651,6 +2792,7 @@ export function PaperCoordinateStudyView({
             "관계와 모든 예측이 한 번에 저장되고 실행 전 계획으로 고정됩니다.",
             3,
           )}
+          {renderInlineTeacherPreparation()}
           <section className="pcv-flow-section" aria-label="목표 도형 확인">
             <h3>목표 도형과 준비 상태</h3>
             {renderStage(1)}
@@ -2692,6 +2834,7 @@ export function PaperCoordinateStudyView({
             "현재 실행의 출처·차이·질문을 확인하고 다음 화면으로 이어갑니다.",
             3,
           )}
+          {renderInlineTeacherPreparation()}
           {renderExecutionControls(state.targetSet === "revalidation")}
           <section className="pcv-flow-section" aria-label="실행과 결과 비교">
             <h3>현재 실행과 점별 관측</h3>
@@ -2746,6 +2889,7 @@ export function PaperCoordinateStudyView({
           "학생의 근거가 저장되고 새 예측을 입력할 별도 시도가 만들어집니다.",
           3,
         )}
+        {renderInlineTeacherPreparation()}
         <section
           className="pcv-flow-section"
           aria-label="추가 관측과 모델 판단"
@@ -2953,7 +3097,9 @@ export function PaperCoordinateStudyView({
                         type="button"
                         className="pcv-button pcv-button--quiet"
                         disabled={state.running}
-                        onClick={actions.onFocusExecutionCriteria}
+                        onClick={() =>
+                          openTeacherPreparationTarget("criteria")
+                        }
                       >
                         교사 준비에서 검증 기준 확인
                       </button>

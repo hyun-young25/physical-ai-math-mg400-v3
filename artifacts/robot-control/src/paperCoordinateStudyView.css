@@ -699,6 +699,14 @@
 .pcv-flow-section { display:grid; min-width:0; gap:12px; padding:14px; background:#fff; border:1px solid #dbe4ef; border-radius:10px; }
 .pcv-flow-section > h3 { margin:0; color:#173b73; font-size:15px; line-height:1.4; }
 .pcv-flow-section > .pcv-flow-footer { margin-top:4px; }
+.pcv-inline-teacher-prep { border-color:#b8c9e0; background:#f8fbff; }
+.pcv-inline-teacher-prep__heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.pcv-inline-teacher-prep__heading h3 { margin:3px 0 0; color:#173b73; font-size:15px; }
+.pcv-inline-teacher-prep__switches { display:flex; flex-wrap:wrap; gap:8px; }
+.pcv-inline-teacher-prep__execution,
+.pcv-inline-teacher-prep__references { min-width:0; }
+.pcv-inline-teacher-prep__execution > .pcv-stage,
+.pcv-inline-teacher-prep__references > .pcv-stage { min-width:0; }
 .pcv-retry-plan { background:#f8fbff; border-color:#bfdbfe; }
 .pcv-student-criteria-summary { display:grid; gap:5px; margin:0 0 12px; padding:11px 13px; color:#24436f; background:#eff6ff; border:1px solid #bfdbfe; border-radius:9px; }
 .pcv-student-criteria-summary > strong { font-size:12px; }
@@ -744,6 +752,8 @@
   .pcv-stage-nav--three ol { gap:4px; padding:8px; }
   .pcv-stage-nav--three li { display:grid; justify-items:start; gap:5px; padding:7px; font-size:10px; word-break:keep-all; }
   .pcv-flow-section { padding:10px; }
+  .pcv-inline-teacher-prep__heading { align-items:stretch; flex-direction:column; }
+  .pcv-inline-teacher-prep__switches > button { flex:1 1 100%; }
   .pcv-student-criteria-summary { padding:9px 10px; }
   .pcv-flow-footer { align-items:stretch; flex-direction:column; }
   .pcv-preparation-summary ul,

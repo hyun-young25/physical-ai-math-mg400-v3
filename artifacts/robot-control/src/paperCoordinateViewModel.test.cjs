@@ -18,6 +18,10 @@ new Function(
 )(exports_, (name) => {
   throw new Error(`Unexpected runtime import: ${name}`);
 });
+const view = fs.readFileSync(
+  path.join(__dirname, "PaperCoordinateStudyView.tsx"),
+  "utf8",
+);
 
 test("7단계 진입 차단은 실제 누락 항목과 이동 위치를 반환한다", () => {
   assert.deepEqual(exports_.paperStageNavigationRequirement(7, false, false), {
@@ -38,6 +42,30 @@ test("기존 저장 단계는 학생에게 세 화면으로 묶여 재시도도 
   assert.deepEqual(
     [1, 2, 3, 4, 5, 6, 7].map(exports_.paperStudentScreenForStage),
     [1, 1, 1, 2, 2, 2, 3],
+  );
+});
+
+test("교사 준비 링크는 기준점과 실행 준비 영역을 구분한다", () => {
+  assert.equal(exports_.paperTeacherPreparationPanelForTarget("references"), "references");
+  for (const target of ["height", "criteria", "teacher", "connection"])
+    assert.equal(exports_.paperTeacherPreparationPanelForTarget(target), "execution");
+  for (const target of ["prediction", "dt"])
+    assert.equal(exports_.paperTeacherPreparationPanelForTarget(target), null);
+});
+
+test("이어받은 교사 기준은 직접 부모 시도와 일치할 때만 재사용으로 표시한다", () => {
+  const criteria = { inheritedFromAttemptId: "parent-1" };
+  assert.equal(
+    exports_.paperVerificationCriteriaInheritedFromParent(criteria, "parent-1"),
+    true,
+  );
+  assert.equal(
+    exports_.paperVerificationCriteriaInheritedFromParent(criteria, "other-parent"),
+    false,
+  );
+  assert.equal(
+    exports_.paperVerificationCriteriaInheritedFromParent(criteria, null),
+    false,
   );
 });
 
@@ -214,7 +242,14 @@ test("간략화된 실행·비교와 수정·재확인 화면에 실행 조작�
   assert.match(view, /actions\.onSaveRetryPlan\(\)/);
   assert.match(view, /수정 모델과 새 예측 저장/);
   assert.match(view, /독립 검증점/);
-  assert.match(view, /onClick=\{actions\.onFocusExecutionCriteria\}/);
+  assert.match(view, /onClick=\{\(\) =>\s*openTeacherPreparationTarget\("criteria"\)\}/);
+  assert.match(view, /if \(target && openTeacherPreparationTarget\(target\)\) return;/);
+  assert.match(view, /if \(openTeacherPreparationTarget\(target\)\) return;/);
+  assert.match(view, /renderInlineTeacherPreparation\(\)/);
+  assert.match(view, /renderStage\(4, true\)/);
+  assert.match(view, /학생 화면의 관계·예측 계획이 아직 저장되지 않았습니다/);
+  assert.match(view, /disabled=\{\s*state\.running \|\|\s*\!\!state\.run \|\|\s*\(conciseFlow && !criteriaPlanReady\)/);
+  assert.match(view, /이전 시도 \$\{state\.parentAttempt\?\.attempt[\s\S]*최초 확정 근거를 유지했습니다/);
   assert.match(
     view,
     /paperComparableRunPair\([\s\S]*state\.activeAttempt\?\.runHistory/,

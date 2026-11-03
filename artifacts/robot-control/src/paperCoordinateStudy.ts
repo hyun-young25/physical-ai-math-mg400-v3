@@ -105,6 +105,7 @@ export type PaperVerificationCriteria = {
   rotationToleranceDeg: number;
   rationale: string;
   confirmedAt: number;
+  inheritedFromAttemptId?: string;
 };
 
 export type PaperInkReading = {
