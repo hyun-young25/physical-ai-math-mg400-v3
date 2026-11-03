@@ -2631,8 +2631,10 @@ export function PaperCoordinateStudyView({
           tabIndex={-1}
         >
           <p className="pcv-guided-instruction">
-            <strong>지금 할 일</strong> ‘DT에서 확인’을 눌러 새 예측을 다시
-            실행합니다. DT는 화면 시뮬레이션이며 실측이 아닙니다.
+            <strong>지금 할 일</strong> ‘DT로 다시 확인’을 눌러 수정한 예측을
+            DT에서 실행합니다. DT는 화면 시뮬레이션이며 실측이 아닙니다. DT 완료
+            후 교사 준비가 충족되면 ‘실장비로 다시 확인’을 눌러 같은 계획을
+            실물로 확인할 수 있습니다.
           </p>
           {renderStage(4)}
           {state.run?.status === "completed" && (
