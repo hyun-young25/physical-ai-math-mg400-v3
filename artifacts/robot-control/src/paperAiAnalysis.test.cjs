@@ -546,7 +546,7 @@ test("first attempt has no prior feedback; unrelated assignment stays isolated w
   const versionChild = {
     ...current,
     parentAttemptId: otherVersion.id,
-    taskVersion: "v4-paper-merged",
+    taskVersion: "v6-paper-transform",
   };
   const versionChanged = moduleExports.paperFeedbackContext(
     versionChild,

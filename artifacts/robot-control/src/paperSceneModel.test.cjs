@@ -4,12 +4,11 @@ const cache={};function load(name){if(cache[name])return cache[name];const out=c
 cache.useSquareVisual={};const m=load('paperSceneModel'),store=load('paperSceneStore'),rev=load('revisionSceneStore');
 const frame={id:'rotated',samples:[['O',200,-60],['X',200,40],['Y',100,-60]].map(([point,x,y])=>({point,pose:{x,y,z:60,r:0}})),source:'teacher'};
 const data=()=>({frame,samples:frame.samples,level:'advanced-paper-hardware',stage:3,targetPoints:[{name:'P1',xCm:0,yCm:0}],predictions:[{name:'P1',robotX:'200',robotY:'-60'}],running:false});
-test('10 cm paper grid follows measured O/X/Y and retains an explicit legacy 20 cm display',()=>{
+test('paper grid follows measured O/X/Y and remains 10 cm for current attempts',()=>{
  assert.deepEqual(m.paperCorners(frame),[{x:200,y:-60,z:60,r:0},{x:200,y:40,z:60,r:0},{x:100,y:40,z:60,r:0},{x:100,y:-60,z:60,r:0}]);
  assert.equal(m.paperGrid(frame).length,22);assert.equal(Math.hypot(m.paperGrid(frame)[2][0].x-200,m.paperGrid(frame)[2][0].y+60),10);
- assert.deepEqual(m.paperCorners(frame,20),[{x:200,y:-60,z:60,r:0},{x:200,y:140,z:60,r:0},{x:0,y:140,z:60,r:0},{x:0,y:-60,z:60,r:0}]);
  assert.equal(m.paperSceneGridSize({...data(),activeAttempt:{taskVersion:'v5-paper-10cm'}}),10);
- assert.equal(m.paperSceneGridSize({...data(),activeAttempt:{taskVersion:'v4-paper-merged'}}),20);
+  assert.equal(m.paperSceneGridSize({...data(),activeAttempt:{taskVersion:'v6-paper-transform'}}),10);
 });
 test('unknown frames and incomplete input cannot invent robot targets or a result',()=>{
  const d=data();d.frame=null;assert.deepEqual(m.paperSceneSeries(d,1),[]);d.frame=frame;d.predictions[0].robotY='';

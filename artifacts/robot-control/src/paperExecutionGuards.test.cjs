@@ -6,7 +6,8 @@ function sample(angle){const a=angle*Math.PI/180,now=Date.now();return p.validat
 for(const angle of [0,15,90])test(`sheet boundary uses physical mm at ${angle} degrees`,()=>{
  const f=sample(angle),pose=(xCm,yCm)=>p.frameTransformPoint(f,{xCm,yCm});
  assert.equal(g.paperBoundary(f,pose(0,0)).outside,false);
- assert.equal(g.paperBoundary(f,pose(20,20)).outside,false);
+  assert.equal(g.paperBoundary(f,pose(10,10)).outside,false);
+  assert.equal(g.paperBoundary(f,pose(10.1,10)).outside,true);
  assert.ok(Math.abs(g.paperBoundary(f,pose(-2,10)).distance-20)<1e-6);
  assert.ok(g.paperBoundary(f,pose(-2.2,-2.2)).distance>30,'diagonal distance, not square expanded box');
  assert.equal(g.supervisedPaperBlockers(true,true,true,f,[{point:'P3',pose:pose(-2,10)}]).length,0);

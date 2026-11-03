@@ -23,7 +23,7 @@ export function PaperSceneLegend(){
 export function PaperSceneToolbar(){
   const {data}=usePaperScene();if(!data)return null;
   const measured=data.displaySource==="hardware"||data.displaySource==="mock";
-  return <div className="paper-scene-toolbar"><span>{data.frame?"종이 20×20 cm · 1 cm 눈금":"위치 미확인 · 반투명 종이는 배치 예시"}<small>{measured?"원래 색: 현재 보고 위치":"원래 색: 현재 위치 고정 · 파란 고스트: DT 예측 이동 · 실측 아님"}</small></span><button type="button" onClick={requestPaperCamera}>↺ 종이 시점</button></div>;
+  return <div className="paper-scene-toolbar"><span>{data.frame?"종이 10×10 cm · 1 cm 눈금":"위치 미확인 · 반투명 종이는 배치 예시"}<small>{measured?"원래 색: 현재 보고 위치":"원래 색: 현재 위치 고정 · 파란 고스트: DT 예측 이동 · 실측 아님"}</small></span><button type="button" onClick={requestPaperCamera}>↺ 종이 시점</button></div>;
 }
 export function PaperSceneCaption(){
   const {data,point,reference,phase,robotDisplay}=usePaperScene();if(!data)return null;
@@ -127,7 +127,7 @@ export function PaperSceneMap({fallback=false,compact=false}:{fallback?:boolean;
   const choose=(name:string)=>selectPaperPoint(name);
   const selectedName=reference??(point===null?null:`P${point+1}`);
   return <section className={`paper-scene-map${compact?expanded?" paper-scene-map--expanded":" paper-scene-map--compact":""}`} aria-label={fallback?"3D 미지원 · 종이 좌표 대체 도면":"도봇과 맞춰 보는 종이 도면"} data-frame={frame?.id??"unknown"}>
-    <header><b>{fallback?"3D 미지원 · 좌표 도면":frame?"도봇과 같은 종이 · 위에서 보기":"종이 좌표 예시 · 위치 미확인"}</b><span>20×20 cm · 눈금 1 cm</span>{compact&&<button type="button" className="paper-map-expand" aria-expanded={expanded} onClick={()=>setExpanded(!expanded)}>{expanded?"접기":"크게 보기"}</button>}</header>
+    <header><b>{fallback?"3D 미지원 · 좌표 도면":frame?"도봇과 같은 종이 · 위에서 보기":"종이 좌표 예시 · 위치 미확인"}</b><span>10×10 cm · 눈금 1 cm</span>{compact&&<button type="button" className="paper-map-expand" aria-expanded={expanded} onClick={()=>setExpanded(!expanded)}>{expanded?"접기":"크게 보기"}</button>}</header>
     <svg viewBox="0 0 410 350" role="group" aria-label="종이 좌표와 로봇 좌표를 구분한 도면">
       <polygon points={path(corners)} fill="#f8fafc" stroke={C.reference} opacity={frame?1:.4}/>
       {paperGrid(frame).map((l,i)=><polyline key={i} points={path(l)} fill="none" stroke="#cbd5e1" strokeWidth={i%10===0?1.2:.6}/ >)}

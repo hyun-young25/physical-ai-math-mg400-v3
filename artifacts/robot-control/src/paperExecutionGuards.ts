@@ -4,11 +4,11 @@ import { frameInversePoint, frameTransformPoint, type PaperFrame } from "./paper
 export const PAPER_SUPERVISED_MARGIN_MM = 30;
 export type PaperRunBlocker = { message: string; target: "prediction" | "criteria" | "height" | "references" | "connection" | "teacher" | "dt" };
 
-/** Distance to the physical 20 cm sheet, in robot millimetres, including rotated frames. */
+/** Distance to the 10 cm square sheet, in robot millimetres, including rotated frames. */
 export function paperBoundary(
   frame: PaperFrame,
   pose: LessonPose,
-  sheetSizeCm = 20,
+  sheetSizeCm = 10,
 ) {
   const local = frameInversePoint(frame, pose);
   if (!local || !Number.isFinite(local.xCm) || !Number.isFinite(local.yCm)) return { outside: true, distance: Infinity };
@@ -24,7 +24,7 @@ export function paperBoundary(
 }
 
 export function supervisedPaperBlockers(enabled: boolean, mismatch: boolean, dtCompleted: boolean,
-  frame: PaperFrame | null, points: { point:string; pose:LessonPose }[], sheetSizeCm = 20): PaperRunBlocker[] {
+  frame: PaperFrame | null, points: { point:string; pose:LessonPose }[], sheetSizeCm = 10): PaperRunBlocker[] {
   if (!mismatch) return [];
   const reasons: PaperRunBlocker[] = [];
   if (!enabled) reasons.push({message:"목표와 다른 예측입니다. 교사 감독 허용이 꺼져 있어 실장비로 실행할 수 없습니다.",target:"teacher"});

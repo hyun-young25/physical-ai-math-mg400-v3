@@ -1,4 +1,8 @@
-import { frameTransformPoint, type PaperFrame } from "./paperCoordinateStudy";
+import {
+  PAPER_GRID_SIZE_CM,
+  frameTransformPoint,
+  type PaperFrame,
+} from "./paperCoordinateStudy";
 import type { PaperCoordinateStudyViewState } from "./paperCoordinateViewModel";
 import type { JourneyPoint } from "./revisionJourney";
 import { revisionSceneSeries, type RevisionPhase, type RevisionSeries } from "./revisionSceneStore";
@@ -17,17 +21,22 @@ export function paperFrameSource(data: PaperSceneData) {
 export function paperPoint(frame: PaperFrame | null, xCm: number, yCm: number): PaperScenePoint {
   return frame ? frameTransformPoint(frame, { xCm, yCm }) : { x: xCm * 10, y: yCm * 10, z: 0 };
 }
-export function paperCorners(frame: PaperFrame | null, sizeCm = 10) {
-  return [[0,0],[sizeCm,0],[sizeCm,sizeCm],[0,sizeCm]].map(([x,y]) => paperPoint(frame,x,y));
+export function paperCorners(frame: PaperFrame | null) {
+  return [
+    [0, 0],
+    [PAPER_GRID_SIZE_CM, 0],
+    [PAPER_GRID_SIZE_CM, PAPER_GRID_SIZE_CM],
+    [0, PAPER_GRID_SIZE_CM],
+  ].map(([x, y]) => paperPoint(frame, x, y));
 }
-export function paperGrid(frame: PaperFrame | null, sizeCm = 10) {
-  return Array.from({length:sizeCm+1},(_,i) => [
-    [paperPoint(frame,i,0),paperPoint(frame,i,sizeCm)],
-    [paperPoint(frame,0,i),paperPoint(frame,sizeCm,i)],
+export function paperGrid(frame: PaperFrame | null) {
+  return Array.from({length:PAPER_GRID_SIZE_CM+1},(_,i) => [
+    [paperPoint(frame,i,0),paperPoint(frame,i,PAPER_GRID_SIZE_CM)],
+    [paperPoint(frame,0,i),paperPoint(frame,PAPER_GRID_SIZE_CM,i)],
   ]).flat();
 }
 export function paperSceneGridSize(data: PaperSceneData) {
-  return data.activeAttempt?.taskVersion === "v4-paper-merged" ? 20 : 10;
+  return PAPER_GRID_SIZE_CM;
 }
 const number = (text: string) => text.trim() && Number.isFinite(Number(text)) ? Number(text) : null;
 export function paperSceneSeries(data: PaperSceneData, phase: RevisionPhase): RevisionSeries[] {

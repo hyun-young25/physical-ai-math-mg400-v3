@@ -354,6 +354,50 @@ export function isPaperHardwareAttemptReadOnly(
 }
 
 /**
+ * Retired paper attempts stay in storage for preservation, but are not part of
+ * the current student history or task logic.
+ */
+export function isArchivedPaperAttempt(
+  record: Pick<PaperTrialRecord, "task" | "level" | "taskVersion">,
+): boolean {
+  return (
+    record.task === "paper-coordinate" &&
+    record.taskVersion === "v4-paper-merged" &&
+    (record.level === "advanced-paper-hardware" ||
+      record.level === "advanced-paper-dt")
+  );
+}
+
+export function visiblePaperAttempts(
+  records: PaperTrialRecord[],
+): PaperTrialRecord[] {
+  return records.filter((record) => !isArchivedPaperAttempt(record));
+}
+
+/** Keep retired records byte-for-byte while persisting the current visible set. */
+export function paperAttemptsForStorage(
+  visibleRecords: PaperTrialRecord[],
+  storedRecords: PaperTrialRecord[],
+): PaperTrialRecord[] {
+  const visibleById = new Map(
+    visiblePaperAttempts(visibleRecords).map((record) => [record.id, record]),
+  );
+  const merged: PaperTrialRecord[] = [];
+  for (const stored of storedRecords) {
+    if (isArchivedPaperAttempt(stored)) {
+      merged.push(stored);
+      continue;
+    }
+    const current = visibleById.get(stored.id);
+    if (current) {
+      merged.push(current);
+      visibleById.delete(stored.id);
+    }
+  }
+  return [...merged, ...visibleById.values()];
+}
+
+/**
  * Opening the hardware paper lesson resumes only a nonterminal v6 attempt.
  * Older content versions remain in history; they are never promoted in place.
  */
@@ -380,16 +424,13 @@ export function paperLegacyRecordNotice(
   ) {
     return null;
   }
-  if (taskVersion === "v4-paper-merged") {
-    return "이전 v4 과제 기록(20×20 cm)입니다. 원본은 보존되며 입력·저장·실행은 읽기 전용입니다.";
-  }
   if (taskVersion === PAPER_TASK_VERSION) {
     return "이전 버전 v5(10×10 cm · O/X/Y 자동 변환 방식) 기록입니다. 원본은 보존되며 입력·저장·실행은 읽기 전용입니다.";
   }
   if (!taskVersion) {
-    return "이전 버전 기록입니다. 원본은 읽기 전용으로 보존됩니다. 과제 버전 정보가 없어 종이 크기는 단정하지 않습니다.";
+    return "이전 버전 기록입니다. 원본은 읽기 전용으로 보존됩니다. 버전 정보가 없어 현재 과제와 같은 방식으로 해석하지 않습니다.";
   }
-  return `이전 버전(${taskVersion}) 기록입니다. 원본은 읽기 전용으로 보존됩니다. 실제 종이 크기는 이 버전 정보만으로 확정하지 않습니다.`;
+  return "이전 버전 기록입니다. 원본은 읽기 전용으로 보존됩니다. 현재 과제와 다른 방식으로 해석하지 않습니다.";
 }
 
 /**

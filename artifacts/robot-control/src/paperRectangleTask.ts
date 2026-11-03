@@ -18,12 +18,7 @@ export function paperTaskTargets(level:PaperCoordinateLevel,set:PaperTargetSet,t
   if(level==="advanced-paper-dt"||level==="advanced-paper-hardware") {
     if(level==="advanced-paper-hardware"&&taskVersion===PAPER_HARDWARE_V6_VERSION&&set==="revalidation")
       return [{name:"V",xCm:5,yCm:6}];
-    // v4 records retain their original task coordinates when viewed. New
-    // attempts use points wholly inside the 10 × 10 cm teaching sheet.
-    const legacy = taskVersion === "v4-paper-merged";
-    const points=legacy
-      ? set==="revalidation"?[[2,3],[9,3],[9,12],[2,12]]:[[0,0],[11,0],[11,15],[0,15]]
-      : set==="revalidation"?[[2,2],[8,2],[8,8],[2,8]]:[[1,1],[9,1],[9,9],[1,9]];
+    const points=set==="revalidation"?[[2,2],[8,2],[8,8],[2,8]]:[[1,1],[9,1],[9,9],[1,9]];
     return points.map(([xCm,yCm],i)=>({name:"P"+(i+1),xCm,yCm}));
   }
   const points=set==="revalidation"?[[3,3],[7,3],[7,5],[3,5]]:[[2,2],[8,2],[8,6],[2,6]];

@@ -8,10 +8,12 @@ function trial(omit=false,offset=0){const frame=m.givenPaperFrame(),start=Date.n
  return {frame,run};
 }
 const diagnose=(t,options={})=>p.diagnosePaperRun(t.run,t.frame,"plan",{targets,detectOriginMissing:true,...options});
-test("current merged course uses a 10x10 cm paper and v4 records retain their original targets",()=>{
+test("current paper course keeps all targets and the independent point within the 10x10 cm sheet",()=>{
   assert.deepEqual(targets.map(t=>[t.xCm,t.yCm]),[[1,1],[9,1],[9,9],[1,9]]);
   assert.deepEqual(r.paperTaskTargets("advanced-paper-dt","revalidation").map(t=>[t.xCm,t.yCm]),[[2,2],[8,2],[8,8],[2,8]]);
-  assert.deepEqual(r.paperTaskTargets("advanced-paper-dt","initial","v4-paper-merged").map(t=>[t.xCm,t.yCm]),[[0,0],[11,0],[11,15],[0,15]]);
+   const v6Targets=r.paperTaskTargets("advanced-paper-hardware","initial","v6-paper-transform");
+   assert.ok(v6Targets.every(t=>t.xCm>=0&&t.xCm<=10&&t.yCm>=0&&t.yCm<=10));
+   assert.deepEqual(r.paperTaskTargets("advanced-paper-hardware","revalidation","v6-paper-transform"),[{name:"V",xCm:5,yCm:6}]);
  assert.deepEqual(r.paperTaskTargets("advanced-paper-rotated","initial").map(t=>[t.xCm,t.yCm]),[[2,2],[8,2],[8,6],[2,6]]);
   assert.equal(m.PAPER_TASK_VERSION,"v5-paper-10cm");
  assert.equal(m.paperConceptValid({motion:"MoveJ",closeX:"0",closeY:"0"}),false);

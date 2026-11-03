@@ -64,7 +64,9 @@ import {
   PAPER_SAMPLE_MAX_AGE_MS,
   archiveCompletedPaperRunForLiftEdit,
   buildPaperPathOperations,
+  paperAttemptsForStorage,
   isPaperHardwareAttemptReadOnly,
+  visiblePaperAttempts,
   paperLegacyRecordNotice,
   paperLiftHeightDraftState,
   paperLiftGapDraftState,
@@ -201,9 +203,9 @@ const paperPlanHashFor = (
   predictions: PaperPredictionPoint[],
   liftHeight: number | null,
   _baselineLengthToleranceMm: number,
-  taskVersion = PAPER_TASK_VERSION,
+  _taskVersion = PAPER_TASK_VERSION,
 ) =>
-  `${makePaperPlanHash(frameId, targetSet, transform ?? null, predictions)}${taskVersion === "v4-paper-merged" ? `|baseline-length:${_baselineLengthToleranceMm}` : ""}|lift:${liftHeight ?? "unset"}`;
+  `${makePaperPlanHash(frameId, targetSet, transform ?? null, predictions)}|lift:${liftHeight ?? "unset"}`;
 const isRecord = (value: unknown): value is PaperTrialRecord =>
   !!value &&
   typeof value === "object" &&
@@ -214,7 +216,9 @@ const timeIso = () => new Date().toISOString();
 const poseDistance = (a: LessonPose, b: LessonPose) =>
   Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 const freshRecords = () =>
-  recoverInterruptedPaperRuns(readEvidence(STORAGE_KEY, isRecord));
+  recoverInterruptedPaperRuns(
+    visiblePaperAttempts(readEvidence(STORAGE_KEY, isRecord)),
+  );
 
 export type PaperCoordinateStudyProps = {
   onBack: () => void;
@@ -553,19 +557,24 @@ export function PaperCoordinateStudy({
       message = "학습 근거를 브라우저에 저장했습니다.",
     ) => {
       setSaveState("saving");
-      const ok = writeEvidence(STORAGE_KEY, nextRecords);
+      const visibleRecords = visiblePaperAttempts(nextRecords);
+      const recordsForStorage = paperAttemptsForStorage(
+        visibleRecords,
+        readEvidence(STORAGE_KEY, isRecord),
+      );
+      const ok = writeEvidence(STORAGE_KEY, recordsForStorage);
       const pendingInkDraft = pendingInkDraftRef.current;
       const pendingInkDraftSaved =
         !!pendingInkDraft &&
-        nextRecords.some(
+        visibleRecords.some(
           (record) =>
             record.id === pendingInkDraft.recordId &&
             JSON.stringify(record.drafts?.inkReadings ?? null) ===
               pendingInkDraft.snapshot,
         );
       if (ok) {
-        recordsRef.current = nextRecords;
-        setRecords(nextRecords);
+        recordsRef.current = visibleRecords;
+        setRecords(visibleRecords);
         if (pendingInkDraftSaved) pendingInkDraftRef.current = null;
       }
       const fullySaved = ok && (!pendingInkDraft || pendingInkDraftSaved);
@@ -1022,12 +1031,9 @@ export function PaperCoordinateStudy({
       active.level !== "advanced-paper-hardware" &&
       active.taskVersion !== PAPER_TASK_VERSION
     ) {
-      const message =
-        active.taskVersion === "v4-paper-merged"
-          ? "이전 v4 과제 기록(20×20 cm)은 보존되어 읽기 전용입니다. 새 시도를 시작하세요."
-          : active.taskVersion === PAPER_TASK_VERSION
-            ? "이전 v5 과제 기록(10×10 cm · 자동 변환 방식)은 보존되어 읽기 전용입니다. 새 시도를 시작하세요."
-            : `이전 버전(${active.taskVersion ?? "버전 정보 없음"}) 기록은 보존되어 읽기 전용입니다. 종이 크기는 이 정보만으로 단정하지 않습니다. 새 시도를 시작하세요.`;
+      const message = active.taskVersion === PAPER_TASK_VERSION
+        ? "이전 v5 과제 기록(10×10 cm · 자동 변환 방식)은 보존되어 읽기 전용입니다. 새 시도를 시작하세요."
+        : "이전 버전 기록은 보존되어 읽기 전용입니다. 현재 과제 방식과 다를 수 있으므로 새 시도를 시작하세요.";
       setPageError(message);
       return { message, target: "run" };
     }
@@ -3966,7 +3972,7 @@ export function PaperCoordinateStudy({
         dtReadyForPhysical,
         active.frame,
         points,
-        isV6Attempt ? PAPER_GRID_SIZE_CM : 20,
+        PAPER_GRID_SIZE_CM,
       );
       if (blockers.length) {
         setPageError(blockers.map((blocker) => blocker.message).join(" · "));
@@ -3998,7 +4004,7 @@ export function PaperCoordinateStudy({
         dtReadyForPhysical,
         active.frame,
         points,
-        isV6Attempt ? PAPER_GRID_SIZE_CM : 20,
+        PAPER_GRID_SIZE_CM,
       );
       if (blocked.length) {
         setPageError(blocked.map((b) => b.message).join(" · "));
@@ -4801,7 +4807,7 @@ export function PaperCoordinateStudy({
         dtReadyForPhysical,
         frame,
         previewPoints,
-        isV6Attempt ? PAPER_GRID_SIZE_CM : 20,
+        PAPER_GRID_SIZE_CM,
       ),
     );
   if (

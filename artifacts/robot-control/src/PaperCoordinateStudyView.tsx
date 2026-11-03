@@ -135,10 +135,7 @@ export function PaperCoordinateStudyView({
   const rectangle = isPaperRectangle(state.level),
     merged = isMergedPaper(state.level),
     dtOnly = isPaperDT(state.level),
-    grid =
-      merged && state.activeAttempt?.taskVersion === "v4-paper-merged"
-        ? 20
-        : 10;
+    grid = 10;
   const verificationPointGuide = paperVerificationPointGuide(
     state.targetPoints,
   );
@@ -3980,9 +3977,7 @@ export function PaperCoordinateStudyView({
         과제 버전:{" "}
         {state.level === "advanced-paper-hardware"
           ? state.activeAttempt?.taskVersion ?? "새 시도"
-          : merged
-            ? "v4-paper-merged"
-            : "기존 종이 과제"}
+          : state.activeAttempt?.taskVersion ?? (merged ? "현재 종이 과제" : "기존 종이 과제")}
       </small>
     </section>
   );

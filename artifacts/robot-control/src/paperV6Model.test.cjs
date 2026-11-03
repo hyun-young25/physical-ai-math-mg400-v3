@@ -445,18 +445,49 @@ test("entering advanced-paper-hardware with a saved v5 attempt starts a new v6 a
     ),
     undefined,
   );
-  assert.match(
-    paper.paperLegacyRecordNotice(
-      "advanced-paper-hardware",
-      "v4-paper-merged",
+  const retiredHardware = {
+    task: "paper-coordinate",
+    id: "retired-hardware",
+    level: "advanced-paper-hardware",
+    taskVersion: "v4-paper-merged",
+    status: "incomplete",
+    originalPrediction: { x: 11, y: 15 },
+  };
+  const retiredDt = {
+    ...retiredHardware,
+    id: "retired-dt",
+    level: "advanced-paper-dt",
+  };
+  assert.deepEqual(
+    paper.visiblePaperAttempts([retiredHardware, savedV5, retiredDt]).map(
+      ({ id }) => id,
     ),
-    /v4.*20×20 cm/,
+    ["saved-v5"],
+  );
+  const preservedStorage = paper.paperAttemptsForStorage(
+    [{ ...savedV5, status: "model" }, activeV6],
+    [retiredHardware, savedV5, retiredDt],
+  );
+  assert.deepEqual(
+    preservedStorage.filter(paper.isArchivedPaperAttempt),
+    [retiredHardware, retiredDt],
+  );
+  assert.deepEqual(
+    paper.visiblePaperAttempts(preservedStorage).map(({ id }) => id),
+    ["saved-v5", "active-v6"],
   );
   assert.doesNotMatch(
     paper.paperLegacyRecordNotice(
       "advanced-paper-hardware",
       "unversioned-legacy",
     ),
-    /20×20 cm/,
+    /20\s*[×x]\s*20|20\s*cm/i,
   );
+  for (const filename of [
+    "PaperCoordinateStudyView.tsx",
+    "PaperScene.tsx",
+  ]) {
+    const source = fs.readFileSync(path.join(__dirname, filename), "utf8");
+    assert.doesNotMatch(source, /20\s*[×x]\s*20|20\s*cm/i);
+  }
 });
