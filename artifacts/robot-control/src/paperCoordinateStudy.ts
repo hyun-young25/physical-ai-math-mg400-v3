@@ -414,8 +414,8 @@ export function validatePaperFrame(
   const rightAngleError = Math.abs(Math.acos(Math.max(-1, Math.min(1, cos))) * 180 / Math.PI - 90);
   if (rightAngleError > PAPER_ANGLE_TOLERANCE_DEG)
     return { ok: false, reason: "O–X와 O–Y 기준선이 일직선에 가깝거나 직각에서 2° 넘게 벗어났습니다." };
-  if (samples.some(sample => angleDifference(sample.pose.r, O.pose.r) > PAPER_ANGLE_TOLERANCE_DEG))
-    return { ok: false, reason: "기준점의 공구 방향이 달라 같은 좌표계로 비교할 수 없습니다." };
+  // Unlock teaching can rotate the wrist. Paper axes come from XY positions,
+  // not the recorded wrist angles; retain R as evidence and the O motion heading.
   const source = samples[0].source;
   return {
     ok: true,
