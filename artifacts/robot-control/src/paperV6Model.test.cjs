@@ -27,6 +27,31 @@ const aiAnalysis = load("paperAiAnalysis");
 const guards = load("paperExecutionGuards");
 const rectangle = load("paperRectangleTask");
 
+test("a frozen v6 prediction can resume only when its plan and saved criteria still match", () => {
+  const matching = {
+    savedPlanHash: "plan-1",
+    currentPlanHash: "plan-1",
+    criteriaPlanHash: "plan-1",
+    draftMatchesPlan: true,
+  };
+  assert.equal(v6.canResumePaperV6SavedPrediction(matching), true);
+  assert.equal(v6.canResumePaperV6SavedPrediction({ ...matching, currentPlanHash: "changed" }), false);
+  assert.equal(v6.canResumePaperV6SavedPrediction({ ...matching, criteriaPlanHash: "old" }), false);
+  assert.equal(v6.canResumePaperV6SavedPrediction({ ...matching, draftMatchesPlan: false }), false);
+  assert.equal(v6.canResumePaperV6SavedPrediction({ ...matching, savedPlanHash: null }), false);
+});
+
+test("v6 run screen exposes the supervised mismatch control and actionable hardware blockers", () => {
+  const ui = fs.readFileSync(path.join(__dirname, "PaperV6StudentLesson.tsx"), "utf8");
+  assert.match(ui, /data-testid="paper-v6-allow-mismatch"/);
+  assert.match(ui, /onAllowMismatchedHardware\?\.\(event\.target\.checked\)/);
+  assert.match(ui, /data-testid="paper-v6-physical-blockers"/);
+  assert.match(ui, /연결 화면 열기/);
+  assert.match(ui, /O\/X\/Y 기록 열기/);
+  assert.match(ui, /계정 인증이 아닙니다/);
+  assert.match(ui, /data-testid="paper-v6-supervision-hint"/);
+});
+
 const frame = {
   id: "mock-frame-1",
   source: "hardware",

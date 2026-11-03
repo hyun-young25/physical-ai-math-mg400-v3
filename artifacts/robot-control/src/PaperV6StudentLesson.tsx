@@ -174,6 +174,9 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
       ? targetPoints.map((point) => point.name)
       : [targetPoints[0]?.name].filter((name): name is string => !!name);
   const run = state.run;
+  const hasFrozenInitialPrediction =
+    state.activeAttempt?.targetSet === "initial" &&
+    !!state.activeAttempt.planHash;
   const attempt = state.activeAttempt?.attempt ?? 1;
   const latestAi = state.activeAttempt?.aiAnalyses
     ?.filter((item) => item.runId === run?.id && !!item.displayedAt)
@@ -199,6 +202,32 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
   });
   const executionControls = (
     <section className="paper-v6-run-controls" aria-label="명시적 실행 선택">
+      {(state.allowMismatchedHardware ||
+        state.physicalBlockers?.some((blocker) => blocker.target === "teacher")) && (
+        <fieldset
+          className="paper-v6-supervision"
+          data-testid="paper-v6-supervision"
+        >
+          <legend>교사 감독</legend>
+          <label>
+            <input
+              type="checkbox"
+              checked={!!state.allowMismatchedHardware}
+              disabled={state.running}
+              onChange={(event) =>
+                actions.onAllowMismatchedHardware?.(event.target.checked)
+              }
+              data-testid="paper-v6-allow-mismatch"
+            />
+            틀린 예측도 실장비로 확인 허용
+          </label>
+          <p>
+            이 설정은 계정 인증이 아닙니다. 예측과 측정 기준이 다를 때 교사가
+            장비 옆에서 감독한다는 표시입니다. 같은 계획의 DT 완료, 작업 범위,
+            연결·좌표계 확인과 실행 버튼 뒤의 최종 확인은 계속 필요합니다.
+          </p>
+        </fieldset>
+      )}
       <div className="paper-v6-run-buttons">
         <button
           type="button"
@@ -241,14 +270,63 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
         </p>
       )}
       {!state.physicalAvailable && (
-        <p className="paper-v6-error" role="status">
-          실장비 실행 차단: {state.physicalBlockers?.map((blocker) => blocker.message).join(" · ") || state.physicalUnavailableReason || "현재 실장비 준비를 확인하세요."}
-        </p>
+        <section
+          className="paper-v6-blocker-list"
+          role="status"
+          aria-label="실장비 실행에 필요한 확인"
+          data-testid="paper-v6-physical-blockers"
+        >
+          <strong>실장비 실행 준비</strong>
+          <ul>
+            {(state.physicalBlockers?.length
+              ? state.physicalBlockers
+              : [{ message: state.physicalUnavailableReason || "현재 실장비 준비를 확인하세요.", target: "connection" as const }]
+            ).map((blocker, index) => (
+              <li key={`${blocker.target}-${index}`}>
+                <span>{blocker.message}</span>
+                {blocker.target === "connection" && (
+                  <button type="button" onClick={actions.onOpenConnection}>
+                    연결 화면 열기
+                  </button>
+                )}
+                {blocker.target === "references" && (
+                  <button type="button" onClick={actions.onFocusReferencePreparation}>
+                    O/X/Y 기록 열기
+                  </button>
+                )}
+                {blocker.target === "height" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const result = actions.onV6Navigate?.(3);
+                      if (result) {
+                        setMessage(result.message);
+                        setMessageKind(result.kind ?? "error");
+                        return;
+                      }
+                      window.setTimeout(() => {
+                        const input = document.querySelector<HTMLInputElement>(
+                          '[data-testid="paper-v6-lift-gap-input"]',
+                        );
+                        input?.focus();
+                        input?.scrollIntoView({ block: "center", behavior: "smooth" });
+                      }, 0);
+                    }}
+                  >
+                    펜 들기 간격 열기
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p>이 차단은 실장비 실행에만 적용됩니다. DT는 실장비를 움직이지 않으며, 실물 버튼은 표시된 조건을 모두 충족한 뒤 사용할 수 있습니다.</p>
+        </section>
       )}
       {state.physicalAvailable && (
         <p className="paper-v6-callout">
           실장비 실행 가능 상태입니다. 이 버튼을 누른 뒤 기존 교사 감독·실행 확인을
-          완료해야 모션이 시작됩니다. 화면 이동이나 저장으로 로봇은 움직이지 않습니다.
+        완료해야 모션이 시작됩니다. 확인 창은 이 버튼을 누른 뒤 표시됩니다.
+        화면 이동이나 저장으로 로봇은 움직이지 않습니다.
         </p>
       )}
     </section>
@@ -274,6 +352,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
     if (scene === 1) navigate(3);
     else if (scene === 2) {
       if (editingRevisionModel) setEditingRevisionModel(false);
+      else if (hasFrozenInitialPrediction) navigate(5);
       else saveModelAndPrediction();
     } else if (scene === 3) navigate(6);
     else if (scene === 4) navigate(7);
@@ -317,7 +396,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
         intro={sceneIntros[scene - 1]}
         canGoBack={scene > 1 && !state.running}
         canGoNext={scene < 5 && !state.running && (scene !== 1 || hasAllReferences)}
-        nextLabel={scene === 2 ? editingRevisionModel ? "판단 화면으로 돌아가기" : "모델과 예측 저장" : scene === 3 ? "비교하기" : scene === 4 ? "판단 이어가기" : "기준점 확인 후 계속"}
+        nextLabel={scene === 2 ? editingRevisionModel ? "판단 화면으로 돌아가기" : hasFrozenInitialPrediction ? "저장된 예측으로 실행 단계 열기" : "모델과 예측 저장" : scene === 3 ? "비교하기" : scene === 4 ? "판단 이어가기" : "기준점 확인 후 계속"}
         onBack={goBack}
         onNext={advance}
         statusMessage={state.error?.trim() || message?.trim() || undefined}
@@ -442,6 +521,11 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
 
         {scene === 2 && (step === 3 || step === 4 || editingRevisionModel) && (
           <div className="paper-v6-step" data-testid="paper-v6-model">
+            {hasFrozenInitialPrediction && (
+              <p className="paper-v6-callout" role="status" data-testid="paper-v6-frozen-prediction">
+                최초 예측은 이미 고정되어 다시 저장할 수 없습니다. 아래 버튼으로 저장된 계획의 실행 화면으로 이동하세요. 교사 확인은 그 화면에서 ‘교사 확인 후 실장비 실행’을 누른 뒤 표시됩니다.
+              </p>
+            )}
             {!state.frame && (
               <p className="paper-v6-error">
                 O/X/Y 제어기 보고가 먼저 필요합니다. 이전 단계로 돌아가 기준점을
@@ -686,6 +770,11 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 ? "연습 자료로 경로를 실행합니다. 모의 O/X/Y·잉크는 실제 장비 측정값이 아닙니다."
                 : "모델을 만드는 데 사용한 O/X/Y와 학생 목표가 저장됐습니다. ±2.0 mm는 이 시도의 실행 전에 고정한 비교 기준이며, DT는 실제 측정이 아닙니다."}
             </p>
+            {state.physicalBlockers?.some((blocker) => blocker.target === "teacher") && (
+              <p className="paper-v6-callout" data-testid="paper-v6-supervision-hint">
+                현재 예측은 측정한 기준과 다릅니다. 이는 수학 수업의 진행을 막지 않지만, 실장비로 확인하려면 위의 교사 감독을 켜고 장비 옆에서 지켜봐야 합니다.
+              </p>
+            )}
             {state.verificationCriteria && (
               <div className="paper-v6-criteria" data-testid="paper-v6-criteria">
                 <strong>사전 고정 기준 · ±{state.verificationCriteria.positionToleranceMm.toFixed(1)} mm</strong>

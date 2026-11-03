@@ -5,6 +5,71 @@
   color: #24302b;
 }
 
+.paper-v6-supervision,
+.paper-v6-blocker-list {
+  border: 1px solid #d8e4dc;
+  border-radius: 12px;
+  background: #f7faf8;
+  padding: 0.8rem 0.95rem;
+}
+
+.paper-v6-supervision legend,
+.paper-v6-blocker-list > strong {
+  color: #254c3b;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.paper-v6-supervision label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin-top: 0.25rem;
+  font-weight: 650;
+}
+
+.paper-v6-supervision input {
+  margin-top: 0.2rem;
+}
+
+.paper-v6-supervision p,
+.paper-v6-blocker-list > p {
+  margin: 0.45rem 0 0;
+  color: #5c6b63;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.paper-v6-blocker-list ul {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.6rem 0 0;
+  padding-left: 1.15rem;
+}
+
+.paper-v6-blocker-list li {
+  padding-left: 0.1rem;
+  line-height: 1.45;
+}
+
+.paper-v6-blocker-list li button {
+  display: inline-block;
+  margin: 0.25rem 0 0 0.35rem;
+  border: 0;
+  border-radius: 999px;
+  background: #e2eee7;
+  color: #254c3b;
+  padding: 0.3rem 0.65rem;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.paper-v6-blocker-list li button:hover {
+  background: #d2e4d8;
+}
+
 .paper-v6-step {
   display: grid;
   gap: 18px;

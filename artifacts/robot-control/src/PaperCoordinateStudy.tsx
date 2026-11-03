@@ -115,6 +115,7 @@ import type {
   PaperV6AttemptData,
 } from "./paperCoordinateStudy";
 import {
+  canResumePaperV6SavedPrediction,
   PAPER_V6_PROMPT_VERSION,
   PAPER_V6_REVALIDATION_POINT,
   PAPER_V6_VERIFICATION_RATIONALE,
@@ -1827,7 +1828,42 @@ export function PaperCoordinateStudy({
       return null;
     }
     if (bounded === 4) return saveV6Model();
-    if (bounded === 5) return saveV6Prediction();
+    if (bounded === 5) {
+      if (current.planHash) {
+        if (!canResumePaperV6SavedPrediction({
+          savedPlanHash: current.planHash,
+          currentPlanHash: planHash,
+          criteriaPlanHash: current.verificationCriteria?.planHash,
+          draftMatchesPlan: samePlan,
+        })) {
+          return {
+            message:
+              "최초 예측은 이미 고정되어 다시 저장할 수 없습니다. 현재 입력 초안이 저장된 계획과 다르면 입력을 보존한 채 일치 여부를 확인하세요. 실장비 교사 확인은 실행 화면에서 ‘교사 확인 후 실장비 실행’을 눌렀을 때 열립니다.",
+            kind: "error" as const,
+          };
+        }
+        upsert(
+          {
+            ...current,
+            stage: 5,
+            drafts: { ...current.drafts, v6: paperV6Draft },
+          },
+          "저장된 최초 예측을 유지하고 실행 화면으로 이동했습니다.",
+        );
+        if (!lastSaveSucceededRef.current)
+          return {
+            message: "실행 단계 이동을 저장하지 못했습니다. 입력과 기존 예측은 보존했습니다.",
+            kind: "error" as const,
+          };
+        setStage(5);
+        return {
+          message:
+            "저장된 예측으로 실행 화면을 열었습니다. DT 또는 실장비 버튼을 직접 눌러야 실행되며, 교사 확인은 실장비 버튼을 누른 뒤 표시됩니다.",
+          kind: "success" as const,
+        };
+      }
+      return saveV6Prediction();
+    }
     if (bounded === 6) {
       if (!current.run || current.run.status !== "completed")
         return { message: "현재 저장된 예측을 DT 또는 실장비에서 완료하세요. 단계 이동만으로 실행하지 않습니다.", kind: "error" as const };

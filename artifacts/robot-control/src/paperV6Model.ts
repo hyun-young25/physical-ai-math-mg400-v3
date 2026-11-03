@@ -26,6 +26,18 @@ export const PAPER_V6_REVALIDATION_POINT: PaperGridPoint = {
   yCm: 6,
 };
 
+export function canResumePaperV6SavedPrediction(input: {
+  savedPlanHash?: string | null;
+  currentPlanHash?: string | null;
+  criteriaPlanHash?: string | null;
+  draftMatchesPlan: boolean;
+}): boolean {
+  return !!input.savedPlanHash &&
+    input.savedPlanHash === input.currentPlanHash &&
+    input.savedPlanHash === input.criteriaPlanHash &&
+    input.draftMatchesPlan;
+}
+
 export type PaperV6MoveOperation = {
   kind: "move";
   motion: "MoveL";
