@@ -64,6 +64,8 @@ import {
   PAPER_SAMPLE_MAX_AGE_MS,
   archiveCompletedPaperRunForLiftEdit,
   buildPaperPathOperations,
+  isPaperHardwareAttemptReadOnly,
+  paperLegacyRecordNotice,
   paperLiftHeightDraftState,
   paperLiftGapDraftState,
   parsePaperLiftGapDraft,
@@ -84,6 +86,7 @@ import {
   validatePaperRunForDiagnosis,
   paperRevalidationAssessment,
   paperBaselineLengthMetrics,
+  initialPaperAttemptForLevel,
 } from "./paperCoordinateStudy";
 import type {
   PaperCoordinateLevel,
@@ -238,9 +241,7 @@ export function PaperCoordinateStudy({
 }: PaperCoordinateStudyProps) {
   const visualOwner = useId();
   const initialRecord = useRef(
-    freshRecords()
-      .filter((r) => !initialLevel || r.level === initialLevel)
-      .at(-1),
+    initialPaperAttemptForLevel(freshRecords(), initialLevel),
   );
   const practice = usePractice();
   const practiceRef = useRef(practice);
@@ -1007,9 +1008,26 @@ export function PaperCoordinateStudy({
         target: "references",
       };
     }
-    if (active.taskVersion !== PAPER_TASK_VERSION) {
+    if (
+      active.level === "advanced-paper-hardware" &&
+      isPaperHardwareAttemptReadOnly(active)
+    ) {
       const message =
-        "이전 20×20 cm 과제 기록은 보존되어 읽기 전용입니다. ‘새 시도’에서 10×10 cm 종이 계획을 시작하세요.";
+        paperLegacyRecordNotice(active.level, active.taskVersion) ??
+        "이전 과제 기록은 읽기 전용입니다. 새 v6 시도를 시작하세요.";
+      setPageError(message);
+      return { message, target: "run" };
+    }
+    if (
+      active.level !== "advanced-paper-hardware" &&
+      active.taskVersion !== PAPER_TASK_VERSION
+    ) {
+      const message =
+        active.taskVersion === "v4-paper-merged"
+          ? "이전 v4 과제 기록(20×20 cm)은 보존되어 읽기 전용입니다. 새 시도를 시작하세요."
+          : active.taskVersion === PAPER_TASK_VERSION
+            ? "이전 v5 과제 기록(10×10 cm · 자동 변환 방식)은 보존되어 읽기 전용입니다. 새 시도를 시작하세요."
+            : `이전 버전(${active.taskVersion ?? "버전 정보 없음"}) 기록은 보존되어 읽기 전용입니다. 종이 크기는 이 정보만으로 단정하지 않습니다. 새 시도를 시작하세요.`;
       setPageError(message);
       return { message, target: "run" };
     }
@@ -2397,6 +2415,24 @@ export function PaperCoordinateStudy({
           "실행별 TCP 보고 좌표·학생 잉크 측정·사전 기준을 분리한 학습 기록",
         records,
       }),
+    onSelectAttempt: (recordId) => {
+      if (running) return;
+      const selectedRecord = recordsRef.current.find(
+        (record) =>
+          record.id === recordId && record.task === "paper-coordinate",
+      );
+      if (!selectedRecord) return;
+      setActiveId(selectedRecord.id);
+      setLevel(selectedRecord.level);
+      setStage((selectedRecord.stage as PaperLessonStage) ?? 1);
+      setDiagnosisOverride(null);
+      setPageError(
+        paperLegacyRecordNotice(
+          selectedRecord.level,
+          selectedRecord.taskVersion,
+        ) ?? "",
+      );
+    },
     onStageChange: (nextStage) => {
       if (running) {
         const message =
@@ -2407,7 +2443,8 @@ export function PaperCoordinateStudy({
       let currentActive = active?.id
         ? (recordsRef.current.find((item) => item.id === active.id) ?? active)
         : active;
-      if (pendingInkDraftRef.current) {
+      const readOnlyRecord = isPaperHardwareAttemptReadOnly(currentActive);
+      if (pendingInkDraftRef.current && !readOnlyRecord) {
         if (
           !currentActive ||
           pendingInkDraftRef.current.recordId !== currentActive.id ||
@@ -2424,7 +2461,7 @@ export function PaperCoordinateStudy({
       }
       const movingBackward =
         !!currentActive && nextStage < (currentActive.stage ?? 1);
-      const stageNavigationBlocker = movingBackward
+      const stageNavigationBlocker = movingBackward || readOnlyRecord
         ? null
         : paperStageNavigationRequirement(
             nextStage,
@@ -2432,7 +2469,7 @@ export function PaperCoordinateStudy({
               "complete",
             !!currentActive?.studentHypothesis?.trim(),
           );
-      const required = movingBackward
+      const required = movingBackward || readOnlyRecord
         ? ""
         : nextStage >= 2 && !currentActive?.frame
           ? "O/X/Y 기준점을 먼저 저장하세요."
@@ -2468,8 +2505,10 @@ export function PaperCoordinateStudy({
       }
       setPageError("");
       setStage(nextStage);
-      if (currentActive) upsert({ ...currentActive, stage: nextStage });
+      if (currentActive && !readOnlyRecord)
+        upsert({ ...currentActive, stage: nextStage });
       if (
+        !readOnlyRecord &&
         nextStage === 6 &&
         currentActive?.run &&
         currentActive.frame &&

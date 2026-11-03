@@ -15,7 +15,11 @@ import {
   usePaperScene,
 } from "./paperSceneStore";
 import { paperInkComparisons } from "./paperAiAnalysis";
-import { paperVerificationPointGuide } from "./paperCoordinateStudy";
+import {
+  isPaperHardwareAttemptReadOnly,
+  paperLegacyRecordNotice,
+  paperVerificationPointGuide,
+} from "./paperCoordinateStudy";
 import {
   paperComparableRunPair,
   paperRetryComparisonReady,
@@ -256,6 +260,15 @@ export function PaperCoordinateStudyView({
       : {};
   const isV6PaperAttempt =
     state.activeAttempt?.taskVersion === PAPER_HARDWARE_V6_VERSION;
+  const legacyAttemptReadOnly = isPaperHardwareAttemptReadOnly(
+    state.activeAttempt,
+  );
+  const legacyAttemptNotice = legacyAttemptReadOnly
+    ? paperLegacyRecordNotice(
+        state.activeAttempt!.level,
+        state.activeAttempt!.taskVersion,
+      )
+    : null;
   const largestMismatchPoint =
     state.diagnosis?.taskEvidence?.reduce(
       (largest, row) =>
@@ -3298,6 +3311,77 @@ export function PaperCoordinateStudyView({
     );
   };
 
+  const renderAttemptHistory = (currentLevelOnly = false) => {
+    const versionedHardwareHistory =
+      state.level === "advanced-paper-hardware";
+    const history = currentLevelOnly
+      ? state.records.filter((record) => record.level === state.level)
+      : state.records;
+    return (
+      <details className="pcv-details pcv-records">
+        <summary>시도 연결 기록 · {history.length}회</summary>
+        {history.map((record) => {
+          const legacyNotice = paperLegacyRecordNotice(
+            record.level,
+            record.taskVersion,
+          );
+          return (
+            <article key={record.id}>
+              <h3>
+                시도 {record.attempt} ·{" "}
+                {versionedHardwareHistory
+                  ? record.taskVersion ?? "버전 정보 없음"
+                  : sourceLabel(record.run?.source ?? record.dataSource)}
+              </h3>
+              {versionedHardwareHistory && legacyNotice && (
+                <p>{legacyNotice}</p>
+              )}
+              <p>
+                {isPaperRectangle(record.level)
+                  ? "사각형 P1/P2/P3/P4"
+                  : record.targetSet === "initial"
+                    ? "첫 목표 A/B/C"
+                    : "새 목표 D/E/F"}{" "}
+                · 이전 시도{" "}
+                {state.records.find(
+                  (parent) => parent.id === record.parentAttemptId,
+                )?.attempt ?? "없음"}
+              </p>
+              <p>
+                관측 {record.run?.observations.length ?? 0}개 ·{" "}
+                {record.diagnosis?.candidate ?? "비교 전"}
+              </p>
+              <p>
+                가설: {record.studentHypothesis ?? "작성 전"} · 수정:{" "}
+                {record.revisionReason ?? "작성 전"}
+              </p>
+              <p>{record.revalidation?.scope ?? "재검증 완료 전"}</p>
+              {versionedHardwareHistory && (
+                <button
+                  type="button"
+                  className="pcv-button pcv-button--quiet"
+                  onClick={() => actions.onSelectAttempt(record.id)}
+                  disabled={
+                    state.running || state.activeAttempt?.id === record.id
+                  }
+                >
+                  {state.activeAttempt?.id === record.id
+                    ? "현재 열람 중"
+                    : isPaperHardwareAttemptReadOnly(record)
+                      ? "이전 기록 열람"
+                      : "시도 열기"}
+                </button>
+              )}
+            </article>
+          );
+        })}
+        <button type="button" className="pcv-button" onClick={actions.onExport}>
+          연결된 학습 기록 내려받기
+        </button>
+      </details>
+    );
+  };
+
   if (
     state.level === "advanced-paper-hardware" &&
     state.activeAttempt?.taskVersion === PAPER_HARDWARE_V6_VERSION &&
@@ -3335,9 +3419,36 @@ export function PaperCoordinateStudyView({
             analysis: renderStage(6),
           }}
         />
+        {renderAttemptHistory(true)}
       </section>
     );
   }
+
+  const activitySection = (
+    <section
+      className="pcv-activity"
+      aria-labelledby={`${id}-activity-heading`}
+    >
+      <div className="pcv-activity-kicker">
+        <span>{simplePaperLesson ? "세 가지 활동" : "지금 하는 일"}</span>
+        <span>
+          {simplePaperLesson
+            ? "종이 좌표 · 경로 · 결과"
+            : conciseFlow
+              ? `화면 ${screenIndex} / 3 · ${screenIndex === 1 ? "예측" : screenIndex === 2 ? "실행·비교" : "수정·재확인"}`
+              : `단계 ${state.stage} / 7`}
+        </span>
+      </div>
+      <h2 id={`${id}-activity-heading`}>
+        {simplePaperLesson
+          ? "10×10 cm 종이 좌표 경로 실습"
+          : conciseFlow
+            ? PAPER_FLOW_SCREENS[screenIndex - 1]
+            : activeTitle}
+      </h2>
+      {conciseFlow ? renderConciseFlow() : renderStage(state.stage)}
+    </section>
+  );
 
   return (
     <section
@@ -3376,10 +3487,14 @@ export function PaperCoordinateStudyView({
       {state.level === "advanced-paper-hardware" &&
         state.activeAttempt?.taskVersion !== PAPER_HARDWARE_V6_VERSION && (
           <section className="pcv-callout" aria-label="새 종이 좌표 수업 버전">
-            <strong>새 수학 모델 흐름 v6</strong>
+            <strong>
+              {legacyAttemptNotice
+                ? "이전 과제 기록 · 읽기 전용"
+                : "새 수학 모델 흐름 v6"}
+            </strong>
             <p>
-              기존 v4/v5 시도는 그대로 열람됩니다. 새 시도에서는 종이 좌표를
-              학생이 회전·평행이동 식으로 계산합니다.
+              {legacyAttemptNotice ??
+                "현재 이어갈 v6 시도가 없습니다. 새 시도에서 종이 좌표를 학생이 회전·평행이동 식으로 계산합니다."}
             </p>
             <button
               type="button"
@@ -3387,7 +3502,7 @@ export function PaperCoordinateStudyView({
               onClick={actions.onStartV6Attempt}
               disabled={state.running}
             >
-              새 v6 심화 2 시도 시작
+              새 시도 시작 (v6)
             </button>
           </section>
         )}
@@ -3556,29 +3671,18 @@ export function PaperCoordinateStudyView({
                   )}
                 </section>
               )}
-              <section
-                className="pcv-activity"
-                aria-labelledby={`${id}-activity-heading`}
-              >
-                <div className="pcv-activity-kicker">
-                  <span>{simplePaperLesson ? "세 가지 활동" : "지금 하는 일"}</span>
-                  <span>
-                    {simplePaperLesson
-                      ? "종이 좌표 · 경로 · 결과"
-                      : conciseFlow
-                      ? `화면 ${screenIndex} / 3 · ${screenIndex === 1 ? "예측" : screenIndex === 2 ? "실행·비교" : "수정·재확인"}`
-                      : `단계 ${state.stage} / 7`}
-                  </span>
-                </div>
-                <h2 id={`${id}-activity-heading`}>
-                  {simplePaperLesson
-                    ? "10×10 cm 종이 좌표 경로 실습"
-                    : conciseFlow
-                    ? PAPER_FLOW_SCREENS[screenIndex - 1]
-                    : activeTitle}
-                </h2>
-                {conciseFlow ? renderConciseFlow() : renderStage(state.stage)}
-              </section>
+              {legacyAttemptReadOnly ? (
+                <fieldset
+                  className="pcv-activity-readonly-wrapper"
+                  disabled
+                  aria-label="이전 버전 시도는 읽기 전용입니다"
+                >
+                  <legend>이전 기록 · 읽기 전용</legend>
+                  {activitySection}
+                </fieldset>
+              ) : (
+                activitySection
+              )}
               {!simplePaperLesson && (
               <aside className="pcv-side-note" aria-label="현재 좌표 정보">
                 <span className="pcv-eyebrow">
@@ -3694,38 +3798,7 @@ export function PaperCoordinateStudyView({
           )}
         </div>
       </div>
-      <details className="pcv-details pcv-records">
-        <summary>시도 연결 기록 · {state.records.length}회</summary>
-        {state.records.map((r) => (
-          <article key={r.id}>
-            <h3>
-              시도 {r.attempt} · {sourceLabel(r.run?.source ?? r.dataSource)}
-            </h3>
-            <p>
-              {isPaperRectangle(r.level)
-                ? "사각형 P1/P2/P3/P4"
-                : r.targetSet === "initial"
-                  ? "첫 목표 A/B/C"
-                  : "새 목표 D/E/F"}{" "}
-              · 이전 시도{" "}
-              {state.records.find((p) => p.id === r.parentAttemptId)?.attempt ??
-                "없음"}
-            </p>
-            <p>
-              관측 {r.run?.observations.length ?? 0}개 ·{" "}
-              {r.diagnosis?.candidate ?? "비교 전"}
-            </p>
-            <p>
-              가설: {r.studentHypothesis ?? "작성 전"} · 수정:{" "}
-              {r.revisionReason ?? "작성 전"}
-            </p>
-            <p>{r.revalidation?.scope ?? "재검증 완료 전"}</p>
-          </article>
-        ))}
-        <button className="pcv-button" onClick={actions.onExport}>
-          연결된 학습 기록 내려받기
-        </button>
-      </details>
+      {renderAttemptHistory()}
       <details className="pcv-details pcv-records">
         <summary>근거와 기록 자세히 보기</summary>
         <div className="pcv-evidence-grid">
@@ -3904,7 +3977,12 @@ export function PaperCoordinateStudyView({
         </p>
       )}
       <small className="square-ui-version">
-        과제 버전: {merged ? "v4-paper-merged" : "기존 종이 과제"}
+        과제 버전:{" "}
+        {state.level === "advanced-paper-hardware"
+          ? state.activeAttempt?.taskVersion ?? "새 시도"
+          : merged
+            ? "v4-paper-merged"
+            : "기존 종이 과제"}
       </small>
     </section>
   );

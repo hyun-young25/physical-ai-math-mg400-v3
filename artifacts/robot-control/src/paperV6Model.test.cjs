@@ -25,6 +25,7 @@ const v6 = load("paperV6Model");
 const paper = load("paperCoordinateStudy");
 const aiAnalysis = load("paperAiAnalysis");
 const guards = load("paperExecutionGuards");
+const rectangle = load("paperRectangleTask");
 
 const frame = {
   id: "mock-frame-1",
@@ -331,4 +332,131 @@ test("sanitized AI evidence carries the current and directly linked parent math 
   assert.match(serialized, /O→X를 다시 확인/);
   assert.match(serialized, /x=O\+a, y=O\+b/);
   assert.doesNotMatch(serialized, /PII_SHOULD_NOT_BE_SENT/);
+});
+
+test("entering advanced-paper-hardware with a saved v5 attempt starts a new v6 attempt", () => {
+  const savedV5 = {
+    task: "paper-coordinate",
+    id: "saved-v5",
+    level: "advanced-paper-hardware",
+    taskVersion: "v5-paper-10cm",
+    status: "incomplete",
+    attempt: 4,
+  };
+  assert.equal(
+    paper.initialPaperAttemptForLevel(
+      [savedV5],
+      "advanced-paper-hardware",
+    ),
+    undefined,
+  );
+  assert.match(
+    paper.paperLegacyRecordNotice(
+      "advanced-paper-hardware",
+      savedV5.taskVersion,
+    ),
+    /v5.*10×10 cm.*자동 변환.*읽기 전용/,
+  );
+  assert.equal(paper.isPaperHardwareAttemptReadOnly(savedV5), true);
+  assert.equal(
+    paper.isPaperHardwareAttemptReadOnly({
+      ...savedV5,
+      taskVersion: undefined,
+    }),
+    true,
+  );
+  assert.equal(
+    paper.isPaperHardwareAttemptReadOnly({
+      ...savedV5,
+      level: "advanced-paper-dt",
+    }),
+    false,
+  );
+  assert.equal(
+    v6.paperV6TaskVersionForLevel(
+      "advanced-paper-hardware",
+      savedV5.taskVersion,
+    ),
+    paper.PAPER_HARDWARE_V6_VERSION,
+  );
+  assert.equal(paper.PAPER_GRID_SIZE_CM, 10);
+  const initialTargets = rectangle.paperTaskTargets(
+    "advanced-paper-hardware",
+    "initial",
+    paper.PAPER_HARDWARE_V6_VERSION,
+  );
+  assert.deepEqual(
+    initialTargets.map(({ xCm, yCm }) => [xCm, yCm]),
+    [[1, 1], [9, 1], [9, 9], [1, 9]],
+  );
+  assert.ok(
+    initialTargets.every(
+      ({ xCm, yCm }) => xCm >= 0 && xCm <= 10 && yCm >= 0 && yCm <= 10,
+    ),
+  );
+  assert.deepEqual(
+    rectangle.paperTaskTargets(
+      "advanced-paper-hardware",
+      "revalidation",
+      paper.PAPER_HARDWARE_V6_VERSION,
+    ),
+    [{ name: "V", xCm: 5, yCm: 6 }],
+  );
+
+  const activeV6 = {
+    ...savedV5,
+    id: "active-v6",
+    taskVersion: paper.PAPER_HARDWARE_V6_VERSION,
+    status: "model",
+    v6: { assessment: { status: "incomplete" } },
+  };
+  assert.equal(
+    paper.initialPaperAttemptForLevel(
+      [savedV5, activeV6],
+      "advanced-paper-hardware",
+    )?.id,
+    "active-v6",
+  );
+  assert.equal(paper.isPaperHardwareAttemptReadOnly(activeV6), false);
+
+  const completedV6 = {
+    ...activeV6,
+    status: "revalidated",
+    v6: { assessment: { status: "within-tolerance" } },
+  };
+  assert.equal(
+    paper.initialPaperAttemptForLevel(
+      [savedV5, completedV6],
+      "advanced-paper-hardware",
+    ),
+    undefined,
+  );
+  assert.equal(
+    paper.initialPaperAttemptForLevel(
+      [
+        savedV5,
+        {
+          ...activeV6,
+          status: "running",
+          run: { status: "running" },
+        },
+      ],
+      "advanced-paper-hardware",
+    ),
+    undefined,
+  );
+  assert.match(
+    paper.paperLegacyRecordNotice(
+      "advanced-paper-hardware",
+      "v4-paper-merged",
+    ),
+    /v4.*20×20 cm/,
+  );
+  assert.doesNotMatch(
+    paper.paperLegacyRecordNotice(
+      "advanced-paper-hardware",
+      "unversioned-legacy",
+    ),
+    /20×20 cm/,
+  );
 });

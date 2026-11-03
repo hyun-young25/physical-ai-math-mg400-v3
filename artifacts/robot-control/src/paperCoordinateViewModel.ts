@@ -336,6 +336,7 @@ export type PaperCoordinateStudyViewActions = {
   ) => void;
   onBack: () => void;
   onExport: () => void;
+  onSelectAttempt: (recordId: string) => void;
   onStageChange: (
     stage: PaperLessonStage,
   ) => { message: string; target?: string } | null;

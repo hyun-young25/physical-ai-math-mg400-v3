@@ -162,6 +162,24 @@
   min-width: 0;
   padding: 0 0 2px;
 }
+.pcv-activity-readonly-wrapper {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.pcv-activity-readonly-wrapper > legend {
+  margin: 0 0 8px;
+  padding: 0;
+  color: #8a3b24;
+  font-size: 12px;
+  font-weight: 800;
+}
+.pcv-activity-readonly-wrapper:disabled {
+  opacity: 1;
+}
 .pcv-activity-kicker {
   display: flex;
   align-items: center;

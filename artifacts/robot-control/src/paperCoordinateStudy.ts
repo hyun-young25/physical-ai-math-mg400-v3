@@ -321,6 +321,77 @@ export type PaperTrialRecord = {
   drafts?: PaperTrialDrafts;
 };
 
+export function isInProgressPaperHardwareV6Attempt(
+  record: PaperTrialRecord,
+): boolean {
+  if (
+    record.task !== "paper-coordinate" ||
+    record.level !== "advanced-paper-hardware" ||
+    record.taskVersion !== PAPER_HARDWARE_V6_VERSION ||
+    record.status === "revalidated" ||
+    record.status === "running" ||
+    record.run?.status === "running"
+  ) {
+    return false;
+  }
+  const assessment = record.v6?.assessment?.status;
+  if (assessment && assessment !== "incomplete") return false;
+  if (
+    record.run &&
+    ["partial", "failed", "cancelled"].includes(record.run.status)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function isPaperHardwareAttemptReadOnly(
+  record: Pick<PaperTrialRecord, "level" | "taskVersion"> | null | undefined,
+): boolean {
+  return !!record &&
+    record.level === "advanced-paper-hardware" &&
+    record.taskVersion !== PAPER_HARDWARE_V6_VERSION;
+}
+
+/**
+ * Opening the hardware paper lesson resumes only a nonterminal v6 attempt.
+ * Older content versions remain in history; they are never promoted in place.
+ */
+export function initialPaperAttemptForLevel(
+  records: PaperTrialRecord[],
+  initialLevel?: PaperCoordinateLevel,
+): PaperTrialRecord | undefined {
+  if (initialLevel === "advanced-paper-hardware") {
+    return [...records]
+      .reverse()
+      .find(isInProgressPaperHardwareV6Attempt);
+  }
+  if (!initialLevel) return records.at(-1);
+  return records.filter((record) => record.level === initialLevel).at(-1);
+}
+
+export function paperLegacyRecordNotice(
+  level: PaperCoordinateLevel,
+  taskVersion?: string,
+): string | null {
+  if (
+    level !== "advanced-paper-hardware" ||
+    taskVersion === PAPER_HARDWARE_V6_VERSION
+  ) {
+    return null;
+  }
+  if (taskVersion === "v4-paper-merged") {
+    return "이전 v4 과제 기록(20×20 cm)입니다. 원본은 보존되며 입력·저장·실행은 읽기 전용입니다.";
+  }
+  if (taskVersion === PAPER_TASK_VERSION) {
+    return "이전 버전 v5(10×10 cm · O/X/Y 자동 변환 방식) 기록입니다. 원본은 보존되며 입력·저장·실행은 읽기 전용입니다.";
+  }
+  if (!taskVersion) {
+    return "이전 버전 기록입니다. 원본은 읽기 전용으로 보존됩니다. 과제 버전 정보가 없어 종이 크기는 단정하지 않습니다.";
+  }
+  return `이전 버전(${taskVersion}) 기록입니다. 원본은 읽기 전용으로 보존됩니다. 실제 종이 크기는 이 버전 정보만으로 확정하지 않습니다.`;
+}
+
 /**
  * Parse the text form of an absolute TCP Z value without rejecting transient
  * editing states such as "", "-", "." or "-.".
