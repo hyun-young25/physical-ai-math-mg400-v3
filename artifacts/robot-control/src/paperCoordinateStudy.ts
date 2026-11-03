@@ -8,6 +8,7 @@ export type PaperTargetSet = "initial" | "revalidation";
 export type PaperPointName = "O" | "X" | "Y";
 export type PaperReferenceSource = "hardware" | "mock" | "teacher";
 export type PaperEvidenceSource = PaperReferenceSource | "dt";
+export const PAPER_TASK_VERSION = "v5-paper-10cm";
 
 export type PaperGridPoint = { name: string; xCm: number; yCm: number };
 export type PaperReferenceSample = {
@@ -38,7 +39,7 @@ export type PaperBaselineLengthMetric = {
   signedDifferenceMm: number | null;
   absoluteErrorMm: number | null;
   toleranceMm: number;
-  status: "incomplete" | "pass" | "exceeds";
+  status: "incomplete" | "informational";
   missingPoint: PaperPointName | null;
   zDifferenceMm: number | null;
 };
@@ -65,6 +66,7 @@ export type PaperStudentTransform = {
 export type PaperTrialDrafts = {
   transform?: PaperStudentTransform;
   predictions?: PaperPredictionPoint[];
+  paperCoordinates?: Array<{ point: string; xCm: string; yCm: string }>;
   studentHypothesis?: string;
   followupObservation?: string;
   modelDecision?: "revise" | "retain";
@@ -353,7 +355,7 @@ export function paperBaselineLengthMetrics(
       signedDifferenceMm,
       absoluteErrorMm,
       toleranceMm,
-      status: measuredMm >= 1 && absoluteErrorMm <= toleranceMm ? "pass" : "exceeds",
+      status: "informational",
       missingPoint: null,
       zDifferenceMm: end.pose.z - start.pose.z,
     };
@@ -363,14 +365,8 @@ export function paperBaselineLengthMetrics(
 export function validatePaperFrame(
   samples: PaperReferenceSample[],
   now = Date.now(),
-  baselineLengthToleranceMm = PAPER_BASELINE_LENGTH_TOLERANCE_DEFAULT_MM,
+  _baselineLengthToleranceMm = PAPER_BASELINE_LENGTH_TOLERANCE_DEFAULT_MM,
 ): { ok: true; frame: PaperFrame } | { ok: false; reason: string } {
-  if (
-    !finite(baselineLengthToleranceMm) ||
-    baselineLengthToleranceMm <= 0 ||
-    baselineLengthToleranceMm > PAPER_BASELINE_LENGTH_TOLERANCE_MAX_MM
-  )
-    return { ok: false, reason: "기준선 길이 허용오차는 0보다 크고 100 mm 이하여야 합니다." };
   if (samples.length !== 3 || new Set(samples.map(sample => sample.point)).size !== 3
     || !(["O", "X", "Y"] as const).every(point => samples.some(sample => sample.point === point)))
     return { ok: false, reason: "O, X, Y 기준점을 각각 한 번씩 기록해야 합니다." };
@@ -399,21 +395,14 @@ export function validatePaperFrame(
   const Y = samples.find(sample => sample.point === "Y")!;
   const ox = pointDistance(O.pose, X.pose);
   const oy = pointDistance(O.pose, Y.pose);
-  if (ox < 1 || Math.abs(ox - 100) > baselineLengthToleranceMm)
-    return { ok: false, reason: `O–X XY 거리 ${ox.toFixed(2)} mm, 기준 대비 ${(ox - 100 >= 0 ? "+" : "") + (ox - 100).toFixed(2)} mm, 허용 ±${baselineLengthToleranceMm} mm입니다. X 위치·인쇄 배율·좌표계를 확인하세요.` };
-  if (oy < 1 || Math.abs(oy - 100) > baselineLengthToleranceMm)
-    return { ok: false, reason: `O–Y XY 거리 ${oy.toFixed(2)} mm, 기준 대비 ${(oy - 100 >= 0 ? "+" : "") + (oy - 100).toFixed(2)} mm, 허용 ±${baselineLengthToleranceMm} mm입니다. Y 위치·인쇄 배율·좌표계를 확인하세요.` };
-  const zSpread = Math.max(...samples.map(sample => sample.pose.z)) - Math.min(...samples.map(sample => sample.pose.z));
-  if (zSpread > PAPER_MEASURE_TOLERANCE_MM)
-    return { ok: false, reason: "기준점 높이가 서로 다릅니다. 종이 평면과 펜 끝 높이를 확인하세요." };
   const ax = X.pose.x - O.pose.x, ay = X.pose.y - O.pose.y;
   const bx = Y.pose.x - O.pose.x, by = Y.pose.y - O.pose.y;
+  if (ox < 1 || oy < 1)
+    return { ok: false, reason: "O–X 또는 O–Y 기준점이 너무 가까워 종이 축을 계산할 수 없습니다. 종이의 서로 다른 끝점을 다시 기록하세요." };
   if (ax * by - ay * bx <= 0) return { ok: false, reason: "종이 X/Y 기준점 순서가 뒤바뀌었습니다. 인쇄된 축을 확인하세요." };
-  const lengths = Math.hypot(ax, ay) * Math.hypot(bx, by);
-  const cos = lengths === 0 ? 1 : (ax * bx + ay * by) / lengths;
-  const rightAngleError = Math.abs(Math.acos(Math.max(-1, Math.min(1, cos))) * 180 / Math.PI - 90);
-  if (rightAngleError > PAPER_ANGLE_TOLERANCE_DEG)
-    return { ok: false, reason: "O–X와 O–Y 기준선이 일직선에 가깝거나 직각에서 2° 넘게 벗어났습니다." };
+  const basisSine = Math.abs(ax * by - ay * bx) / (ox * oy);
+  if (basisSine < 0.1)
+    return { ok: false, reason: "O–X와 O–Y 기준선이 거의 일직선이라 종이 좌표를 안정적으로 계산할 수 없습니다. Y점을 종이의 세로 끝점 쪽에 다시 기록하세요." };
   // Unlock teaching can rotate the wrist. Paper axes come from XY positions,
   // not the recorded wrist angles; retain R as evidence and the O motion heading.
   const source = samples[0].source;
@@ -438,7 +427,7 @@ export function frameTransformPoint(frame: PaperFrame, point: Pick<PaperGridPoin
   return {
     x: O.x + (X.x - O.x) * point.xCm / PAPER_GRID_SIZE_CM + (Y.x - O.x) * point.yCm / PAPER_GRID_SIZE_CM,
     y: O.y + (X.y - O.y) * point.xCm / PAPER_GRID_SIZE_CM + (Y.y - O.y) * point.yCm / PAPER_GRID_SIZE_CM,
-    z: (O.z + X.z + Y.z) / 3,
+    z: O.z + (X.z - O.z) * point.xCm / PAPER_GRID_SIZE_CM + (Y.z - O.z) * point.yCm / PAPER_GRID_SIZE_CM,
     r: O.r,
   };
 }
@@ -461,7 +450,7 @@ export function studentTransformPoint(transform: PaperStudentTransform, point: P
   };
 }
 
-export function makePaperPlanHash(frameId: string, targetSet: PaperTargetSet, transform: PaperStudentTransform, predictions: PaperPredictionPoint[]): string {
+export function makePaperPlanHash(frameId: string, targetSet: PaperTargetSet, transform: PaperStudentTransform | null, predictions: PaperPredictionPoint[]): string {
   return JSON.stringify({ frameId, targetSet, transform, predictions: predictions.map(point => ({
     name: point.name, paperX: point.xCm, paperY: point.yCm,
     x: point.robotX, y: point.robotY, z: point.robotZ, r: point.robotR,
@@ -619,8 +608,9 @@ export function paperRevalidationAssessment(
   const tcpWithinTolerance = run.observations.every((observation, index) => {
     const target = frameTransformPoint(record.frame!, targets[index]);
     const distance = Math.hypot(observation.pose.x - target.x, observation.pose.y - target.y);
-    const rotation = angleDifference(observation.pose.r, target.r);
-    return distance <= criteria.positionToleranceMm && rotation <= criteria.rotationToleranceDeg;
+    // Hand-guided O/X/Y samples can carry different R values. R is kept in the
+    // evidence record, but paper position verification is XY-only.
+    return distance <= criteria.positionToleranceMm;
   });
   if (run.source !== "hardware") return {
     parentAttemptId: parent!.id, runId: run.id, source: run.source, checkedAt: Date.now(), scope,

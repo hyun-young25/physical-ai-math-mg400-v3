@@ -1,6 +1,6 @@
-import { validatePaperFrame } from "./paperCoordinateStudy";
+import { PAPER_TASK_VERSION as CURRENT_PAPER_TASK_VERSION, validatePaperFrame } from "./paperCoordinateStudy";
 import type { PaperCoordinateLevel,PaperReferenceSample } from "./paperCoordinateStudy";
-export const PAPER_TASK_VERSION="v4-paper-merged";
+export const PAPER_TASK_VERSION=CURRENT_PAPER_TASK_VERSION;
 export const isMergedPaper=(level:PaperCoordinateLevel)=>level==="advanced-paper-dt"||level==="advanced-paper-hardware";
 export const isPaperDT=(level:PaperCoordinateLevel)=>level==="advanced-paper-dt";
 export const PAPER_ROTATION_SETTING="mg400:teacher:paper-rotation-allowed";

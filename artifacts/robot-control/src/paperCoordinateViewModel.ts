@@ -208,6 +208,7 @@ export type PaperCoordinateStudyViewState = {
   transformFeedback: string;
   targetPoints: PaperGridPoint[];
   predictions: PaperPredictionPoint[];
+  paperCoordinates: Array<{ point: string; xCm: string; yCm: string }>;
   predictionsReady: boolean;
   predictionFeedback: string;
   run: PaperRunSnapshot | null;
@@ -327,6 +328,11 @@ export type PaperCoordinateStudyViewActions = {
   onPredictionChange: (
     point: string,
     field: "robotX" | "robotY",
+    value: string,
+  ) => void;
+  onPaperCoordinateChange: (
+    point: string,
+    field: "xCm" | "yCm",
     value: string,
   ) => void;
   onSavePrediction: () => void;

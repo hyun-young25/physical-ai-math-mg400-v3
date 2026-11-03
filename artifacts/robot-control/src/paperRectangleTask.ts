@@ -1,5 +1,5 @@
 import { paperDiagnosisLabel, PAPER_AXIS_SWAP_CANDIDATE } from "./paperDiagnosisLabel";
-import { PAPER_TARGETS, frameInversePoint, frameTransformPoint, getPaperFrameAngleDegrees } from "./paperCoordinateStudy";
+import { PAPER_TASK_VERSION, PAPER_TARGETS, frameInversePoint, frameTransformPoint, getPaperFrameAngleDegrees } from "./paperCoordinateStudy";
 import type { PaperCoordinateLevel, PaperTargetSet, PaperGridPoint, PaperFrame, PaperRunSnapshot, PaperDiagnosis } from "./paperCoordinateStudy";
 import { getShapeLesson } from "./shapeLearning";
 import { diagnoseSquare, LEVEL_LABELS, squareFeedbackPlan, squareMismatchName } from "./squareMismatchDiagnosis";
@@ -13,10 +13,15 @@ export const PAPER_RECTANGLE_TITLES = {
   "advanced-paper-rotated": "종이 위 사각형 · 비스듬히 놓인 종이",
 } as const;
 export const isPaperRectangle = (level:PaperCoordinateLevel) => level==="advanced-paper-quarter"||level==="advanced-paper-rotated"||level==="advanced-paper-dt"||level==="advanced-paper-hardware";
-export function paperTaskTargets(level:PaperCoordinateLevel,set:PaperTargetSet):PaperGridPoint[] {
+export function paperTaskTargets(level:PaperCoordinateLevel,set:PaperTargetSet,taskVersion=PAPER_TASK_VERSION):PaperGridPoint[] {
   if(!isPaperRectangle(level))return PAPER_TARGETS[set];
   if(level==="advanced-paper-dt"||level==="advanced-paper-hardware") {
-    const points=set==="revalidation"?[[2,3],[9,3],[9,12],[2,12]]:[[0,0],[11,0],[11,15],[0,15]];
+    // v4 records retain their original task coordinates when viewed. New
+    // attempts use points wholly inside the 10 × 10 cm teaching sheet.
+    const legacy = taskVersion === "v4-paper-merged";
+    const points=legacy
+      ? set==="revalidation"?[[2,3],[9,3],[9,12],[2,12]]:[[0,0],[11,0],[11,15],[0,15]]
+      : set==="revalidation"?[[2,2],[8,2],[8,8],[2,8]]:[[1,1],[9,1],[9,9],[1,9]];
     return points.map(([xCm,yCm],i)=>({name:"P"+(i+1),xCm,yCm}));
   }
   const points=set==="revalidation"?[[3,3],[7,3],[7,5],[3,5]]:[[2,2],[8,2],[8,6],[2,6]];

@@ -149,12 +149,13 @@ const baselineLengthToleranceFor = (
 const paperPlanHashFor = (
   frameId: string,
   targetSet: PaperTargetSet,
-  transform: PaperStudentTransform,
+  transform: PaperStudentTransform | undefined,
   predictions: PaperPredictionPoint[],
   liftHeight: number | null,
-  baselineLengthToleranceMm: number,
+  _baselineLengthToleranceMm: number,
+  taskVersion = PAPER_TASK_VERSION,
 ) =>
-  `${makePaperPlanHash(frameId, targetSet, transform, predictions)}|baseline-length:${baselineLengthToleranceMm}|lift:${liftHeight ?? "unset"}`;
+  `${makePaperPlanHash(frameId, targetSet, transform ?? null, predictions)}${taskVersion === "v4-paper-merged" ? `|baseline-length:${_baselineLengthToleranceMm}` : ""}|lift:${liftHeight ?? "unset"}`;
 const isRecord = (value: unknown): value is PaperTrialRecord =>
   !!value &&
   typeof value === "object" &&
@@ -231,6 +232,17 @@ export function PaperCoordinateStudy({
   const [predictionDraft, setPredictionDraft] = useState<
     PaperPredictionPoint[]
   >([]);
+  const [paperCoordinateDrafts, setPaperCoordinateDrafts] = useState<
+    Array<{ point: string; xCm: string; yCm: string }>
+  >(() => paperTaskTargets(
+    initialRecord.current?.level ?? initialLevel ?? "basic",
+    initialRecord.current?.targetSet ?? "initial",
+    initialRecord.current?.taskVersion,
+  ).map((point) => ({
+    point: point.name,
+    xCm: String(point.xCm),
+    yCm: String(point.yCm),
+  })));
   const [inkDraft, setInkDraft] = useState<PaperInkReadingDraft[]>([]);
   const [hypothesisDraft, setHypothesisDraft] = useState("");
   const [revisionDraft, setRevisionDraft] = useState("");
@@ -267,7 +279,13 @@ export function PaperCoordinateStudy({
   const active = records.find((record) => record.id === activeId) ?? null;
   const attemptSupport = active?.support ?? supportMode;
   const currentTargetSet: PaperTargetSet = active?.targetSet ?? "initial";
-  const targetPoints = paperTaskTargets(level, currentTargetSet);
+  const taskPoints = paperTaskTargets(level, currentTargetSet, active?.taskVersion);
+  const targetPoints = active?.predictions?.length
+    ? active.predictions.map(({ name, xCm, yCm }) => ({ name, xCm, yCm }))
+    : taskPoints;
+  const autoMappedPaperLesson =
+    isMergedPaper(level) &&
+    (active?.taskVersion ?? PAPER_TASK_VERSION) === PAPER_TASK_VERSION;
   const frame = active?.frame ?? null;
   const retryParent = records.find((r) => r.id === active?.parentAttemptId);
   const retryInputs =
@@ -325,13 +343,32 @@ export function PaperCoordinateStudy({
       }),
     [targetPoints, predictionDraft, active?.predictions],
   );
-  const predictionsComplete =
-    draftTargets.length === targetPoints.length &&
-    draftTargets.every((point) =>
-      [point.robotX, point.robotY].every(
-        (value) => value.trim() !== "" && Number.isFinite(Number(value)),
-      ),
-    );
+  const predictionsComplete = autoMappedPaperLesson
+    ? paperCoordinateDrafts.length === targetPoints.length &&
+      paperCoordinateDrafts.every((point, index) => {
+        const x = Number(point.xCm);
+        const y = Number(point.yCm);
+        const mapped = frame && Number.isFinite(x) && Number.isFinite(y)
+          ? frameTransformPoint(frame, { xCm: x, yCm: y })
+          : null;
+        return point.point === targetPoints[index]?.name &&
+          point.xCm.trim() !== "" &&
+          point.yCm.trim() !== "" &&
+          Number.isFinite(x) &&
+          Number.isFinite(y) &&
+          x >= 0 && x <= PAPER_GRID_SIZE_CM &&
+          y >= 0 && y <= PAPER_GRID_SIZE_CM &&
+          !!mapped &&
+          [mapped.x, mapped.y, mapped.z, mapped.r].every(Number.isFinite);
+      }) &&
+      new Set(paperCoordinateDrafts.map((point) => `${point.xCm},${point.yCm}`)).size ===
+        paperCoordinateDrafts.length
+    : draftTargets.length === targetPoints.length &&
+      draftTargets.every((point) =>
+        [point.robotX, point.robotY].every(
+          (value) => value.trim() !== "" && Number.isFinite(Number(value)),
+        ),
+      );
   const persistedPredictions = active?.predictions ?? [];
   const selectedPlanHash = active?.planHash ?? "";
   const surfaceZ = frame

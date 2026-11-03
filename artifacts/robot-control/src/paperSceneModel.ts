@@ -5,7 +5,7 @@ import { revisionSceneSeries, type RevisionPhase, type RevisionSeries } from "./
 import { paperRotationVisual } from "./paperRotationVisual";
 
 export const PAPER_COLORS = { reference: "#64748b", target: "#22a06b", prediction: "#8b5cf6", first: "#f97316", result: "#2563eb", mismatch: "#ef4444", robotPreview: "#60a5fa", robotOutline: "#3b82f6" } as const;
-export type PaperSceneData = Pick<PaperCoordinateStudyViewState, "level" | "stage" | "frame" | "samples" | "targetPoints" | "predictions" | "revisionJourney" | "running" | "diagnosis" | "run" | "displayPose" | "displaySource">;
+export type PaperSceneData = Pick<PaperCoordinateStudyViewState, "level" | "stage" | "frame" | "samples" | "targetPoints" | "predictions" | "revisionJourney" | "running" | "diagnosis" | "run" | "displayPose" | "displaySource" | "activeAttempt">;
 export type PaperScenePoint = { x: number; y: number; z: number };
 export function paperFrameSource(data: PaperSceneData) {
   if (!data.frame) return "위치 미확인";
@@ -13,18 +13,21 @@ export function paperFrameSource(data: PaperSceneData) {
   return data.frame.source==="hardware"?"실장비 · 제어기 TCP 보고 좌표":data.frame.source==="mock"?"모의 브리지 · 실측 아님":data.frame.source==="teacher"?"교사 입력 · 측정값 아님":"DT · 실측 아님";
 }
 
-/** Display geometry only. O→X and O→Y each span 10 cm; the sheet spans 20 cm. */
+/** Display geometry for the current 10 × 10 cm paper task. */
 export function paperPoint(frame: PaperFrame | null, xCm: number, yCm: number): PaperScenePoint {
   return frame ? frameTransformPoint(frame, { xCm, yCm }) : { x: xCm * 10, y: yCm * 10, z: 0 };
 }
-export function paperCorners(frame: PaperFrame | null) {
-  return [[0,0],[20,0],[20,20],[0,20]].map(([x,y]) => paperPoint(frame,x,y));
+export function paperCorners(frame: PaperFrame | null, sizeCm = 10) {
+  return [[0,0],[sizeCm,0],[sizeCm,sizeCm],[0,sizeCm]].map(([x,y]) => paperPoint(frame,x,y));
 }
-export function paperGrid(frame: PaperFrame | null) {
-  return Array.from({length:21},(_,i) => [
-    [paperPoint(frame,i,0),paperPoint(frame,i,20)],
-    [paperPoint(frame,0,i),paperPoint(frame,20,i)],
+export function paperGrid(frame: PaperFrame | null, sizeCm = 10) {
+  return Array.from({length:sizeCm+1},(_,i) => [
+    [paperPoint(frame,i,0),paperPoint(frame,i,sizeCm)],
+    [paperPoint(frame,0,i),paperPoint(frame,sizeCm,i)],
   ]).flat();
+}
+export function paperSceneGridSize(data: PaperSceneData) {
+  return data.activeAttempt?.taskVersion === "v4-paper-merged" ? 20 : 10;
 }
 const number = (text: string) => text.trim() && Number.isFinite(Number(text)) ? Number(text) : null;
 export function paperSceneSeries(data: PaperSceneData, phase: RevisionPhase): RevisionSeries[] {
