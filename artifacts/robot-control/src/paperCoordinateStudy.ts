@@ -228,6 +228,52 @@ export type PaperTrialRecord = {
   drafts?: PaperTrialDrafts;
 };
 
+/**
+ * Parse the text form of an absolute TCP Z value without rejecting transient
+ * editing states such as "", "-", "." or "-.".
+ */
+export function parsePaperLiftHeightDraft(value: string): number | null {
+  const trimmed = value.trim();
+  if (!/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(trimmed)) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function paperLiftHeightDraftState(
+  input: string,
+  saved: PaperTrialRecord["liftHeight"] | undefined,
+) {
+  const parsed = parsePaperLiftHeightDraft(input);
+  const isSaved = parsed !== null && saved?.z === parsed;
+  return {
+    input,
+    value: isSaved ? parsed : null,
+    saved: isSaved,
+    source: isSaved ? saved?.source ?? null : null,
+    sequence: isSaved ? saved?.seq ?? null : null,
+  };
+}
+
+/**
+ * A completed/failed run is immutable evidence. When the lift setting changes,
+ * move that snapshot to history and require a new plan/criteria/DT run.
+ */
+export function archiveCompletedPaperRunForLiftEdit(
+  record: PaperTrialRecord,
+): PaperTrialRecord {
+  const previousRun = record.run;
+  if (!previousRun || previousRun.status === "running") return record;
+  return {
+    ...record,
+    runHistory: [...(record.runHistory ?? []), previousRun],
+    run: undefined,
+    status: record.frame ? "model" : "references",
+    diagnosis: undefined,
+    verificationCriteria: undefined,
+    dtRunPlanHash: undefined,
+  };
+}
+
 export function recoverInterruptedPaperRuns(records: PaperTrialRecord[], now = Date.now()): PaperTrialRecord[] {
   return records.map(record => {
     if (record.run?.status !== "running") return record;

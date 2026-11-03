@@ -60,6 +60,9 @@ import {
   PAPER_GRID_SIZE_CM,
   PAPER_MEASURE_TOLERANCE_MM,
   PAPER_SAMPLE_MAX_AGE_MS,
+  archiveCompletedPaperRunForLiftEdit,
+  paperLiftHeightDraftState,
+  parsePaperLiftHeightDraft,
   recoverInterruptedPaperRuns,
   PAPER_TARGETS,
   classifyPaperVerificationPoints,
@@ -253,7 +256,11 @@ export function PaperCoordinateStudy({
     "revise",
   );
   const [modelDecisionReasonDraft, setModelDecisionReasonDraft] = useState("");
-  const [liftDraft, setLiftDraft] = useState("");
+  const [liftDraft, setLiftDraft] = useState(() =>
+    initialRecord.current?.liftHeight
+      ? String(initialRecord.current.liftHeight.z)
+      : "",
+  );
   const [liftRecordFeedback, setLiftRecordFeedback] = useState("");
   const [baselineLengthToleranceDraft, setBaselineLengthToleranceDraft] =
     useState(String(baselineLengthToleranceFor(initialRecord.current)));
@@ -378,11 +385,10 @@ export function PaperCoordinateStudy({
   const originPose =
     frame?.samples.find((sample) => sample.point === "O")?.pose ?? null;
   const liftRecord = active?.liftHeight;
-  const liftHeight =
-    liftRecord?.z ??
-    (Number.isFinite(Number(liftDraft)) && liftDraft.trim()
-      ? Number(liftDraft)
-      : null);
+  const liftDraftState = paperLiftHeightDraftState(liftDraft, liftRecord);
+  // Only the exact value already saved in the active trial may feed planning.
+  // Raw/incomplete/unsaved text remains visible but cannot authorize a run.
+  const liftHeight = liftDraftState.value;
   const baselineLengthToleranceMm = baselineLengthToleranceFor(active);
   const transformComplete =
     !!frame &&
@@ -2170,15 +2176,9 @@ export function PaperCoordinateStudy({
       );
     },
     onRecordCurrentLiftHeight: () => {
-      if (running) {
+      if (running || active?.run?.status === "running") {
         setLiftRecordFeedback(
           "실행 중에는 들기 높이를 기록할 수 없습니다. 실행이 끝난 뒤 다시 시도하세요.",
-        );
-        return;
-      }
-      if (active?.run) {
-        setLiftRecordFeedback(
-          "이전 실행은 보존합니다. 수정 이유를 저장하고 새 시도에서 높이를 다시 기록하세요.",
         );
         return;
       }
@@ -2225,6 +2225,8 @@ export function PaperCoordinateStudy({
         );
         return;
       }
+      const liftBase = archiveCompletedPaperRunForLiftEdit(active);
+      const priorRunArchived = liftBase !== active;
       const lift = {
         z: latest.pose.z,
         source: latest.source,
@@ -2240,7 +2242,7 @@ export function PaperCoordinateStudy({
         coordinateSystem: `User ${latest.user} / Tool ${latest.tool}`,
       };
       upsert({
-        ...active,
+        ...liftBase,
         liftHeight: lift,
         planHash:
           (active.transform || active.taskVersion === PAPER_TASK_VERSION) &&
@@ -2256,7 +2258,7 @@ export function PaperCoordinateStudy({
               )
             : undefined,
         dtRunPlanHash: undefined,
-        run: undefined,
+        verificationCriteria: undefined,
         diagnosis: undefined,
       });
       if (!lastSaveSucceededRef.current) {
@@ -2273,59 +2275,111 @@ export function PaperCoordinateStudy({
             ? "모의 응답 · 실측 아님"
             : "교사 입력 · 측정값 아님";
       setLiftRecordFeedback(
-        `현재 보고 Z ${lift.z.toFixed(2)} mm를 들기 높이로 기록했습니다 · ${source} · ${timeIso()} · seq ${lift.seq ?? "—"} · User ${lift.user} / Tool ${lift.tool}. 이 기록 버튼은 로봇을 이동시키지 않습니다.`,
+        `현재 보고 Z ${lift.z.toFixed(2)} mm를 들기 높이로 기록했습니다 · ${source} · ${timeIso()} · seq ${lift.seq ?? "—"} · User ${lift.user} / Tool ${lift.tool}. 이 기록 버튼은 로봇을 이동시키지 않습니다.${priorRunArchived ? " 이전 실행은 이력에 보존했고 새 DT 확인이 필요합니다." : ""}`,
       );
       setPageError("");
     },
     onLiftHeightChange: (value) => {
-      if (running) return;
-      if (active?.run) {
-        setPageError(
-          "이전 실행은 보존합니다. 수정 이유를 저장하고 새 시도에서 높이를 조정하세요.",
+      if (running || active?.run?.status === "running") {
+        setLiftRecordFeedback(
+          "경로 실행 중에는 현재 경로의 높이를 바꿀 수 없습니다. 실행 종료 후 입력하면 다음 확인에 적용됩니다.",
         );
         return;
       }
       setLiftDraft(value);
       setLiftRecordFeedback("");
-      const number = Number(value);
-      if (active && !value.trim())
+      if (!active) {
+        setLiftRecordFeedback(
+          "입력은 화면에 유지됩니다. 저장하려면 먼저 O/X/Y 기준점으로 시도를 만드세요.",
+        );
+        return;
+      }
+      if (!value.trim()) {
+        if (!active.liftHeight && !active.run) {
+          setLiftRecordFeedback(
+            "펜 들기 Z가 비어 있습니다. 유효한 절대 Z값을 입력하거나 현재 보고 Z를 기록하세요.",
+          );
+          return;
+        }
+        const liftBase = archiveCompletedPaperRunForLiftEdit(active);
         upsert({
-          ...active,
+          ...liftBase,
           liftHeight: undefined,
           planHash: undefined,
           dtRunPlanHash: undefined,
-        });
-      if (active && value.trim() && Number.isFinite(number)) {
-        upsert({
-          ...active,
-          liftHeight: {
-            z: number,
-            source: "teacher",
-            seq: null,
-            capturedAt: Date.now(),
-            ageMsAtCapture: null,
-            user: currentUser,
-            tool: currentTool,
-            coordinateSystem: `교사 입력 · User ${currentUser} / Tool ${currentTool}`,
-          },
-          planHash:
-            (active.transform || active.taskVersion === PAPER_TASK_VERSION) &&
-            active.predictions
-              ? paperPlanHashFor(
-                  active.frame!.id,
-                  active.targetSet,
-                  active.transform,
-                  active.predictions,
-                  number,
-                  baselineLengthToleranceFor(active),
-                  active.taskVersion,
-                )
-              : undefined,
-          dtRunPlanHash: undefined,
-          run: undefined,
+          verificationCriteria: undefined,
           diagnosis: undefined,
         });
+        setLiftRecordFeedback(
+          lastSaveSucceededRef.current
+            ? "펜 들기 Z 입력을 비웠습니다. 높이 준비가 해제되어 새 값을 입력하거나 현재 보고 Z를 다시 기록해야 합니다."
+            : "높이 설정을 비우지 못했습니다. 화면 입력은 유지되며 저장 복구 후 다시 입력하세요.",
+        );
+        return;
       }
+      const number = parsePaperLiftHeightDraft(value);
+      if (number === null) {
+        setLiftRecordFeedback(
+          "입력 중입니다. 부호·소수 입력을 계속할 수 있습니다. 완성된 숫자가 저장되기 전에는 경로 계산과 실행에 사용하지 않습니다.",
+        );
+        return;
+      }
+      const unchangedTeacherValue =
+        active.liftHeight?.source === "teacher" &&
+        active.liftHeight.z === number &&
+        active.liftHeight.user === currentUser &&
+        active.liftHeight.tool === currentTool;
+      if (unchangedTeacherValue) {
+        setLiftRecordFeedback(
+          surfaceZ !== null && number <= surfaceZ
+            ? `교사 입력 Z ${number} mm는 저장되어 있지만 종이 표면 Z ${surfaceZ.toFixed(2)} mm보다 높지 않아 경로 실행에는 사용할 수 없습니다.`
+            : "현재 입력값은 교사 입력으로 저장되어 있습니다. 장비 측정값은 아닙니다.",
+        );
+        return;
+      }
+      const liftBase = archiveCompletedPaperRunForLiftEdit(active);
+      const priorRunArchived = liftBase !== active;
+      const lift = {
+        z: number,
+        source: "teacher" as const,
+        seq: null,
+        capturedAt: Date.now(),
+        ageMsAtCapture: null,
+        user: currentUser,
+        tool: currentTool,
+        coordinateSystem: `교사 입력 · User ${currentUser} / Tool ${currentTool}`,
+      };
+      upsert({
+        ...liftBase,
+        liftHeight: lift,
+        planHash:
+          (active.transform || active.taskVersion === PAPER_TASK_VERSION) &&
+          active.predictions
+            ? paperPlanHashFor(
+                active.frame!.id,
+                active.targetSet,
+                active.transform,
+                active.predictions,
+                number,
+                baselineLengthToleranceFor(active),
+                active.taskVersion,
+              )
+            : undefined,
+        dtRunPlanHash: undefined,
+        verificationCriteria: undefined,
+        diagnosis: undefined,
+      });
+      if (!lastSaveSucceededRef.current) {
+        setLiftRecordFeedback(
+          "저장 실패: 입력은 화면에 유지하지만 이 값은 계산·실행에 사용하지 않습니다. 저장 상태를 복구한 뒤 다시 입력하세요.",
+        );
+        return;
+      }
+      setLiftRecordFeedback(
+        surfaceZ !== null && number <= surfaceZ
+          ? `교사 입력 Z ${number} mm를 저장했습니다. 측정값이 아니며 종이 표면 Z ${surfaceZ.toFixed(2)} mm보다 높지 않아 실행 준비에는 사용할 수 없습니다.${priorRunArchived ? " 이전 실행은 이력에 보존했고 새 DT 확인이 필요합니다." : ""}`
+          : `교사 입력 Z ${number} mm를 저장했습니다 · 측정값 아님 · 현재 연결의 실측 높이 확인을 대신하지 않습니다.${priorRunArchived ? " 이전 실행은 이력에 보존했고 새 DT 확인이 필요합니다." : ""}`,
+      );
     },
     onBaselineLengthToleranceDraftChange: setBaselineLengthToleranceDraft,
     onApplyBaselineLengthTolerance: () => {
@@ -4139,9 +4193,11 @@ export function PaperCoordinateStudy({
       ),
     physicalAvailable: !physicalReason,
     physicalUnavailableReason: physicalReason,
+    liftHeightInput: liftDraft,
+    liftHeightInputSaved: liftDraftState.saved,
     liftHeight,
-    liftHeightSource: liftRecord?.source ?? null,
-    liftHeightSequence: liftRecord?.seq ?? null,
+    liftHeightSource: liftDraftState.source,
+    liftHeightSequence: liftDraftState.sequence,
     paperSurfaceZ: surfaceZ,
     positionTolerance: practice.setupDraft.positionTolerance,
     rotationTolerance: practice.setupDraft.rotationTolerance,

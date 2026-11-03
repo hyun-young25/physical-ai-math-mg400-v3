@@ -1852,9 +1852,10 @@ export function PaperCoordinateStudyView({
                 <section className="pcv-callout pcv-height-check">
                   <strong>종이 높이와 펜 이동 높이</strong>
                   <p>
-                    종이 표면 Z는 기준점 O/X/Y에서 받은 값입니다. 펜 들기 높이는
-                    제조사 프로그램에서 사람이 확인한 뒤 현재 좌표를 기록하세요.
-                    이 화면은 높이 이동 명령을 자동 전송하지 않습니다.
+                    종이 표면 Z와 펜 들기 Z는 같은 User/Tool 좌표계의 TCP 절대
+                    Z(mm)입니다. 들기 Z는 종이에서의 거리값이 아니며, 두 값의
+                    차이가 종이 표면에서의 들림량입니다. 수동 입력은 교사 입력이지
+                    장비 측정값이 아닙니다.
                   </p>
                   <div className="pcv-form-grid">
                     <label className="pcv-field">
@@ -1866,22 +1867,39 @@ export function PaperCoordinateStudyView({
                       />
                     </label>
                     <label className="pcv-field">
-                      <span>펜 들기 Z (mm)</span>
+                      <span>펜 들기 Z 절대 좌표 (mm)</span>
                       <input
-                        type="number"
-                        step="any"
+                        type="text"
                         inputMode="decimal"
-                        value={state.liftHeight ?? ""}
+                        autoComplete="off"
+                        value={state.liftHeightInput}
                         onChange={(event) =>
                           actions.onLiftHeightChange(event.target.value)
                         }
                         aria-label="펜 들기 높이"
+                        aria-describedby="paper-lift-height-help"
+                        disabled={
+                          state.running || state.run?.status === "running"
+                        }
                       />
                     </label>
                   </div>
+                  <p id="paper-lift-height-help" className="pcv-inline-note">
+                    입력 중인 부호·소수·빈 값은 그대로 유지됩니다. 완성된 숫자는
+                    자동 저장되며, 저장되지 않은 값은 경로 계산과 실행에 사용되지
+                    않습니다. Z를 바꾸면 현재 연결의 높이 확인과 같은 계획의 DT
+                    확인을 다시 해야 합니다.
+                  </p>
                   <p className="pcv-inline-note">
-                    들기 높이 자료: {sourceLabel(state.liftHeightSource)} · seq{" "}
-                    {state.liftHeightSequence ?? "—"}
+                    {state.running || state.run?.status === "running"
+                      ? "경로 실행 중입니다. 현재 실행은 바뀌지 않습니다. 종료 후 수정하면 다음 확인에 적용됩니다."
+                      : state.liftHeightInputSaved
+                        ? `현재 입력 저장됨 · ${sourceLabel(state.liftHeightSource)} · seq ${state.liftHeightSequence ?? "—"}`
+                        : state.liftHeightInput.trim()
+                          ? state.saveState === "failed"
+                            ? `저장 실패 · ${state.saveMessage || "입력은 유지되며 저장 복구 후 다시 입력하세요."}`
+                            : "입력 중/미저장 · 이전 저장값은 현재 경로에 사용하지 않습니다."
+                          : "펜 들기 Z 미입력 · 유효한 절대 Z값을 입력하거나 현재 보고 Z를 기록하세요."}
                   </p>
                   <button
                     type="button"
@@ -1891,6 +1909,16 @@ export function PaperCoordinateStudyView({
                   >
                     현재 보고 Z를 들기 높이로 기록
                   </button>
+                  {state.liftRecordFeedback && (
+                    <p className="pcv-inline-note" role="status" aria-live="polite">
+                      {state.liftRecordFeedback}
+                    </p>
+                  )}
+                  <p className="pcv-inline-note">
+                    현재 보고 Z 기록은 같은 연결의 새 위치 보고만 저장하며 로봇을
+                    이동시키지 않습니다. 기존 실행 자료는 이력으로 보존하고 높이
+                    변경 뒤에는 새 DT 확인이 필요합니다.
+                  </p>
                 </section>
                 <details className="pcv-details pcv-tolerance">
                   <summary>교사용 예비 허용오차 조정</summary>

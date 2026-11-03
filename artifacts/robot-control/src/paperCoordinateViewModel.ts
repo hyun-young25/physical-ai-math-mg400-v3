@@ -215,6 +215,8 @@ export type PaperCoordinateStudyViewState = {
   runAvailable: boolean;
   physicalAvailable: boolean;
   physicalUnavailableReason: string;
+  liftHeightInput: string;
+  liftHeightInputSaved: boolean;
   liftHeight: number | null;
   liftHeightSource: PaperReferenceSource | null;
   liftHeightSequence: number | null;
