@@ -98,6 +98,40 @@ test("v6 computes the student model from O and student Δ values and keeps θ=0 
   assert.equal(v6.paperV6TaskVersionForLevel("advanced-paper-dt", "v5-paper-10cm"), "v5-paper-10cm");
 });
 
+test("advanced v6 student UI maps seven saved stages to the five requested scenes without changing save gates", () => {
+  const ui = fs.readFileSync(path.join(__dirname, "PaperV6StudentLesson.tsx"), "utf8");
+  const shell = fs.readFileSync(path.join(__dirname, "PaperV6StepShell.tsx"), "utf8");
+  for (const title of [
+    "종이가 어디 있지?",
+    "내 식으로 예측하기",
+    "로봇이 그려요",
+    "비교하고 AI에게 묻기",
+    "고칠까, 유지할까? → 새 점에서 확인",
+  ]) assert.ok(ui.includes(title), `missing scene title: ${title}`);
+  assert.match(ui, /editingRevisionModel \? 2 : step <= 2 \? 1 : step <= 4 \? 2 : step === 5 \? 3 : step === 6 \? 4 : 5/);
+  assert.match(ui, /if \(scene === 1\) navigate\(3\)/);
+  assert.match(ui, /canGoNext=.*hasAllReferences/s);
+  assert.match(ui, /paper-v6-references-required/);
+  assert.match(ui, /const saveModelAndPrediction = \(\) => \{\s*const modelResult = actions\.onV6SaveModel\?\.\(\);[\s\S]*?if \(modelResult\?\.kind === "error"\)[\s\S]*?const predictionResult = actions\.onV6SavePrediction\?\.\(\);/);
+  assert.match(ui, /scene === 2 && \(step === 3 \|\| step === 4 \|\| editingRevisionModel\)/);
+  assert.match(ui, /scene === 2 && !editingRevisionModel/);
+  assert.match(ui, /paper-v6-revision-deltas/);
+  assert.match(ui, /totalSteps=\{5\}/);
+  assert.match(ui, /state\.error\?\.trim\(\) \|\| message\?\.trim\(\) \|\| undefined/);
+  assert.match(ui, /runAction\(actions\.onV6CreateRevalidation\)/);
+  assert.match(ui, /식 고치기/);
+  assert.match(ui, /식 유지/);
+  assert.equal((ui.match(/무엇을 추가로 확인했나요\?/g) ?? []).length, 1);
+  assert.doesNotMatch(ui, /paper-v6-current-ai-output/);
+  assert.equal((ui.match(/\{blocks\.analysis\}/g) ?? []).length, 1);
+  assert.match(ui, /state\.runAvailable/);
+  assert.match(ui, /state\.physicalAvailable/);
+  assert.match(ui, /교사용 상세/);
+  assert.match(shell, /totalSteps\?: number/);
+  assert.match(shell, /totalSteps = 7/);
+  assert.match(shell, /max=\{stepCount\}/);
+});
+
 test("guided P1 hand substitution is checked against the student's equation, not the measured frame", () => {
   const model = v6.paperV6ModelFromDraft({
     originXmm: "200",

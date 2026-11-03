@@ -1759,6 +1759,16 @@ export function PaperCoordinateStudy({
       setStage(3);
       return null;
     }
+    if (bounded === 2) {
+      upsert(
+        { ...current, stage: 2, drafts: { ...current.drafts, v6: paperV6Draft } },
+        "기준점 기록 화면으로 이동했습니다.",
+      );
+      if (!lastSaveSucceededRef.current)
+        return { message: "현재 단계를 저장하지 못해 이동하지 않았습니다.", kind: "error" as const };
+      setStage(2);
+      return null;
+    }
     if (bounded === 4) return saveV6Model();
     if (bounded === 5) return saveV6Prediction();
     if (bounded === 6) {

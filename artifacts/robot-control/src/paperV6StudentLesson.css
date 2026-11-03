@@ -337,3 +337,712 @@
     max-height: 150px;
   }
 }
+
+/* Advanced paper hardware: field notebook meets a robot teaching console. */
+.paper-v6-student {
+  --v6-ink: #243735;
+  --v6-muted: #687b74;
+  --v6-line: #d7e2db;
+  --v6-paper: #f7f8f2;
+  --v6-card: #fffefa;
+  --v6-green: #275e52;
+  --v6-coral: #c96e50;
+  --v6-wash: #e9f1eb;
+  color: var(--v6-ink);
+  font-family: "Pretendard", "Noto Sans KR", sans-serif;
+}
+
+.paper-v6-cycle {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  margin: 0 0 12px;
+  padding: 12px 16px 13px;
+  background: rgb(245 248 241 / 96%);
+  border: 1px solid var(--v6-line);
+  border-radius: 13px;
+  box-shadow: 0 5px 18px rgb(39 67 57 / 8%);
+  backdrop-filter: blur(12px);
+}
+
+.paper-v6-cycle__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.paper-v6-cycle__meta > span {
+  padding: 4px 8px;
+  color: #fffaf1;
+  background: var(--v6-coral);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+.paper-v6-cycle__meta strong {
+  color: #52675e;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+
+.paper-v6-cycle ol {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 7px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.paper-v6-cycle li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 0 7px;
+  min-width: 0;
+  padding: 7px 8px;
+  color: #74857d;
+  background: #edf2ec;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease;
+}
+
+.paper-v6-cycle li.is-current {
+  color: #fffdf5;
+  background: var(--v6-green);
+  border-color: #1d5147;
+  transform: translateY(-2px);
+}
+
+.paper-v6-cycle__number {
+  grid-row: span 2;
+  color: var(--v6-coral);
+  font: 750 10px/1 ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+
+.paper-v6-cycle li.is-current .paper-v6-cycle__number {
+  color: #f7c7a7;
+}
+
+.paper-v6-cycle__label {
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.paper-v6-cycle li small {
+  grid-column: 2;
+  overflow: hidden;
+  color: inherit;
+  font-size: 9px;
+  opacity: .78;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.paper-v6-student .paper-v6-shell {
+  --pv6-ink: #243735;
+  --pv6-muted: #687b74;
+  --pv6-line: #d7e2db;
+  --pv6-paper: #fffefa;
+  --pv6-wash: #e9f1eb;
+  --pv6-green: #275e52;
+  --pv6-green-deep: #1d5147;
+  --pv6-success: #34714f;
+  --pv6-error: #9b4c3c;
+  border-color: var(--v6-line);
+  border-radius: 14px;
+  box-shadow: 0 14px 35px rgb(35 64 53 / 9%);
+}
+
+.paper-v6-student .paper-v6-shell__header {
+  background:
+    radial-gradient(ellipse at 92% 4%, rgb(201 110 80 / 13%), transparent 34%),
+    linear-gradient(112deg, #e7f0e8, #f5f5ec 76%);
+}
+
+.paper-v6-student .paper-v6-shell__step-mark {
+  color: #fff9ef;
+  background: var(--v6-coral);
+  border-color: var(--v6-coral);
+}
+
+.paper-v6-student .paper-v6-shell__content {
+  width: min(100%, 1040px);
+}
+
+.paper-v6-step {
+  gap: 17px;
+  animation: paper-v6-enter 240ms ease both;
+}
+
+@keyframes paper-v6-enter {
+  from { opacity: .55; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.paper-v6-coordinate-pair section,
+.paper-v6-reference-summary,
+.paper-v6-point,
+.paper-v6-run-result,
+.paper-v6-criteria,
+.paper-v6-live-points,
+.paper-v6-followup-card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 15px;
+  background: #fffefa;
+  border: 1px solid var(--v6-line);
+  border-radius: 11px;
+}
+
+.paper-v6-ai-card {
+  background: var(--v6-card);
+  border-color: var(--v6-line);
+  border-radius: 11px;
+  box-shadow: 0 4px 13px rgb(41 66 56 / 4%);
+}
+
+.paper-v6-coordinate-pair section {
+  padding: 17px;
+}
+
+.paper-v6-coordinate-pair svg {
+  color: var(--v6-green);
+}
+
+.paper-v6-coordinate-pair svg circle {
+  fill: var(--v6-coral);
+}
+
+.paper-v6-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  margin-right: 5px;
+  padding: 4px 8px;
+  color: #345950;
+  background: #e8f0e9;
+  border: 1px solid #d4e2d7;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.paper-v6-section-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.paper-v6-section-heading h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+}
+
+.paper-v6-section-heading p {
+  margin: 4px 0 0;
+  color: var(--v6-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.paper-v6-live-points,
+.paper-v6-ai-card {
+  display: grid;
+  gap: 13px;
+  min-width: 0;
+  padding: 15px;
+}
+
+.paper-v6-live-points__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.paper-v6-live-points__grid article {
+  min-width: 0;
+  padding: 11px;
+  background: #f3f6f0;
+  border: 1px solid #e0e8df;
+  border-radius: 9px;
+}
+
+.paper-v6-live-points__grid article > strong {
+  display: inline-grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  color: #fffaf1;
+  background: var(--v6-coral);
+  border-radius: 7px;
+  font: 750 11px ui-monospace, Consolas, monospace;
+}
+
+.paper-v6-live-points__grid p {
+  margin: 7px 0 4px;
+  font: 650 11px/1.4 ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.paper-v6-live-points__grid small {
+  display: block;
+  color: var(--v6-muted);
+  font-size: 9px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.paper-v6-student .paper-v6-callout {
+  color: #38564b;
+  background: #edf4ed;
+  border-color: #d9e7da;
+}
+
+.paper-v6-student .paper-v6-equation {
+  color: #f4f4e9;
+  background: #244c46;
+  border-color: #244c46;
+  border-radius: 10px;
+  box-shadow: inset 4px 0 0 var(--v6-coral);
+}
+
+.paper-v6-student .paper-v6-field input,
+.paper-v6-student .paper-v6-field textarea,
+.paper-v6-student .paper-v6-field select {
+  border-color: #c9d8ce;
+  border-radius: 8px;
+}
+
+.paper-v6-student .paper-v6-primary {
+  color: #fffdf5;
+  background: var(--v6-green);
+  border-color: var(--v6-green);
+  border-radius: 8px;
+}
+
+.paper-v6-student .paper-v6-primary--hardware {
+  color: #71422f;
+  background: #fff1e7;
+  border-color: #e7b699;
+}
+
+.paper-v6-student .paper-v6-secondary,
+.paper-v6-student .paper-v6-export {
+  color: var(--v6-green);
+  background: #fffefa;
+  border-color: #c7d9cd;
+  border-radius: 8px;
+}
+
+.paper-v6-source-legend span {
+  color: #38564b;
+  background: #f0f4ee;
+  border-color: #dfe8de;
+}
+
+.paper-v6-ai-card {
+  border-left: 4px solid var(--v6-coral);
+}
+
+.paper-v6-role-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  color: #596e64;
+  background: #f0f4ee;
+  border-radius: 8px;
+  font-size: 11px;
+}
+
+.paper-v6-revise-model {
+  justify-self: start;
+}
+
+.paper-v6-decision {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 13px;
+  background: #fffefa;
+  border: 1px solid var(--v6-line);
+  border-radius: 11px;
+}
+
+.paper-v6-decision legend {
+  padding: 0 5px;
+  color: #354e45;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.paper-v6-decision-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.paper-v6-decision-button {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 72px;
+  padding: 12px 13px;
+  color: #38564b;
+  text-align: left;
+  background: #f3f6f0;
+  border: 1px solid #d8e4d9;
+  border-radius: 9px;
+  font: inherit;
+  cursor: pointer;
+  transition: transform 150ms ease, background-color 150ms ease, border-color 150ms ease;
+}
+
+.paper-v6-decision-button:hover {
+  transform: translateY(-1px);
+}
+
+.paper-v6-decision-button.is-selected {
+  color: #fffaf1;
+  background: var(--v6-green);
+  border-color: var(--v6-green);
+}
+
+.paper-v6-decision-button strong {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.paper-v6-decision-button small {
+  color: inherit;
+  font-size: 10px;
+  line-height: 1.45;
+  opacity: .82;
+}
+
+.paper-v6-followup-summary,
+.paper-v6-revision-preview {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  color: #41594e;
+  background: #f0f4ee;
+  border: 1px solid #dce7dc;
+  border-radius: 9px;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.paper-v6-followup-summary p,
+.paper-v6-revision-preview p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.paper-v6-model-reference {
+  grid-column: 1 / -1;
+  align-self: end;
+}
+
+.paper-v6-student .paper-v6-decision-button:focus-visible {
+  outline: 3px solid #829b83;
+  outline-offset: 3px;
+}
+
+.paper-v6-teacher-details {
+  margin: 12px 0 0;
+  color: #596e64;
+  background: #eef2eb;
+  border-color: #d9e2d8;
+}
+
+.paper-v6-teacher-details__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+  margin-top: 10px;
+  font: 10px/1.5 ui-monospace, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.paper-v6-teacher-details .paper-v6-export {
+  margin-top: 10px;
+}
+
+.paper-v6-attempt-chain {
+  display: grid;
+  gap: 7px;
+  padding: 0;
+  margin: 12px 0 0;
+  list-style: none;
+  counter-reset: attempt;
+}
+
+.paper-v6-attempt-chain li {
+  display: grid;
+  gap: 4px;
+  padding: 9px 11px;
+  background: #f2f5ef;
+  border-left: 3px solid var(--v6-coral);
+  border-radius: 0 8px 8px 0;
+}
+
+.paper-v6-attempt-chain strong {
+  color: #345950;
+  font-size: 11px;
+}
+
+.paper-v6-attempt-chain span {
+  color: var(--v6-muted);
+  font: 10px/1.5 ui-monospace, Consolas, monospace;
+}
+
+@media (max-width: 800px) {
+  .paper-v6-cycle {
+    padding: 10px;
+  }
+  .paper-v6-cycle ol {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .paper-v6-cycle li {
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 0 4px;
+    padding: 7px 5px;
+  }
+  .paper-v6-cycle__label {
+    font-size: 9px;
+  }
+  .paper-v6-cycle li small {
+    font-size: 8px;
+  }
+}
+
+@media (max-width: 540px) {
+  .paper-v6-cycle__meta strong {
+    max-width: 68%;
+    font-size: 9px;
+    text-align: right;
+  }
+  .paper-v6-cycle ol {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .paper-v6-cycle li {
+    min-height: 49px;
+  }
+  .paper-v6-live-points__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .paper-v6-decision-buttons {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .paper-v6-teacher-details__facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.paper-v6-paper-shape {
+  fill: #f8f4e8;
+  stroke: #557568;
+  stroke-width: 1.5;
+}
+
+.paper-v6-paper-grid {
+  fill: none;
+  stroke: #d9e2d4;
+  stroke-width: .7;
+}
+
+.paper-v6-paper-axis {
+  fill: none;
+  stroke: #41715e;
+  stroke-dasharray: 3 2;
+  stroke-width: 1.2;
+}
+
+.paper-v6-target-marker circle {
+  fill: #fffdf6;
+  stroke: #527263;
+  stroke-width: 1;
+}
+
+.paper-v6-target-marker text,
+.paper-v6-reference-marker text {
+  fill: #344d42;
+  font-size: 7px;
+  font-weight: 800;
+}
+
+.paper-v6-reference-marker circle {
+  fill: #f5efe2;
+  stroke: #bd6a4e;
+  stroke-width: 1.4;
+}
+
+.paper-v6-reference-marker.is-measured circle {
+  fill: #bd6a4e;
+  stroke: #7b3f2e;
+}
+
+.paper-v6-reference-prompt {
+  margin: 0;
+  padding: 12px 14px;
+  color: #fffdf6;
+  background: #275e52;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.paper-v6-reference-controls {
+  min-width: 0;
+}
+
+.paper-v6-followup-summary {
+  display: grid;
+  gap: 5px;
+  padding: 12px 14px;
+  background: #f1f4ee;
+  border: 1px solid var(--v6-line);
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.paper-v6-followup-summary p {
+  margin: 0;
+  color: var(--v6-muted);
+  line-height: 1.5;
+}
+
+.paper-v6-decision-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.paper-v6-decision-button {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  min-height: 76px;
+  padding: 13px 15px;
+  text-align: left;
+  color: var(--v6-ink);
+  background: var(--v6-card);
+  border: 2px solid var(--v6-line);
+  border-radius: 11px;
+  cursor: pointer;
+}
+
+.paper-v6-decision-button.is-selected {
+  background: #e9f1eb;
+  border-color: var(--v6-green);
+  box-shadow: inset 0 0 0 1px var(--v6-green);
+}
+
+.paper-v6-decision-button strong {
+  font-size: 15px;
+  font-weight: 850;
+}
+
+.paper-v6-decision-button small {
+  color: var(--v6-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.paper-v6-revision-preview {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  padding: 11px 13px;
+  background: #f4f6ef;
+  border-radius: 9px;
+}
+
+.paper-v6-revision-preview p {
+  margin: 0;
+  font: 650 12px/1.5 ui-monospace, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+/* The robot viewport belongs to scene 3 only; other scenes use the full lesson panel. */
+.learning-workspace:has(.paper-v6-student[data-scene]) {
+  flex-direction: row !important;
+}
+
+.learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-scene {
+  display: none !important;
+}
+
+.learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-panel {
+  flex: 1 1 100%;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.learning-workspace:has(.paper-v6-student[data-scene="3"]) .curriculum-scene {
+  display: block !important;
+  flex: 0 0 56% !important;
+  min-width: 0;
+}
+
+.learning-workspace:has(.paper-v6-student[data-scene="3"]) .curriculum-panel {
+  flex: 1 1 44%;
+  width: auto;
+}
+
+.learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-scene :is(
+  .paper-scene-legend,
+  .paper-scene-caption,
+  .paper-scene-toolbar,
+  .revision-scene-dock
+) {
+  display: none !important;
+}
+
+@media (max-width: 900px) {
+  .learning-workspace:has(.paper-v6-student[data-scene]) {
+    flex-direction: column !important;
+  }
+  .learning-workspace:has(.paper-v6-student[data-scene="3"]) .curriculum-scene {
+    flex: 0 0 min(34vh, 310px) !important;
+    width: 100%;
+    min-height: 220px;
+  }
+  .learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-panel,
+  .learning-workspace:has(.paper-v6-student[data-scene="3"]) .curriculum-panel {
+    flex: 1 1 0%;
+    width: 100%;
+    min-height: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paper-v6-step,
+  .paper-v6-cycle li {
+    animation: none;
+    transition: none;
+  }
+}

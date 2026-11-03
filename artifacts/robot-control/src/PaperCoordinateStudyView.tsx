@@ -1085,8 +1085,8 @@ export function PaperCoordinateStudyView({
         별도 실행 버튼에서만 시작됩니다.
       </p>
       <p className="pcv-reference-progress" role="status">
-        {state.frame
-          ? `기준점 ${state.samples.length}/3 · ${sourceLabel(state.frame.source)} 자료`
+        {state.samples.length
+          ? `기준점 ${state.samples.length}/3 · ${sourceLabel(state.frame?.source ?? state.samples[0]?.source ?? null)} 자료`
           : "기준점 0/3 · 같은 연결에서 새 위치 보고를 받은 뒤 각 점을 기록하세요."}
         {!state.currentPose && " 현재 위치 보고가 없어 기준점 기록은 아직 사용할 수 없습니다."}
       </p>
@@ -1102,7 +1102,7 @@ export function PaperCoordinateStudyView({
       {state.level === "advanced-paper-hardware" && (
         <details
           className="pcv-details pcv-position-adjustment"
-          open={!simplePaperLesson}
+          open={isV6PaperAttempt || !simplePaperLesson}
         >
           <summary>
             {simplePaperLesson ? "위치 맞춤 도구 (필요할 때)" : "TCP 미세 이동"}
@@ -1392,6 +1392,21 @@ export function PaperCoordinateStudyView({
     renderStageId: PaperLessonStage,
     openExecutionPreparation = false,
   ) => {
+    if (renderStageId === 1 && isV6PaperAttempt) {
+      const nextReference = (["O", "X", "Y"] as const).find(
+        (point) => !state.samples.some((sample) => sample.point === point),
+      );
+      return (
+        <section className="paper-v6-reference-controls">
+          <p className="pcv-callout">
+            {nextReference
+              ? `교사와 함께 종이의 ${nextReference}점에 펜 끝을 맞춘 뒤, 현재 위치를 새로 읽어 기록합니다.`
+              : "O·X·Y 기준점이 기록되었습니다. 저장된 제어기 보고값을 확인하세요."}
+          </p>
+          {renderReferencePreparation()}
+        </section>
+      );
+    }
     switch (renderStageId) {
       case 1:
         return (
@@ -3399,7 +3414,7 @@ export function PaperCoordinateStudyView({
             onClick={actions.onBack}
             disabled={state.running}
           >
-            ← <span>사각형 수업으로</span>
+            ← <span>사각형 과제 목록</span>
           </button>
           <div className="pcv-header-title">
             <span className="pcv-eyebrow">2-4 · 심화 2 · v6</span>
@@ -3414,9 +3429,9 @@ export function PaperCoordinateStudyView({
             references: renderStage(1),
             observationsAndInk: renderStage(5),
             analysis: renderStage(6),
+            teacherDetails: renderAttemptHistory(true),
           }}
         />
-        {renderAttemptHistory(true)}
       </section>
     );
   }

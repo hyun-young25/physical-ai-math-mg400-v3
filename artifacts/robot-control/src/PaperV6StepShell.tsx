@@ -3,6 +3,7 @@ import "./paperV6StepShell.css";
 
 export type PaperV6StepShellProps = {
   step: number;
+  totalSteps?: number;
   title: string;
   intro: string;
   children: ReactNode;
@@ -15,10 +16,9 @@ export type PaperV6StepShellProps = {
   statusKind?: "info" | "success" | "error";
 };
 
-const TOTAL_STEPS = 7;
-
 export function PaperV6StepShell({
   step,
+  totalSteps = 7,
   title,
   intro,
   children,
@@ -30,7 +30,8 @@ export function PaperV6StepShell({
   statusMessage,
   statusKind = "info",
 }: PaperV6StepShellProps) {
-  const currentStep = Math.min(TOTAL_STEPS, Math.max(1, Math.trunc(step)));
+  const stepCount = Math.max(1, Math.trunc(totalSteps));
+  const currentStep = Math.min(stepCount, Math.max(1, Math.trunc(step)));
   const message = statusMessage?.trim();
 
   return (
@@ -40,14 +41,14 @@ export function PaperV6StepShell({
           <div className="paper-v6-shell__progress-label">
             <span>종이 좌표 학습</span>
             <strong data-testid="paper-v6-step-count">
-              {currentStep} <span aria-hidden="true">/</span> {TOTAL_STEPS}
+              {currentStep} <span aria-hidden="true">/</span> {stepCount}
             </strong>
           </div>
           <progress
             className="paper-v6-shell__progress-bar"
             value={currentStep}
-            max={TOTAL_STEPS}
-            aria-label={`전체 7단계 중 ${currentStep}단계`}
+            max={stepCount}
+            aria-label={`전체 ${stepCount}단계 중 ${currentStep}단계`}
             data-testid="paper-v6-progress"
           />
         </div>
