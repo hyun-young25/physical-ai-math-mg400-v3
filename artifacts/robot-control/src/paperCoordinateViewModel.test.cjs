@@ -123,8 +123,8 @@ test("최종 판단은 유효한 비교 자료에만 열리고, 완료 자료가
     /const returnToRetryComparison = \(\) => \{([\s\S]*?)\n  \};/,
   )?.[1];
   assert.ok(previous, "실행 비교로 돌아가는 동작이 있어야 합니다.");
-  assert.match(previous, /setGuidedRetryStep\(3\)/);
   assert.match(previous, /setFlowGuidance/);
+  assert.match(previous, /data-testid="revalidation-comparison-step"/);
   assert.doesNotMatch(
     previous,
     /onFinalizeRevalidation|onRunDT|onRunPhysical|setFinalDecisionReason|onModelDecisionReasonChange|upsert|persistDraft/,
@@ -137,7 +137,7 @@ test("최종 판단은 유효한 비교 자료에만 열리고, 완료 자료가
   assert.match(reasonInput, /setFinalDecisionReason\(event\.target\.value\)/);
   assert.match(
     view,
-    /guidedRetryStep === 4[\s\S]*paperRetryComparisonReady\(state\.diagnosis\?\.status\)/,
+    /state\.run\?\.status === "completed"[\s\S]*paperRetryComparisonReady\(state\.diagnosis\?\.status\)/,
   );
   const study = fs.readFileSync(
     path.join(__dirname, "PaperCoordinateStudy.tsx"),
@@ -157,7 +157,7 @@ test("간략화된 실행·비교와 수정·재확인 화면에 실행 조작�
   );
   assert.match(
     view,
-    /const renderExecutionControls = \(\s*executionAllowed = true,\s*retryStep\?: number,\s*\) =>/,
+    /const renderExecutionControls = \(retryExecution = false\) =>/,
   );
   assert.match(view, /data-testid="paper-execution-controls"/);
   assert.match(view, /onClick=\{actions\.onRunDT\}/);
@@ -170,24 +170,21 @@ test("간략화된 실행·비교와 수정·재확인 화면에 실행 조작�
     .replace(/\s+/g, " ");
   assert.match(
     dtButton,
-    /disabled=\{ state\.running \|\| !executionAllowed \|\| !state\.runAvailable \}/,
+    /disabled=\{state\.running \|\| !state\.runAvailable\}/,
   );
   assert.match(
     physicalButton,
-    /disabled=\{ state\.running \|\| !executionAllowed \|\| dtOnly \|\| !state\.physicalAvailable \}/,
+    /disabled=\{state\.running \|\| dtOnly \|\| !state\.physicalAvailable\}/,
   );
   assert.match(
     view,
-    /renderExecutionControls\(\)[\s\S]*renderStage\(state\.stage\)/,
+    /renderExecutionControls\(state\.targetSet === "revalidation"\)[\s\S]*renderStage\(4\)[\s\S]*renderStage\(5\)[\s\S]*renderStage\(6\)/,
   );
   const retryScreen = view.match(
     /const renderRetryScreen = \(\) => \(\s*<>[\s\S]*?<\/>\s*\);/,
   )?.[0];
   assert.ok(retryScreen, "수정 후 재확인 화면이 있어야 합니다.");
-  assert.match(
-    retryScreen,
-    /\{renderExecutionControls\(\s*paperRetryExecutionReady\(guidedRetryStep\),\s*guidedRetryStep,\s*\)\}/,
-  );
+  assert.match(retryScreen, /\{renderExecutionControls\(true\)\}/);
   const retryControlsIndex = retryScreen.indexOf("{renderExecutionControls(");
   const retryComparisonIndex = retryScreen.indexOf(
     'data-testid="revalidation-comparison-step"',
@@ -205,27 +202,19 @@ test("간략화된 실행·비교와 수정·재확인 화면에 실행 조작�
     view,
     /retryExecution \? "수정한 계획 다시 실행" : "저장된 계획 실행"/,
   );
-  assert.match(
-    view,
-    /retryExecution[\s\S]*?"DT로 다시 확인"[\s\S]*?"DT에서 확인"/,
-  );
-  assert.match(
-    view,
-    /retryExecution[\s\S]*?"실장비로 다시 확인"[\s\S]*?"실장비에서 확인"/,
-  );
+  assert.match(view, /retryExecution\s*\?\s*"DT로 다시 확인"/);
+  assert.match(view, /retryExecution\s*\?\s*"실장비로 다시 확인"/);
+  assert.match(view, /: "DT에서 확인"/);
+  assert.match(view, /: "실장비에서 확인"/);
   assert.match(view, /모의 브리지에서 다시 시험/);
   assert.doesNotMatch(
     retryScreen,
-    /guidedRetryStep\s*>=\s*3\s*&&\s*renderExecutionControls/,
+    /guidedRetryStep|renderExecutionControls\(\s*paperRetryExecutionReady/,
   );
-  assert.match(view, /!executionAllowed \|\| !state\.runAvailable/);
-  assert.match(view, /!executionAllowed \|\|[\s\S]*!state\.physicalAvailable/);
-  assert.match(view, /수정한 계획을 저장하기 전에는 DT를 실행할 수 없습니다/);
-  assert.match(
-    view,
-    /수정한 계획을 저장하기 전에는 실장비를 실행할 수 없습니다/,
-  );
-  assert.match(view, /새 예측 입력으로 이동/);
+  assert.match(view, /actions\.onSaveRetryPlan\(\)/);
+  assert.match(view, /수정 모델과 새 예측 저장/);
+  assert.match(view, /독립 검증점/);
+  assert.match(view, /onClick=\{actions\.onFocusExecutionCriteria\}/);
   assert.match(
     view,
     /paperComparableRunPair\([\s\S]*state\.activeAttempt\?\.runHistory/,
@@ -233,6 +222,53 @@ test("간략화된 실행·비교와 수정·재확인 화면에 실행 조작�
   assert.match(view, /이전 실행[\s\S]*현재 실행/);
   assert.match(view, /DT는 가상 자료/);
   assert.match(view, /실장비 실행 전 확인/);
+});
+
+test("세 화면은 한 번의 핵심 저장 동작으로 관계·예측과 실행 자료를 이어준다", () => {
+  const view = fs.readFileSync(
+    path.join(__dirname, "PaperCoordinateStudyView.tsx"),
+    "utf8",
+  );
+  const firstScreen = view.match(
+    /if \(screenIndex === 1\) \{([\s\S]*?)\n    \}\n    if \(screenIndex === 2\)/,
+  )?.[1];
+  assert.ok(firstScreen, "첫 화면 구성이 있어야 합니다.");
+  for (const stage of [1, 2, 3])
+    assert.match(firstScreen, new RegExp(`renderStage\\(${stage}\\)`));
+  assert.match(firstScreen, /actions\.onSavePlanAndContinue/);
+  assert.doesNotMatch(
+    firstScreen,
+    /advancePredictionGuide|다음: 좌표 관계|관계 저장 후 좌표 예측/,
+  );
+
+  const secondScreen = view.match(
+    /if \(screenIndex === 2\) \{([\s\S]*?)\n    \}\n    if \(state\.targetSet === "revalidation"\)/,
+  )?.[1];
+  assert.ok(secondScreen, "둘째 화면 구성이 있어야 합니다.");
+  for (const stage of [4, 5, 6])
+    assert.match(secondScreen, new RegExp(`renderStage\\(${stage}\\)`));
+  assert.match(secondScreen, /actions\.onContinueToRevision/);
+  assert.match(secondScreen, /renderExecutionControls/);
+
+  const retryScreen = view.match(
+    /const renderRetryScreen = \(\) => \(\s*<>[\s\S]*?<\/>\s*\);/,
+  )?.[0];
+  assert.ok(retryScreen, "수정 계획이 셋째 화면에 있어야 합니다.");
+  assert.match(retryScreen, /renderStage\(2\)[\s\S]*renderStage\(3\)/);
+  assert.match(retryScreen, /renderExecutionControls\(true\)/);
+  assert.match(retryScreen, /data-testid="revalidation-comparison-step"/);
+  assert.match(retryScreen, /최종 판단 저장/);
+  assert.match(retryScreen, /DT·모의 실행은 실측이 아닙니다/);
+
+  const criteriaSummary = view.match(
+    /className="pcv-student-criteria-summary"([\s\S]*?)<\/section>/,
+  )?.[1];
+  assert.ok(criteriaSummary, "학생용 확정 기준 요약이 있어야 합니다.");
+  assert.match(criteriaSummary, /currentVerificationPoints/);
+  assert.match(criteriaSummary, /independentVerificationPoints/);
+  assert.match(criteriaSummary, /constructionOverlaps/);
+  assert.match(criteriaSummary, /positionToleranceMm/);
+  assert.match(criteriaSummary, /rotationToleranceDeg/);
 });
 
 test("MG400 손가이딩은 교사 준비의 조건부 안내이며 웹 Unlock 명령이 아니다", () => {

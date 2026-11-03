@@ -1261,6 +1261,18 @@ export function PaperCoordinateStudy({
         element?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 0);
     },
+    onFocusExecutionCriteria: () => {
+      setStage(4);
+      window.setTimeout(() => {
+        const element = document.querySelector<HTMLElement>(
+          '[aria-label="실행 전 검증 기준"]',
+        );
+        const details = element?.closest("details");
+        if (details) details.open = true;
+        element?.scrollIntoView({ behavior: "smooth", block: "center" });
+        element?.focus({ preventScroll: true });
+      }, 0);
+    },
     onFocusTcpJog: () => {
       setStage(1);
       window.setTimeout(() => {
@@ -1621,13 +1633,19 @@ export function PaperCoordinateStudy({
           recordsRef.current.find((item) => item.id === currentActive!.id) ??
           currentActive;
       }
-      const stageNavigationBlocker = paperStageNavigationRequirement(
-        nextStage,
-        (diagnosisOverride ?? currentActive?.diagnosis)?.status === "complete",
-        !!currentActive?.studentHypothesis?.trim(),
-      );
-      const required =
-        nextStage >= 2 && !currentActive?.frame
+      const movingBackward =
+        !!currentActive && nextStage < (currentActive.stage ?? 1);
+      const stageNavigationBlocker = movingBackward
+        ? null
+        : paperStageNavigationRequirement(
+            nextStage,
+            (diagnosisOverride ?? currentActive?.diagnosis)?.status ===
+              "complete",
+            !!currentActive?.studentHypothesis?.trim(),
+          );
+      const required = movingBackward
+        ? ""
+        : nextStage >= 2 && !currentActive?.frame
           ? "O/X/Y 기준점을 먼저 저장하세요."
           : nextStage >= 3 && !currentActive?.transform
             ? "변환 관계를 먼저 저장하세요."

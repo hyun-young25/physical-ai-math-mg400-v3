@@ -318,6 +318,7 @@ export type PaperCoordinateStudyViewActions = {
   onBaselineLengthToleranceDraftChange: (value: string) => void;
   onApplyBaselineLengthTolerance: () => void;
   onFocusReferencePreparation: () => void;
+  onFocusExecutionCriteria: () => void;
   onFocusTcpJog: () => void;
   onFocusRevision: () => void;
   onToleranceChange: (

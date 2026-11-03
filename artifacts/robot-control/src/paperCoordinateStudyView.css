@@ -696,6 +696,14 @@
 .pcv-save-status { display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .pcv-save-status.is-failed { color:#9f2f24; background:#fff5f3; border-color:#e8b4ad; }
 .pcv-guided-flow { display:grid; gap:14px; }
+.pcv-flow-section { display:grid; min-width:0; gap:12px; padding:14px; background:#fff; border:1px solid #dbe4ef; border-radius:10px; }
+.pcv-flow-section > h3 { margin:0; color:#173b73; font-size:15px; line-height:1.4; }
+.pcv-flow-section > .pcv-flow-footer { margin-top:4px; }
+.pcv-retry-plan { background:#f8fbff; border-color:#bfdbfe; }
+.pcv-student-criteria-summary { display:grid; gap:5px; margin:0 0 12px; padding:11px 13px; color:#24436f; background:#eff6ff; border:1px solid #bfdbfe; border-radius:9px; }
+.pcv-student-criteria-summary > strong { font-size:12px; }
+.pcv-student-criteria-summary p { margin:0; font-size:11px; line-height:1.5; overflow-wrap:anywhere; }
+.pcv-student-criteria-summary .pcv-button { justify-self:start; margin-top:3px; }
 .pcv-guided-progress { display:grid; gap:8px; margin:0 0 14px; padding:14px 16px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; }
 .pcv-guided-progress > div { display:flex; align-items:center; justify-content:space-between; gap:12px; color:#274778; font-size:12px; }
 .pcv-guided-progress > div strong { color:#163b70; font-size:15px; }
@@ -735,6 +743,8 @@
 @media (max-width: 560px) {
   .pcv-stage-nav--three ol { gap:4px; padding:8px; }
   .pcv-stage-nav--three li { display:grid; justify-items:start; gap:5px; padding:7px; font-size:10px; word-break:keep-all; }
+  .pcv-flow-section { padding:10px; }
+  .pcv-student-criteria-summary { padding:9px 10px; }
   .pcv-flow-footer { align-items:stretch; flex-direction:column; }
   .pcv-preparation-summary ul,
   .pcv-prep-list { display:block; }
