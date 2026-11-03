@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "bmnevw_kHWaHHwbdkqJwY"
+uri = "file://generated-artifacts/dt-ghost-verification/verification-report.html"
+type = "html"
+title = "DT blue ghost verification"
+description = "Self-contained visual report with desktop and narrow-viewport DT captures, tested source commit, and confirmation that no physical robot moved."
+logical_id = "b5644185-8af6-4d1b-933e-c3de9c921dc3"
+content_hash = "sha256:27bdb8bc9c9dd4e12bbb9d3b6e1e9a7d554746c2c26ce605cc7a180c563abf33"
+size = 537614
+mtime_ms = 1793695061632
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:85dd1949-4bfa-45ac-bfbe-b9fef008fb74/b5644185-8af6-4d1b-933e-c3de9c921dc3/cb1334f3-077d-4dca-bcd7-5c6aa04b4cd6"
+storage_version_token = "1793695169991230"
+content_type = "text/html"

@@ -625,6 +625,13 @@
 .curriculum-body:has(.paper-coordinate-host) { overflow-y:auto; }
 .paper-coordinate-host { flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding:10px; }
 .paper-coordinate-host > .lesson-course-path { flex-shrink:0; }
+@media (max-width: 900px) {
+  .workspace-layout > .workspace-has-lesson > .curriculum-scene:has(.paper-scene-toolbar) {
+    flex: 0 0 640px !important;
+    height: 640px !important;
+    min-height: 640px;
+  }
+}
 .paper-transform-estimate { padding:12px; border:1px solid #c7d2fe; border-radius:8px; background:#eef2ff; overflow-wrap:anywhere; }
 .paper-transform-estimate small { color:#475569; }
 .paper-diagnosis-visual { margin:14px 0; }
