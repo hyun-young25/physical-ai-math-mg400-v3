@@ -1102,7 +1102,7 @@ export function PaperCoordinateStudyView({
       {state.level === "advanced-paper-hardware" && (
         <details
           className="pcv-details pcv-position-adjustment"
-          open={isV6PaperAttempt || !simplePaperLesson}
+          open={!isV6PaperAttempt && !simplePaperLesson}
         >
           <summary>
             {simplePaperLesson ? "위치 맞춤 도구 (필요할 때)" : "TCP 미세 이동"}
@@ -1397,12 +1397,7 @@ export function PaperCoordinateStudyView({
         (point) => !state.samples.some((sample) => sample.point === point),
       );
       return (
-        <section className="paper-v6-reference-controls">
-          <p className="pcv-callout">
-            {nextReference
-              ? `교사와 함께 종이의 ${nextReference}점에 펜 끝을 맞춘 뒤, 현재 위치를 새로 읽어 기록합니다.`
-              : "O·X·Y 기준점이 기록되었습니다. 저장된 제어기 보고값을 확인하세요."}
-          </p>
+        <section className="paper-v6-reference-controls" aria-label="교사 준비 기준점 설정">
           {renderReferencePreparation()}
         </section>
       );

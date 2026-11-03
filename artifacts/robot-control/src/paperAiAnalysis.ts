@@ -61,7 +61,8 @@ export function preparePaperInkReadings(
       reading.runId === run.id &&
       reading.frameId === frame.id &&
       reading.unit === "cm" &&
-      reading.source === "student-manual-ink",
+      (reading.source === "student-manual-ink" ||
+        (reading.source === "mock-simulation" && run.source !== "hardware")),
   );
   const staleEvidence = (record.inkReadings ?? []).length !== linked.length;
   const draftByPoint = new Map(drafts.map((row) => [row.point, row]));
@@ -72,6 +73,7 @@ export function preparePaperInkReadings(
       yCm: "",
       status: "not-measured",
       reason: "",
+      source: run.source === "mock" ? "mock-simulation" : "student-manual-ink",
     };
   const touched = targets.some((point) => {
     const row = normalizedDraft(point.name);
@@ -92,7 +94,8 @@ export function preparePaperInkReadings(
         saved.status === row.status &&
         saved.rawX === row.xCm &&
         saved.rawY === row.yCm &&
-        saved.reason === row.reason.trim()
+        saved.reason === row.reason.trim() &&
+        saved.source === (row.source ?? "student-manual-ink")
       );
     });
 
@@ -151,13 +154,22 @@ export function preparePaperInkReadings(
         message: `${point.name}: 측정하지 못했거나 판독할 수 없는 이유를 입력하세요. 잉크 자료를 분석·판정에 사용하지 않았습니다.`,
       };
     }
+    const source = row.source ?? "student-manual-ink";
+    if (source === "mock-simulation" && run.source === "hardware") {
+      return {
+        ok: false,
+        point: point.name,
+        message:
+          `${point.name}: 연습용 잉크 자료는 실제 장비 실행에 연결할 수 없습니다. 실제 측정값으로 바꾸지 않았습니다.`,
+      };
+    }
     readings.push({
       recordId: record.id,
       runId: run.id,
       frameId: frame.id,
       point: point.name,
       unit: "cm",
-      source: "student-manual-ink",
+      source,
       status: row.status,
       xCm: row.status === "measured" ? parsedX : null,
       yCm: row.status === "measured" ? parsedY : null,

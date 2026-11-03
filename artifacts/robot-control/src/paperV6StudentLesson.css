@@ -1046,3 +1046,129 @@
     transition: none;
   }
 }
+
+/* Keep scene 1 focused on the two coordinate views, three reference cards,
+   and one large record action. Setup tools stay inside the closed disclosure. */
+.paper-v6-student[data-scene="1"] .paper-v6-step[data-testid="paper-v6-understand"] {
+  gap: 10px;
+}
+
+.paper-v6-paper-note {
+  margin: 0;
+  color: var(--v6-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.paper-v6-student[data-scene="1"] .paper-v6-live-points__grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.paper-v6-student[data-scene="1"] .paper-v6-live-points article {
+  min-width: 0;
+  padding: 9px 10px;
+}
+
+.paper-v6-student[data-scene="1"] .paper-v6-live-points article p {
+  margin: 3px 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.paper-v6-student[data-scene="1"] .paper-v6-live-points article small {
+  display: block;
+  font-size: 10px;
+}
+
+.paper-v6-reference-record {
+  width: 100%;
+  min-height: 54px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--v6-blue);
+  color: #fff;
+  font: 750 17px/1.25 inherit;
+  cursor: pointer;
+}
+
+.paper-v6-reference-record:disabled {
+  background: #d7e0eb;
+  color: #475569;
+  cursor: not-allowed;
+}
+
+.paper-v6-teacher-prep {
+  margin-top: 2px;
+  border: 1px solid var(--v6-border);
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.paper-v6-teacher-prep > summary {
+  padding: 11px 13px;
+  color: var(--v6-ink);
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.paper-v6-teacher-prep > :not(summary) {
+  margin-left: 12px;
+  margin-right: 12px;
+}
+
+.paper-v6-mock-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  color: var(--v6-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.paper-v6-mock-switch input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--v6-blue);
+}
+
+.paper-v6-mock-note {
+  margin-top: 0;
+  color: #475569;
+  font-size: 11px;
+}
+
+@media (max-width: 800px) {
+  .paper-v6-student[data-scene="1"] .paper-v6-coordinate-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .paper-v6-student[data-scene="1"] .paper-v6-coordinate-pair > section {
+    min-width: 0;
+    padding: 8px;
+  }
+
+  .paper-v6-student[data-scene="1"] .paper-v6-coordinate-pair svg {
+    width: 100%;
+    height: auto;
+    max-height: 132px;
+  }
+
+  .paper-v6-reference-record {
+    min-height: 50px;
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 520px) {
+  .paper-v6-student[data-scene="1"] .paper-v6-live-points__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .paper-v6-student[data-scene="1"] .paper-v6-coordinate-pair {
+    grid-template-columns: 1fr 1fr;
+  }
+}

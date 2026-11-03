@@ -148,6 +148,8 @@ export function paperVerificationCriteriaSavedForAttempt(
 
 export type PaperCoordinateStudyViewState = {
   simplePaperLesson?: boolean;
+  mockPracticeEnabled: boolean;
+  mockPracticeReason: string;
   dtBlockers?: import("./paperExecutionGuards").PaperRunBlocker[];
   physicalBlockers?: import("./paperExecutionGuards").PaperRunBlocker[];
   allowMismatchedHardware?: boolean;
@@ -342,6 +344,7 @@ export type PaperCoordinateStudyViewActions = {
   ) => { message: string; target?: string } | null;
   onLevelChange: (level: PaperCoordinateLevel) => void;
   onRecordCurrentReference: (point: PaperPointName) => void;
+  onToggleMockPractice: (enabled: boolean) => void;
   onPreparationTcpJog: (axis: "x" | "y" | "z", deltaMm: number) => void;
   onStopPreparationMovement: () => void;
   onManualReferenceChange: (

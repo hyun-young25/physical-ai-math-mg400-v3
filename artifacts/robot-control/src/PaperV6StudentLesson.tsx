@@ -165,8 +165,8 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
     (point) => !state.samples.some((sample) => sample.point === point),
   );
   const referencePrompt = missingReference
-    ? `지금은 ${missingReference}점을 종이 그림에 맞춘 뒤 새 TCP 보고값으로 기록하세요.`
-    : "O·X·Y 기록을 마쳤습니다. 저장된 위치를 확인하고 예측으로 이동하세요.";
+    ? `지금 찍을 점: ${missingReference} · 펜 끝을 맞춘 뒤 현재 위치를 기록하세요.`
+    : "O·X·Y 기록 완료 · 다음은 내 식으로 예측합니다.";
   const sketchPoint = (xCm: number, yCm: number) => ({
     x: 40 + xCm * 9.6 - yCm * 0.9,
     y: 103 + xCm * 0.9 - yCm * 8,
@@ -181,7 +181,13 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
           onClick={actions.onRunDT}
           data-testid="paper-v6-run-dt"
         >
-          {revalidation ? "DT에서 다시 검증" : "DT에서 실행"}
+          {state.mockPracticeEnabled
+            ? revalidation
+              ? "모의 로봇으로 V 연습"
+              : "모의 로봇으로 연습 실행"
+            : revalidation
+              ? "DT에서 다시 검증"
+              : "DT에서 실행"}
         </button>
         <button
           type="button"
@@ -323,7 +329,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                     ["Y", 0, 10],
                   ] as const).map(([name, xCm, yCm]) => {
                     const position = sketchPoint(xCm, yCm);
-                    const measured = state.frame?.samples.some((sample) => sample.point === name);
+                    const measured = state.samples.some((sample) => sample.point === name);
                     return <g key={name} className={`paper-v6-reference-marker${measured ? " is-measured" : ""}`} data-testid={`paper-v6-diagram-point-${name}`}>
                       <circle cx={position.x} cy={position.y} r="4" />
                       <text x={position.x - 8} y={position.y + (name === "Y" ? -7 : 13)}>{name}</text>
@@ -336,24 +342,16 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 </svg>
               </section>
             </div>
-            <p className="paper-v6-callout">
-              1 cm = 10 mm는 고정값입니다. 종이는 측정하기 전에는 로봇 축에
-              어떻게 놓였는지 알 수 없습니다.
+            <p className="paper-v6-paper-note">
+              종이가 어떻게 놓였는지는 로봇으로 재 봐야 알 수 있어요.
             </p>
             <p className="paper-v6-reference-prompt" role="status" data-testid="paper-v6-current-reference">
               {referencePrompt}
             </p>
-            <div className="paper-v6-target-list" aria-label="목표 사각형 종이 좌표">
-              {targetPoints.map((point) => (
-                <span key={point.name}>
-                  {point.name} ({point.xCm}, {point.yCm}) cm
-                </span>
-              ))}
-            </div>
             <section className="paper-v6-live-points" aria-label="현재 O X Y 측정값" data-testid="paper-v6-live-points">
               <div className="paper-v6-section-heading">
                 <span className="paper-v6-role">🤖 로봇</span>
-                <div><h3>종이의 O · X · Y</h3><p>제어기 보고 좌표만 표시합니다. 아직 값이 없으면 비워 둡니다.</p></div>
+                <div><h3>종이의 O · X · Y</h3></div>
               </div>
               <div className="paper-v6-live-points__grid">
                 {(["O", "X", "Y"] as const).map((name) => {
@@ -361,46 +359,58 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                   return <article key={name} data-testid={`paper-v6-live-point-${name}`}>
                     <strong>{name}</strong>
                     {sample ? <p>X {sample.pose.x.toFixed(2)} · Y {sample.pose.y.toFixed(2)} mm</p> : <p>측정 대기</p>}
-                    <small>{sample ? `${sample.source === "hardware" ? "MG400 제어기 TCP" : sample.source === "mock" ? "모의 · 실측 아님" : "교사 입력"} · ${new Date(sample.capturedAt).toLocaleString()}` : "측정값 없음"}</small>
+                    <small>{sample ? `${sample.source === "hardware" ? "MG400 TCP" : sample.source === "mock" ? "연습 자료" : "교사 입력"}` : "기록 전"}</small>
                   </article>;
                 })}
               </div>
             </section>
-          </div>
-        )}
-
-        {scene === 1 && (
-          <div className="paper-v6-step" data-testid="paper-v6-references">
-            <p className="paper-v6-callout">
-              교사가 종이 모서리에 펜 끝을 맞춘 뒤 O·X·Y를 각각 새로 읽어 저장합니다.
-              화면 값은 제어기 보고 좌표이며 학생이 재는 잉크 위치가 아닙니다.
-            </p>
-            {blocks.references}
-            {!hasAllReferences && (
-              <p className="paper-v6-error" role="status" data-testid="paper-v6-references-required">
-                다음 장면으로 가려면 O · X · Y 세 기준점의 기록이 모두 필요합니다.
-                교사 준비 영역에서 MG400 보고값을 확인해 주세요.
+            <button
+              type="button"
+              className="paper-v6-reference-record"
+              disabled={!missingReference || state.running || !state.currentPose}
+              onClick={() => {
+                if (missingReference)
+                  actions.onRecordCurrentReference(missingReference);
+              }}
+              data-testid="paper-v6-record-current-reference"
+            >
+              {missingReference
+                ? `현재 위치를 ${missingReference}로 기록`
+                : "O · X · Y 기록 완료"}
+            </button>
+            {state.referenceError && (
+              <p className="paper-v6-error" role="status">
+                {state.referenceError}
               </p>
             )}
-            {state.frame && (
-              <section className="paper-v6-reference-summary">
-                <h3>저장된 제어기 보고값</h3>
-                {(["O", "X", "Y"] as const).map((name) => {
-                  const sample = state.frame?.samples.find((row) => row.point === name);
-                  return (
-                    <p key={name}>
-                      {name}: {sample
-                        ? `(${sample.pose.x.toFixed(2)}, ${sample.pose.y.toFixed(2)}, ${sample.pose.z.toFixed(2)}, ${sample.pose.r.toFixed(2)}) mm · ${sample.source === "hardware" ? "MG400 제어기" : sample.source === "mock" ? "모의" : "교사 입력"} · ${new Date(sample.capturedAt).toLocaleString()} · seq ${sample.seq ?? "—"}`
-                        : "아직 기록 없음"}
-                    </p>
-                  );
-                })}
-                <small>
-                  O–Y 길이와 직각은 참고 정보입니다. 학생 모델의 θ는 O–X에서 직접
-                  계산하거나 θ=0 가정을 선택합니다.
-                </small>
-              </section>
-            )}
+            <details className="paper-v6-teacher-prep" data-testid="paper-v6-teacher-prep">
+              <summary>교사 준비</summary>
+              <label className="paper-v6-mock-switch">
+                <input
+                  type="checkbox"
+                  aria-label="장비 없이 연습 모의 로봇"
+                  checked={state.mockPracticeEnabled}
+                  disabled={
+                    !state.mockPracticeEnabled &&
+                    !!state.mockPracticeReason
+                  }
+                  onChange={(event) =>
+                    actions.onToggleMockPractice(event.target.checked)
+                  }
+                />
+                <span>장비 없이 연습(모의 로봇)</span>
+              </label>
+              {state.mockPracticeEnabled ? (
+                <p className="paper-v6-mock-note">
+                  연습 자료 · 실제 MG400 명령이나 실측 기록은 만들지 않습니다.
+                </p>
+              ) : state.mockPracticeReason ? (
+                <p className="paper-v6-error" role="status">
+                  {state.mockPracticeReason}
+                </p>
+              ) : null}
+              {blocks.references}
+            </details>
           </div>
         )}
 
@@ -584,8 +594,9 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
         {scene === 3 && step === 5 && (
           <div className="paper-v6-step" data-testid="paper-v6-run">
             <p className="paper-v6-callout">
-              모델을 만드는 데 사용한 O/X/Y와 학생 목표가 저장됐습니다. ±2.0 mm는 이
-              시도의 실행 전에 고정한 비교 기준이며, DT는 실제 측정이 아닙니다.
+              {state.mockPracticeEnabled
+                ? "연습 자료로 경로를 실행합니다. 모의 O/X/Y·잉크는 실제 장비 측정값이 아닙니다."
+                : "모델을 만드는 데 사용한 O/X/Y와 학생 목표가 저장됐습니다. ±2.0 mm는 이 시도의 실행 전에 고정한 비교 기준이며, DT는 실제 측정이 아닙니다."}
             </p>
             {state.verificationCriteria && (
               <div className="paper-v6-criteria" data-testid="paper-v6-criteria">
@@ -601,7 +612,13 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 <p>
                   {run.status === "completed" ? "완료" : run.status === "running" ? "실행 중" : "미완료"}
                   {" · "}
-                  {run.source === "hardware" ? "MG400 제어기 TCP" : run.source === "dt" ? "DT · 실측 아님" : "모의 · 실측 아님"}
+                  {run.source === "hardware"
+                    ? "MG400 제어기 TCP"
+                    : run.source === "dt"
+                      ? state.mockPracticeEnabled
+                        ? "DT · 연습 자료"
+                        : "DT · 실측 아님"
+                      : "연습 자료"}
                 </p>
                 <small>명령 {run.commands.length}개 · 새 관측 {run.observations.length}개</small>
                 {run.error && <p className="paper-v6-error">{run.error}</p>}
@@ -613,7 +630,15 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
         {scene === 4 && step === 6 && (
           <div className="paper-v6-step" data-testid="paper-v6-interpret">
             <div className="paper-v6-source-legend" aria-label="자료 출처">
-              <span>🧮 학생 모델 예측</span><span>🤖 제어기 TCP 보고</span><span>🙋 학생 수기 잉크 · cm</span>
+              <span>🧮 학생 모델 예측</span>
+              {state.mockPracticeEnabled ? (
+                <span>🤖 연습 자료 · 모의 TCP/잉크</span>
+              ) : (
+                <>
+                  <span>🤖 제어기 TCP 보고</span>
+                  <span>🙋 학생 수기 잉크 · cm</span>
+                </>
+              )}
             </div>
             {blocks.observationsAndInk}
             <section className="paper-v6-ai-card">

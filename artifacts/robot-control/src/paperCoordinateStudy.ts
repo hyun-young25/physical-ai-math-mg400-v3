@@ -8,6 +8,7 @@ export type PaperTargetSet = "initial" | "revalidation";
 export type PaperPointName = "O" | "X" | "Y";
 export type PaperReferenceSource = "hardware" | "mock" | "teacher";
 export type PaperEvidenceSource = PaperReferenceSource | "dt";
+export type PaperInkEvidenceSource = "student-manual-ink" | "mock-simulation";
 export const PAPER_TASK_VERSION = "v5-paper-10cm";
 /** New research flow is versioned only for the MG400 slanted-paper level. */
 export const PAPER_HARDWARE_V6_VERSION = "v6-paper-transform";
@@ -198,7 +199,7 @@ export type PaperInkReading = {
   frameId: string;
   point: string;
   unit: "cm";
-  source: "student-manual-ink";
+  source: PaperInkEvidenceSource;
   status: "measured" | "unreadable" | "outside-range" | "not-measured";
   xCm: number | null;
   yCm: number | null;
@@ -211,7 +212,55 @@ export type PaperInkReading = {
 export type PaperInkReadingDraft = Pick<PaperInkReading, "point" | "status" | "reason"> & {
   xCm: string;
   yCm: string;
+  /** Synthetic ink values are accepted only for an explicitly marked mock run. */
+  source?: PaperInkEvidenceSource;
 };
+
+const PAPER_V6_MOCK_THETA_RAD = (28.6 * Math.PI) / 180;
+
+/** In-app practice data only; this is never sent to the hardware bridge. */
+export function paperV6MockReferencePose(point: PaperPointName): LessonPose {
+  const origin = { x: 200, y: 50 };
+  const length = 100;
+  if (point === "O")
+    return { x: origin.x, y: origin.y, z: 0, r: 0 };
+  if (point === "X")
+    return {
+      x: origin.x + length * Math.cos(PAPER_V6_MOCK_THETA_RAD),
+      y: origin.y + length * Math.sin(PAPER_V6_MOCK_THETA_RAD),
+      z: 0,
+      r: 0,
+    };
+  return {
+    x: origin.x - length * Math.sin(PAPER_V6_MOCK_THETA_RAD),
+    y: origin.y + length * Math.cos(PAPER_V6_MOCK_THETA_RAD),
+    z: 0,
+    r: 0,
+  };
+}
+
+/** Convert the in-app mock TCP path to explicitly synthetic paper-ink drafts. */
+export function paperV6MockInkDrafts(
+  frame: PaperFrame,
+  points: Array<{ point: string; pose: LessonPose }>,
+): PaperInkReadingDraft[] | null {
+  const drafts = points.map(({ point, pose }) => {
+    const paper = frameInversePoint(frame, pose);
+    if (!paper || !Number.isFinite(paper.xCm) || !Number.isFinite(paper.yCm))
+      return null;
+    return {
+      point,
+      status: "measured" as const,
+      xCm: paper.xCm.toFixed(2),
+      yCm: paper.yCm.toFixed(2),
+      reason: "",
+      source: "mock-simulation" as const,
+    };
+  });
+  return drafts.some((draft) => draft === null)
+    ? null
+    : (drafts as PaperInkReadingDraft[]);
+}
 
 export type PaperRunSnapshot = {
   id: string;

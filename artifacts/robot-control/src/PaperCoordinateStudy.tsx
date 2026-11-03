@@ -89,6 +89,8 @@ import {
   paperRevalidationAssessment,
   paperBaselineLengthMetrics,
   initialPaperAttemptForLevel,
+  paperV6MockReferencePose,
+  paperV6MockInkDrafts,
 } from "./paperCoordinateStudy";
 import type {
   PaperCoordinateLevel,
@@ -307,6 +309,8 @@ export function PaperCoordinateStudy({
   const [paperV6Draft, setPaperV6Draft] = useState<PaperV6Draft>(() =>
     initialRecord.current?.drafts?.v6 ?? emptyPaperV6Draft(supportMode),
   );
+  const [requestedPaperV6MockPractice, setRequestedPaperV6MockPractice] =
+    useState(false);
   const [liftDraft, setLiftDraft] = useState(() =>
     initialRecord.current?.liftHeight
       ? String(initialRecord.current.liftHeight.z)
@@ -389,37 +393,86 @@ export function PaperCoordinateStudy({
       ? paperRetryInputs(retryParent, level, frame, targetPoints)
       : null;
   const samples = active?.referenceSamples ?? frame?.samples ?? [];
+  const mockReferencesSaved =
+    isV6Attempt &&
+    (active?.dataSource === "mock" ||
+      frame?.source === "mock" ||
+      samples.some((sample) => sample.source === "mock"));
+  const mockPracticeEnabled =
+    isV6Attempt && (requestedPaperV6MockPractice || mockReferencesSaved);
+  const mockPracticeBlockedByConnection =
+    hardwareConnected || practice.snap.connection === "connected";
+  const mockPracticeReason = !isV6Attempt
+    ? "모의 로봇 연습은 심화2의 새 시도에서만 사용할 수 있습니다."
+    : mockPracticeBlockedByConnection
+      ? "실장비 연결이 감지되어 모의 위치 기록을 막았습니다. 연결을 끊거나 실제 위치 기록을 계속하세요."
+      : active?.run || active?.frame || samples.length
+        ? "기준점이나 실행 기록이 있는 시도에서는 연습 모드를 바꿀 수 없습니다. 새 시도를 시작하세요."
+        : "";
+  const nextMockReference = (["O", "X", "Y"] as const).find(
+    (point) => !samples.some((sample) => sample.point === point),
+  );
+  const mockCurrentPoint = nextMockReference ?? "O";
+  const mockPoseAvailable =
+    mockPracticeEnabled && !mockPracticeBlockedByConnection
+      ? paperV6MockReferencePose(mockCurrentPoint)
+      : null;
   const currentMeasurement = practice.snap.measurement;
   const measurementAvailable =
     practice.snap.connection === "connected" &&
     measurementFresh(currentMeasurement) &&
     !currentMeasurement?.moving &&
     !currentMeasurement?.error;
-  const currentPoseRead = measurementAvailable
-    ? currentMeasurement!.pose
-    : null;
-  const currentSource = measurementAvailable
-    ? currentMeasurement!.source
-    : null;
-  const currentSequence = measurementAvailable ? currentMeasurement!.seq : null;
-  const currentMeasuredAt = measurementAvailable
-    ? currentMeasurement!.measuredAt
-    : null;
-  const currentSystem = measurementAvailable
-    ? `User ${currentMeasurement!.user} / Tool ${currentMeasurement!.tool}`
-    : "";
-  const currentUser = measurementAvailable
-    ? currentMeasurement!.user
-    : practice.setupDraft.user;
-  const currentTool = measurementAvailable
-    ? currentMeasurement!.tool
-    : practice.setupDraft.tool;
-  const coordinatesVerified =
-    !!practice.setupDraft.verified.coordinates &&
-    !!practice.snap.setup?.verified.coordinates &&
-    (!measurementAvailable ||
-      (currentMeasurement!.user === practice.snap.setup!.user &&
-        currentMeasurement!.tool === practice.snap.setup!.tool));
+  const currentPoseRead = mockPracticeEnabled
+    ? mockPoseAvailable
+    : measurementAvailable
+      ? currentMeasurement!.pose
+      : null;
+  const currentSource = mockPracticeEnabled
+    ? mockPoseAvailable
+      ? "mock"
+      : null
+    : measurementAvailable
+      ? currentMeasurement!.source
+      : null;
+  const currentSequence = mockPracticeEnabled
+    ? mockPoseAvailable
+      ? 9000 + samples.length
+      : null
+    : measurementAvailable
+      ? currentMeasurement!.seq
+      : null;
+  const currentMeasuredAt = mockPracticeEnabled
+    ? mockPoseAvailable
+      ? Date.now()
+      : null
+    : measurementAvailable
+      ? currentMeasurement!.measuredAt
+      : null;
+  const currentSystem = mockPracticeEnabled
+    ? mockPoseAvailable
+      ? "연습 자료 · User 0 / Tool 0"
+      : ""
+    : measurementAvailable
+      ? `User ${currentMeasurement!.user} / Tool ${currentMeasurement!.tool}`
+      : "";
+  const currentUser = mockPracticeEnabled
+    ? 0
+    : measurementAvailable
+      ? currentMeasurement!.user
+      : practice.setupDraft.user;
+  const currentTool = mockPracticeEnabled
+    ? 0
+    : measurementAvailable
+      ? currentMeasurement!.tool
+      : practice.setupDraft.tool;
+  const coordinatesVerified = mockPracticeEnabled
+    ? !!mockPoseAvailable
+    : !!practice.setupDraft.verified.coordinates &&
+      !!practice.snap.setup?.verified.coordinates &&
+      (!measurementAvailable ||
+        (currentMeasurement!.user === practice.snap.setup!.user &&
+          currentMeasurement!.tool === practice.snap.setup!.tool));
   const selectedTransform = transformDraft;
   const draftTargets = useMemo(
     () =>
@@ -480,11 +533,14 @@ export function PaperCoordinateStudy({
     liftGapDraft,
     active?.penLiftGapMm,
   );
+  const liftGapForPlan = mockPracticeEnabled
+    ? liftGapState.value ?? 30
+    : liftGapState.value;
   // Only the exact value already saved in the active trial may feed planning.
   // Raw/incomplete/unsaved text remains visible but cannot authorize a run.
   const liftHeight = autoMappedPaperLesson || isV6Attempt
-    ? surfaceZ !== null && liftGapState.value !== null
-      ? surfaceZ + liftGapState.value
+    ? surfaceZ !== null && liftGapForPlan !== null
+      ? surfaceZ + liftGapForPlan
       : null
     : liftDraftState.value;
   const baselineLengthToleranceMm = baselineLengthToleranceFor(active);
@@ -848,6 +904,7 @@ export function PaperCoordinateStudy({
           yCm: reading.rawY,
           status: reading.status,
           reason: reading.reason,
+          source: reading.source,
         })) ??
         paperTaskTargets(active.level, active.targetSet, active.taskVersion).map((point) => ({
           point: point.name,
@@ -1676,7 +1733,7 @@ export function PaperCoordinateStudy({
     );
     if (!generated.predictions)
       return { message: generated.error ?? "P1 계산을 확인하세요.", kind: "error" as const };
-    if (liftHeight === null || liftGapState.value === null)
+    if (liftHeight === null || liftGapForPlan === null)
       return { message: "펜 들기 간격(mm)을 먼저 저장하세요. 오래된 절대 Z값은 사용하지 않습니다.", kind: "error" as const };
     const hash = paperPlanHashFor(
       current.frame.id,
@@ -1940,7 +1997,7 @@ export function PaperCoordinateStudy({
       return { message: "O/X/Y와 학생 모델을 확인하세요.", kind: "error" as const };
     if (current.run)
       return { message: "이 검증 시도의 실행이 이미 시작됐습니다. 결과를 덮어쓸 수 없습니다.", kind: "error" as const };
-    if (liftHeight === null || liftGapState.value === null)
+    if (liftHeight === null || liftGapForPlan === null)
       return { message: "펜 들기 간격(mm)을 저장하세요.", kind: "error" as const };
     const predictions = paperV6GeneratedPredictions(
       current.frame,
@@ -2555,6 +2612,41 @@ export function PaperCoordinateStudy({
     onRecordCurrentReference: (point) => {
       if (running) return;
       const live = practice.session.getSnapshot();
+      if (practice.hasPendingOperation() || live.busy || hardwareConnected) {
+        setReferenceError(
+          "장비 조작 또는 연결이 진행 중이라 기준점을 기록하지 않았습니다. 연결이 끝난 뒤 다시 확인하세요.",
+        );
+        return;
+      }
+      if (mockPracticeEnabled) {
+        if (
+          live.connection === "connected" ||
+          !mockPoseAvailable ||
+          point !== nextMockReference
+        ) {
+          setReferenceError(
+            "모의 위치를 사용할 수 없습니다. 실장비 연결을 끊고 교사 준비에서 모의 연습을 확인하세요.",
+          );
+          return;
+        }
+        const capturedAt = Date.now();
+        const sample: PaperReferenceSample = {
+          point,
+          pose: { ...mockPoseAvailable },
+          source: "mock",
+          connectionToken: "paper-v6-in-app-mock",
+          seq: 9000 + samples.length,
+          capturedAt,
+          ageMsAtCapture: 0,
+          user: 0,
+          tool: 0,
+          coordinateSystem: "연습 자료 · User 0 / Tool 0",
+          verifiedCoordinates: true,
+        };
+        setReferenceError("");
+        saveReference(sample);
+        return;
+      }
       const latest = live.measurement;
       if (practice.hasPendingOperation() || live.busy || latest?.moving) {
         setReferenceError(
@@ -2602,6 +2694,26 @@ export function PaperCoordinateStudy({
         verifiedCoordinates: coordinatesVerified,
       };
       saveReference(sample);
+    },
+    onToggleMockPractice: (enabled) => {
+      if (enabled) {
+        if (mockPracticeReason) {
+          setPageError(mockPracticeReason);
+          return;
+        }
+        setRequestedPaperV6MockPractice(true);
+        setReferenceError("");
+        setPageError("");
+        return;
+      }
+      if (mockReferencesSaved) {
+        setPageError(
+          "모의 기준점이 기록된 시도는 연습 자료로 보존됩니다. 실장비 자료는 새 시도에서 기록하세요.",
+        );
+        return;
+      }
+      setRequestedPaperV6MockPractice(false);
+      setPageError("");
     },
     onManualReferenceChange: (point, field, value) =>
       setManualInputs((previous) => ({
@@ -3869,6 +3981,12 @@ export function PaperCoordinateStudy({
 
   async function executeRun(kind: "dt" | "connected") {
     if (running) return;
+    if (kind === "connected" && mockPracticeEnabled) {
+      setPageError(
+        "연습 자료로 기록한 기준점은 실장비 실행에 사용할 수 없습니다. 실측 O/X/Y를 새 시도에서 기록하세요.",
+      );
+      return;
+    }
     if (practice.hasPendingOperation() || practice.snap.busy) {
       setPageError(
         "TCP 준비 이동 또는 다른 장비 명령의 확인·실행 중에는 종이 경로를 시작할 수 없습니다.",
@@ -4035,7 +4153,7 @@ export function PaperCoordinateStudy({
         O.pose,
         points,
         surfaceZ!,
-        liftGapState.value!,
+        liftGapForPlan!,
       );
       safeZ = planned.safeZ;
       operations = planned.operations;
@@ -4059,7 +4177,7 @@ export function PaperCoordinateStudy({
         paperOriginPose: O.pose,
         predictions: active.predictions ?? [],
         surfaceZ: surfaceZ!,
-        liftGapMm: liftGapState.value!,
+        liftGapMm: liftGapForPlan!,
       });
       if (!planned.ok) {
         setPageError(planned.error);
@@ -4194,7 +4312,7 @@ export function PaperCoordinateStudy({
           endedAt: completedAt,
           observations,
         };
-        const completedRecord: PaperTrialRecord = {
+        let completedRecord: PaperTrialRecord = {
           ...active,
           runHistory: priorRuns,
           inkReadings: undefined,
@@ -4205,11 +4323,47 @@ export function PaperCoordinateStudy({
           diagnosis: undefined,
           dataSource: "dt",
         };
+        const practiceInk = mockPracticeEnabled
+          ? paperV6MockInkDrafts(
+              active.frame!,
+              points.map((item) => ({
+                point: item.point,
+                pose: item.pose,
+              })),
+            )
+          : null;
+        if (practiceInk) {
+          const preparedPracticeInk = preparePaperInkReadings(
+            completedRecord,
+            practiceInk,
+            targetPoints,
+            PAPER_GRID_SIZE_CM,
+            completedAt,
+          );
+          if (preparedPracticeInk.ok) {
+            completedRecord = {
+              ...completedRecord,
+              inkReadings: preparedPracticeInk.readings,
+              drafts: {
+                ...completedRecord.drafts,
+                inkReadings: practiceInk,
+              },
+            };
+            setInkDraft(practiceInk);
+          } else {
+            setPageError(preparedPracticeInk.message);
+          }
+        }
         const analyzed = diagnoseCompletedRecord(
           completedRecord,
           recordsRef.current,
         );
-        upsert(analyzed.record, `${analyzed.message} DT 자료 · 실측 아님.`);
+        upsert(
+          analyzed.record,
+          mockPracticeEnabled
+            ? `${analyzed.message} 연습 자료 · 모의 TCP/잉크이며 실측 아님.`
+            : `${analyzed.message} DT 자료 · 실측 아님.`,
+        );
         if (!lastSaveSucceededRef.current) {
           setPageError(
             "DT 동작은 끝났지만 완료 기록 저장에 실패했습니다. 저장되지 않은 결과를 완료로 표시하지 않았습니다.",
@@ -4221,7 +4375,9 @@ export function PaperCoordinateStudy({
         setPageError(
           analyzed.diagnosis?.status === "invalidated"
             ? `DT 이동은 완료됐지만 현재 계획과 연결해 비교할 수 없습니다. ${analyzed.diagnosis.candidate}`
-            : "DT 완료 · 실측 아님. 비교 근거를 같은 화면에 저장했습니다.",
+            : mockPracticeEnabled
+              ? "연습 완료 · 모의 O/X/Y와 잉크 자료를 같은 시도에 연결했습니다. 실측 결과가 아닙니다."
+              : "DT 완료 · 실측 아님. 비교 근거를 같은 화면에 저장했습니다.",
         );
       } catch (error) {
         const failedRun = {
@@ -4756,7 +4912,7 @@ export function PaperCoordinateStudy({
         : "펜 들기 높이(Z)를 먼저 입력하세요.",
       target: "height",
     });
-  else if (isV6Attempt && !liftGapState.saved)
+  else if (isV6Attempt && !liftGapState.saved && !mockPracticeEnabled)
     commonBlockers.push({
       message: "펜 들기 간격(mm)을 저장해야 실행 높이를 계산할 수 있습니다.",
       target: "height",
@@ -4931,7 +5087,14 @@ export function PaperCoordinateStudy({
     }
   }
   const physicalReason = isMergedPaper(level)
-    ? physicalBlockers.map((b) => b.message).join(" · ")
+    ? [
+        ...(mockPracticeEnabled
+          ? [
+              "연습 자료로 만든 기준점은 실장비에 사용할 수 없습니다. 실측 O/X/Y로 새 시도를 시작하세요.",
+            ]
+          : []),
+        ...physicalBlockers.map((b) => b.message),
+      ].join(" · ")
     : legacyPhysicalReason;
 
   const liveSession = practice.snap;
@@ -5145,6 +5308,8 @@ export function PaperCoordinateStudy({
 
   const state: PaperCoordinateStudyViewState = {
     simplePaperLesson: autoMappedPaperLesson,
+    mockPracticeEnabled,
+    mockPracticeReason,
     dtBlockers: isMergedPaper(level) ? dtBlockers : undefined,
     physicalBlockers: isMergedPaper(level) ? physicalBlockers : undefined,
     allowMismatchedHardware,
@@ -5330,7 +5495,7 @@ export function PaperCoordinateStudy({
     liftHeightInputSaved: liftDraftState.saved,
     liftHeight,
     liftGapInput: liftGapDraft,
-    liftGapMm: liftGapState.value,
+    liftGapMm: liftGapForPlan,
     liftGapSaved: liftGapState.saved,
     liftHeightSource: liftDraftState.source,
     liftHeightSequence: liftDraftState.sequence,
