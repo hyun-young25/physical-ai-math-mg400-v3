@@ -11,7 +11,7 @@ function record(id,parent=null,shift=0){
 test('new prediction keeps the original and feedback, but cannot claim a new execution result',()=>{
  const a=record('a',null,20),b=record('b','a');delete b.run;delete b.diagnosis;
  const before=JSON.stringify([a,b]),out=j.paperRevisionJourney(b,[a,b],[],b.predictions,b.transform,3);
- assert.equal(out.first.points[0].x,200);assert.equal(out.draft[0].x,180);assert.equal(out.current.complete,false);assert.equal(out.current.match,false);
+  assert.equal(out.first.points[0].x,Number(a.predictions[0].robotX));assert.equal(out.draft[0].x,Number(b.predictions[0].robotX));assert.equal(out.current.complete,false);assert.equal(out.current.match,false);
  assert.equal(out.previous.question,a.diagnosis.question);assert.equal(out.editing,true);assert.equal(JSON.stringify([a,b]),before);
 });
 test('completed correction is linked; different frames/targets are flagged instead of implying improvement',()=>{

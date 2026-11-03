@@ -525,6 +525,12 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
             {state.diagnosis && (
               <p className="paper-v6-callout" data-testid="paper-v6-rule-diagnosis">
                 규칙 계산은 원인 후보를 제안할 뿐 원인을 단정하지 않습니다.{" "}
+                {state.diagnosis.estimatedRotationDifferenceDeg != null && (
+                  <>
+                    O→X 회전 차이 추정{" "}
+                    {state.diagnosis.estimatedRotationDifferenceDeg.toFixed(1)}°{" "}
+                  </>
+                )}
                 {state.diagnosis.candidate} 질문: {state.diagnosis.question}
               </p>
             )}
@@ -533,6 +539,14 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
 
         {step === 7 && !revalidation && (
           <div className="paper-v6-step" data-testid="paper-v6-revise">
+            <p className="paper-v6-callout" data-testid="paper-v6-support-level">
+              도움 단계 {v6?.supportLevel ?? 1}/3 ·{" "}
+              {(v6?.supportLevel ?? 1) === 1
+                ? "관측 질문: 선택한 추가 확인 결과가 내 설명과 어떻게 연결되나요?"
+                : (v6?.supportLevel ?? 1) === 2
+                  ? "관계 힌트: O의 위치 변화와 O→X 방향 변화를 따로 비교해 보세요."
+                  : "예시와 교사 도움: 목표점이 아닌 종이 (5,0), (0,5) cm를 식에 넣어 회전 항의 부호를 확인해 보세요. 필요하면 교사에게 함께 확인을 요청하세요."}
+            </p>
             <details className="paper-v6-details" open>
               <summary>현재 모델과 같은 시도의 분석</summary>
               <p>
@@ -599,28 +613,45 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
               </select>
             </label>
             {(draft.decision ?? "revise") === "revise" && (
-              <div className="paper-v6-form-grid">
-                {field("수정 모델 O의 X (mm)", draft.originXmm, (value) => updateDraft({ originXmm: value }), "수정 모델 원점 O X mm", "paper-v6-revision-origin-x")}
-                {field("수정 모델 O의 Y (mm)", draft.originYmm, (value) => updateDraft({ originYmm: value }), "수정 모델 원점 O Y mm", "paper-v6-revision-origin-y")}
-                {field("수정 모델 θ (도)", draft.thetaDeg, (value) => updateDraft({ thetaDeg: value, thetaAssumption: "calculated" }), "수정 모델 회전각 도", "paper-v6-revision-theta")}
-              </div>
+              <>
+                <div className="paper-v6-form-grid">
+                  {field("수정 모델 O의 X (mm)", draft.originXmm, (value) => updateDraft({ originXmm: value }), "수정 모델 원점 O X mm", "paper-v6-revision-origin-x")}
+                  {field("수정 모델 O의 Y (mm)", draft.originYmm, (value) => updateDraft({ originYmm: value }), "수정 모델 원점 O Y mm", "paper-v6-revision-origin-y")}
+                  {field("수정 모델 θ (도)", draft.thetaDeg, (value) => updateDraft({ thetaDeg: value, thetaAssumption: "calculated" }), "수정 모델 회전각 도", "paper-v6-revision-theta")}
+                </div>
+                <fieldset className="paper-v6-choice">
+                  <legend>수정 모델에서 사용할 회전 가정</legend>
+                  <label>
+                    <input
+                      type="radio"
+                      name="paper-v6-revision-theta-assumption"
+                      checked={(draft.thetaAssumption ?? "calculated") === "calculated"}
+                      onChange={() => updateDraft({ thetaAssumption: "calculated" })}
+                    />
+                    수정한 θ 사용
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="paper-v6-revision-theta-assumption"
+                      checked={draft.thetaAssumption === "zero"}
+                      onChange={() => updateDraft({ thetaAssumption: "zero", thetaDeg: "0" })}
+                    />
+                    θ=0 가정 유지
+                  </label>
+                </fieldset>
+              </>
             )}
             <label className="paper-v6-field">
               <span>유지 또는 수정 근거</span>
               <textarea
                 aria-label="모델 판단 근거"
                 rows={2}
-                value={draft.decisionReason ?? ""}
-                onChange={(event) => updateDraft({ decisionReason: event.target.value })}
-              />
-            </label>
-            <label className="paper-v6-field">
-              <span>AI 질문과 추가 확인을 어떻게 반영하나요?</span>
-              <textarea
-                aria-label="모델 수정 이유"
-                rows={2}
-                value={draft.revisionReason ?? ""}
-                onChange={(event) => updateDraft({ revisionReason: event.target.value })}
+                value={draft.decisionReason ?? draft.revisionReason ?? ""}
+                onChange={(event) => updateDraft({
+                  decisionReason: event.target.value,
+                  revisionReason: event.target.value,
+                })}
               />
             </label>
             {v6?.modelError && <p className="paper-v6-error">{v6.modelError}</p>}

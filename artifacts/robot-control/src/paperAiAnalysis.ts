@@ -448,6 +448,14 @@ function linkedSummary(record: PaperTrialRecord) {
     modelDecisionReason: record.modelDecisionReason,
     revisionReason: record.revisionReason,
     revalidation: record.revalidation,
+    v6StudentModel: record.v6?.model ?? null,
+    v6InitialModel: record.v6?.initialModel ?? null,
+    v6FormulaWork: record.v6?.formulaWork ?? [],
+    v6Explanation: record.v6?.explanation ?? "",
+    v6FollowupChecks: record.v6?.followupChecks ?? [],
+    v6FollowupResult: record.v6?.followupResult ?? null,
+    v6Decision: record.v6?.decision ?? null,
+    v6DecisionReason: record.v6?.decisionReason ?? null,
     previouslyDisplayedFeedback: displayedFeedback,
     frame: record.frame
       ? {
@@ -535,6 +543,17 @@ export function paperFeedbackContext(
           samples,
         }
       : null,
+    studentModelWork: current.v6
+      ? {
+          model: current.v6.model ?? null,
+          initialModel: current.v6.initialModel ?? null,
+          thetaAssumption: current.v6.model?.thetaAssumption ?? null,
+          formulaWork: current.v6.formulaWork ?? [],
+          explanation: current.v6.explanation ?? "",
+          supportLevel: current.v6.supportLevel ?? 1,
+          promptVersion: current.v6.promptVersion ?? null,
+        }
+      : null,
   };
   return {
     task: "paper-coordinate",
@@ -557,6 +576,14 @@ export function paperFeedbackContext(
       modelDecisionReason: current.modelDecisionReason ?? "",
       followupObservation: current.followupObservation ?? null,
       pathConcept: current.pathConcept ?? null,
+      studentModelDecision: current.v6
+        ? {
+            choice: current.v6.decision ?? null,
+            reason: current.v6.decisionReason ?? null,
+            followupChecks: current.v6.followupChecks ?? [],
+            followupResult: current.v6.followupResult ?? null,
+          }
+        : null,
     }),
     reason: [
       current.transform?.explanation
@@ -587,6 +614,8 @@ export function paperFeedbackContext(
       predictionEvidence: diagnosis?.predictionEvidence ?? [],
       taskEvidence: diagnosis?.taskEvidence ?? [],
       firstMismatch: diagnosis?.firstMismatch ?? null,
+      estimatedRotationDifferenceDeg:
+        diagnosis?.estimatedRotationDifferenceDeg ?? null,
       question: diagnosis?.question ?? null,
       why: diagnosis?.why ?? null,
       toleranceMm:

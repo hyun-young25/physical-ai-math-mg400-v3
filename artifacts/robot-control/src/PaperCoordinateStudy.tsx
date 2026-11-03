@@ -1,6 +1,7 @@
 import { paperRetryInputs, paperRetryFields } from "./paperRetry";
 import {
   paperBoundary,
+  PAPER_SUPERVISED_MARGIN_MM,
   supervisedPaperBlockers,
   type PaperRunBlocker,
 } from "./paperExecutionGuards";
@@ -13,7 +14,6 @@ import {
 import { paperRevisionJourney } from "./revisionJourney";
 import {
   PAPER_TASK_VERSION,
-  PAPER_HARDWARE_V6_VERSION,
   isMergedPaper,
   isPaperDT,
   givenPaperFrame,
@@ -56,6 +56,7 @@ import type {
 } from "./paperCoordinateViewModel";
 import {
   PAPER_ANGLE_TOLERANCE_DEG,
+  PAPER_HARDWARE_V6_VERSION,
   PAPER_BASELINE_LENGTH_TOLERANCE_DEFAULT_MM,
   PAPER_BASELINE_LENGTH_TOLERANCE_MAX_MM,
   PAPER_GRID_SIZE_CM,
@@ -112,7 +113,10 @@ import {
   PAPER_V6_VERIFICATION_RATIONALE,
   PAPER_V6_VERIFICATION_TOLERANCE_MM,
   paperV6Assessment,
+  paperV6EstimatedRotationDifference,
   paperV6GeneratedPredictions,
+  buildPaperV6MovePlan,
+  paperV6OperationalIndicators,
   paperV6ModelFromDraft,
   paperV6PredictionsFromDraft,
   paperV6TaskVersionForLevel,
@@ -355,10 +359,16 @@ export function PaperCoordinateStudy({
     active?.v6?.model?.savedAt ?? 0,
   );
   const v6Model = isV6Attempt
-    ? (v6DraftModelResult.model ?? active?.v6?.model ?? null)
+    ? v6DraftModelResult.model
     : null;
   const v6Generated = isV6Attempt && frame && v6Model
-    ? paperV6PredictionsFromDraft(frame, targetPoints, v6Model, paperV6Draft)
+    ? active?.targetSet === "revalidation"
+      ? {
+          predictions: paperV6GeneratedPredictions(frame, targetPoints, v6Model),
+          formulaWork: [],
+          error: null,
+        }
+      : paperV6PredictionsFromDraft(frame, targetPoints, v6Model, paperV6Draft)
     : { predictions: null, formulaWork: [], error: null };
   const v6SavedPlanMatchesDraft =
     !isV6Attempt ||
@@ -367,7 +377,7 @@ export function PaperCoordinateStudy({
       !!v6Generated.predictions &&
       JSON.stringify(v6Generated.predictions) ===
         JSON.stringify(active.predictions) &&
-      v6Draft.explanation?.trim() === active.v6.explanation);
+      paperV6Draft.explanation?.trim() === active.v6.explanation);
   const retryParent = records.find((r) => r.id === active?.parentAttemptId);
   const retryInputs =
     resetRetryId !== active?.id
@@ -1217,7 +1227,7 @@ export function PaperCoordinateStudy({
             item.taskVersion === record.taskVersion)) &&
         item.diagnosis?.pattern === initial.pattern,
     ).length;
-    const diagnosis = diagnosePaperRun(run, frame, planHash, {
+    const baseDiagnosis = diagnosePaperRun(run, frame, planHash, {
       transform: record.transform,
       toleranceMm,
       repeated,
@@ -1225,6 +1235,16 @@ export function PaperCoordinateStudy({
       detectOriginMissing: isMergedPaper(record.level),
       support: attemptSupport,
     });
+    const diagnosis =
+      record.taskVersion === PAPER_HARDWARE_V6_VERSION && record.v6?.model
+        ? {
+            ...baseDiagnosis,
+            estimatedRotationDifferenceDeg: paperV6EstimatedRotationDifference(
+              frame,
+              record.v6.model,
+            ),
+          }
+        : baseDiagnosis;
     let diagnosed: PaperTrialRecord = {
       ...record,
       diagnosis,
@@ -1314,7 +1334,7 @@ export function PaperCoordinateStudy({
       record,
       inkDraft,
       targetPoints,
-      isMergedPaper(level) ? 20 : 10,
+      isV6Attempt ? PAPER_GRID_SIZE_CM : isMergedPaper(level) ? 20 : 10,
       Date.now(),
     );
     if (!prepared.ok) {
@@ -1324,6 +1344,38 @@ export function PaperCoordinateStudy({
         message: prepared.message,
         target: "ink" as const,
       };
+    }
+    if (
+      record.taskVersion === PAPER_HARDWARE_V6_VERSION &&
+      record.run?.source === "hardware"
+    ) {
+      const requiredPoint =
+        record.targetSet === "revalidation"
+          ? "V"
+          : record.diagnosis?.taskEvidence?.reduce(
+              (largest, row) =>
+                !largest || row.distance > largest.distance ? row : largest,
+              null as (typeof record.diagnosis.taskEvidence)[number] | null,
+            )?.point ??
+            record.diagnosis?.firstMismatch ??
+            targetPoints[0]?.name;
+      const requiredReading = prepared.readings.find(
+        (reading) =>
+          reading.point === requiredPoint &&
+          reading.recordId === record!.id &&
+          reading.runId === record!.run!.id &&
+          reading.frameId === record!.frame?.id,
+      );
+      if (
+        !requiredReading ||
+        requiredReading.status === "not-measured" ||
+        (requiredReading.status !== "measured" &&
+          !requiredReading.reason?.trim())
+      ) {
+        const message = `${requiredPoint ?? "현재 차이점"}의 이번 실장비 실행 잉크 측정을 입력하거나 판독 불가 사유를 적어 저장해야 분석할 수 있습니다.`;
+        setPageError(message);
+        return { ok: false as const, message, target: "ink" as const };
+      }
     }
     if (prepared.changed) {
       upsert(
@@ -1584,6 +1636,8 @@ export function PaperCoordinateStudy({
       return { message: "재검증 점은 세 번째 활동의 기준 저장 동작을 사용하세요.", kind: "error" as const };
     if (current.run)
       return { message: "최초 실행 기록은 고칠 수 없습니다. 모델 판단 뒤 새 시도를 만드세요.", kind: "error" as const };
+    if (current.planHash)
+      return { message: "최초 예측은 이미 고정됐습니다. 저장된 예측과 설명은 수정할 수 없습니다.", kind: "error" as const };
     if (!current.frame)
       return { message: "O/X/Y 기준점이 없습니다. 기준점 측정 단계로 돌아가세요.", kind: "error" as const };
     if (!current.v6?.model)
@@ -1615,7 +1669,7 @@ export function PaperCoordinateStudy({
     const predictionsReachable = generated.predictions.every((point) => {
       const z = Number(point.robotZ ?? surfaceZ ?? 0);
       return [point.robotX, point.robotY].every((value) => Number.isFinite(Number(value))) &&
-        canReach({ x: Number(point.robotX), y: Number(point.robotY), z, r: Number(point.robotR ?? 0 });
+        canReach({ x: Number(point.robotX), y: Number(point.robotY), z, r: Number(point.robotR ?? 0) });
     });
     if (!predictionsReachable)
       return { message: "학생 모델의 목표 중 도달 불가능한 점이 있습니다. 좌표와 단위를 확인하세요.", kind: "error" as const };
@@ -1675,8 +1729,6 @@ export function PaperCoordinateStudy({
       if (!current.frame) return { message: "먼저 O/X/Y 기준점을 기록하세요.", kind: "error" as const };
       if (current.frame.samples.length !== 3)
         return { message: "O·X·Y 세 기준점을 모두 기록하세요.", kind: "error" as const };
-      if (liftGapState.value === null || !liftGapState.saved)
-        return { message: "펜 들기 간격(mm)을 저장하세요. 기존 실행 설정에서 입력할 수 있습니다.", kind: "error" as const };
       upsert({ ...current, stage: 3, drafts: { ...current.drafts, v6: paperV6Draft } });
       if (!lastSaveSucceededRef.current)
         return { message: "초안을 저장하지 못해 이동하지 않았습니다.", kind: "error" as const };
@@ -1705,6 +1757,15 @@ export function PaperCoordinateStudy({
         return { message: "현재 실행과 연결된 AI 질문 또는 규칙 질문을 명시적으로 요청해 표시하세요.", kind: "error" as const };
       if (!hypothesisDraft.trim())
         return { message: "비교 화면의 ‘떠올린 원인 후보’에 생각을 입력하세요.", kind: "error" as const };
+      const samePatternCount = current.diagnosis?.pattern
+        ? records.filter(
+            (record) =>
+              record.id !== current.id &&
+              record.taskVersion === PAPER_HARDWARE_V6_VERSION &&
+              record.diagnosis?.pattern === current.diagnosis?.pattern,
+          ).length
+        : 0;
+      const supportLevel = Math.min(3, samePatternCount + 1) as 1 | 2 | 3;
       const updated = upsert(
         {
           ...current,
@@ -1712,6 +1773,9 @@ export function PaperCoordinateStudy({
           studentHypothesis: privateText(hypothesisDraft.trim()),
           status: "reasoned",
           drafts: { ...current.drafts, v6: paperV6Draft },
+          v6: current.v6
+            ? { ...current.v6, supportLevel }
+            : current.v6,
         },
         "현재 실행에 연결된 학생 원인 후보와 입력 초안을 저장했습니다.",
       );
@@ -1738,10 +1802,12 @@ export function PaperCoordinateStudy({
       return { message: "추가로 확인한 항목을 하나 이상 선택하세요.", kind: "error" as const };
     if (!paperV6Draft.followupResult?.trim())
       return { message: "추가로 확인한 결과를 한 줄 적으세요.", kind: "error" as const };
-    if (!paperV6Draft.decisionReason?.trim())
+    const decisionReason =
+      paperV6Draft.decisionReason?.trim() ||
+      paperV6Draft.revisionReason?.trim() ||
+      "";
+    if (!decisionReason)
       return { message: "모델을 유지하거나 수정한 근거를 적으세요.", kind: "error" as const };
-    if (!paperV6Draft.revisionReason?.trim())
-      return { message: "추가 확인 결과를 모델 판단과 연결해 적으세요.", kind: "error" as const };
     const decision = paperV6Draft.decision ?? "revise";
     const parentModel = parent.v6?.model;
     if (!parentModel) return { message: "이전 시도에 저장된 학생 모델이 없습니다.", kind: "error" as const };
@@ -1758,16 +1824,14 @@ export function PaperCoordinateStudy({
       )
         return { message: "수정 선택을 했지만 O와 θ가 이전 모델과 같습니다. 값을 바꾸거나 모델 유지를 선택하세요.", kind: "error" as const };
     }
-    const privateReason = privateText(
-      `${paperV6Draft.decisionReason.trim()}\n${paperV6Draft.revisionReason.trim()}`,
-    );
+    const privateReason = privateText(decisionReason);
     const savedParent = upsert(
       {
         ...parent,
         status: decision === "revise" ? "revised" : "reasoned",
         modelDecision: decision,
-        modelDecisionReason: privateText(paperV6Draft.decisionReason.trim()),
-        revisionReason: privateText(paperV6Draft.revisionReason.trim()),
+        modelDecisionReason: privateReason,
+        revisionReason: privateReason,
         followupObservation: {
           recordId: parent.id,
           runId: parent.run.id,
@@ -1798,8 +1862,8 @@ export function PaperCoordinateStudy({
       thetaAssumption: chosenModel.thetaAssumption,
       explanation: parent.v6?.explanation ?? "",
       decision,
-      decisionReason: paperV6Draft.decisionReason,
-      revisionReason: paperV6Draft.revisionReason,
+      decisionReason,
+      revisionReason: decisionReason,
       followupChecks: paperV6Draft.followupChecks,
       followupResult: paperV6Draft.followupResult,
     };
@@ -1918,7 +1982,6 @@ export function PaperCoordinateStudy({
       if (!lastSaveSucceededRef.current)
         return { message: "V 잉크 측정 저장에 실패했습니다. 입력을 유지했고 최종 판정을 하지 않았습니다.", kind: "error" as const };
       if (!saved.run) return { message: "저장된 실행을 확인할 수 없습니다.", kind: "error" as const };
-      current.inkReadings = prepared.readings;
     }
     const savedCurrent =
       recordsRef.current.find((record) => record.id === current.id) ?? current;
@@ -3371,7 +3434,23 @@ export function PaperCoordinateStudy({
       const currentAnalyses = latest.aiAnalyses ?? [];
       if (currentAnalyses.some((item) => item.id === analysis.id)) return;
       upsert(
-        { ...latest, aiAnalyses: [...currentAnalyses, analysis] },
+        {
+          ...latest,
+          aiAnalyses: [...currentAnalyses, analysis],
+          ...(latest.v6
+            ? {
+                v6: {
+                  ...latest.v6,
+                  aiProvider: analysis.provider,
+                  aiModel: analysis.model,
+                  promptVersion:
+                    analysis.promptVersion ??
+                    latest.v6.promptVersion ??
+                    PAPER_V6_PROMPT_VERSION,
+                },
+              }
+            : {}),
+        },
         "화면에 실제 표시된 분석과 같은 시도의 실행 근거를 연결해 저장했습니다.",
       );
     },
@@ -3675,6 +3754,7 @@ export function PaperCoordinateStudy({
         taskVersion: record.taskVersion,
         targetSet: record.targetSet,
         status: record.status,
+        operationalIndicators: paperV6OperationalIndicators(record),
         studentModel: record.v6?.model,
         initialModel: record.v6?.initialModel,
         initialPrediction: record.v6?.initialPrediction,
@@ -3691,6 +3771,7 @@ export function PaperCoordinateStudy({
           tool: sample.tool,
         })),
         predictions: record.predictions,
+        inkReadings: record.inkReadings,
         run: record.run && {
           source: record.run.source,
           status: record.run.status,
@@ -3712,6 +3793,7 @@ export function PaperCoordinateStudy({
           response: privateText(analysis.text),
           promptVersion: analysis.promptVersion,
           fallbackUsed: analysis.fallbackUsed,
+          evidenceSnapshot: analysis.evidenceSnapshot,
           source: analysis.source,
           runPlanHash: analysis.planHash,
         })),
@@ -3763,6 +3845,7 @@ export function PaperCoordinateStudy({
     }
     if (
       isMergedPaper(level) &&
+      !isV6Attempt &&
       !autoMappedPaperLesson &&
       !paperConceptValid(active?.pathConcept)
     ) {
@@ -3772,6 +3855,7 @@ export function PaperCoordinateStudy({
     if (
       kind === "connected" &&
       isMergedPaper(level) &&
+      !isV6Attempt &&
       !autoMappedPaperLesson &&
       attemptSupport === "guided" &&
       !supervisedMismatch &&
@@ -3836,6 +3920,20 @@ export function PaperCoordinateStudy({
       setPageError("저장된 예측 좌표가 유효하지 않습니다.");
       return;
     }
+    if (kind === "connected" && isV6Attempt) {
+      const blockers = supervisedPaperBlockers(
+        allowMismatchedHardware,
+        mismatchedPrediction,
+        dtReadyForPhysical,
+        active.frame,
+        points,
+        isV6Attempt ? PAPER_GRID_SIZE_CM : 20,
+      );
+      if (blockers.length) {
+        setPageError(blockers.map((blocker) => blocker.message).join(" · "));
+        return;
+      }
+    }
     const now = Date.now();
     const simStart = { ...currentPose };
     const liveMeasurement = practice.snap.measurement;
@@ -3851,6 +3949,7 @@ export function PaperCoordinateStudy({
     const raisedOnly = new Set<string>();
     if (
       kind === "connected" &&
+      !isV6Attempt &&
       !autoMappedPaperLesson &&
       supervisedMismatch
     ) {
@@ -3860,6 +3959,7 @@ export function PaperCoordinateStudy({
         dtReadyForPhysical,
         active.frame,
         points,
+        isV6Attempt ? PAPER_GRID_SIZE_CM : 20,
       );
       if (blocked.length) {
         setPageError(blocked.map((b) => b.message).join(" · "));
@@ -3884,7 +3984,35 @@ export function PaperCoordinateStudy({
       );
       safeZ = planned.safeZ;
       operations = planned.operations;
-      commands = operations.map((operation) => operation.target);
+      commands = operations.flatMap((operation): LessonPose[] =>
+        "target" in operation &&
+        "x" in operation.target &&
+        "y" in operation.target &&
+        "z" in operation.target &&
+        "r" in operation.target
+          ? [operation.target as LessonPose]
+          : [],
+      );
+      captureIndices = new Map(
+        Object.entries(planned.capturePointByOperationIndex).map(
+          ([index, point]) => [Number(index), point],
+        ),
+      );
+    } else if (isV6Attempt) {
+      const planned = buildPaperV6MovePlan({
+        startPose,
+        paperOriginPose: O.pose,
+        predictions: active.predictions ?? [],
+        surfaceZ: surfaceZ!,
+        liftGapMm: liftGapState.value!,
+      });
+      if (!planned.ok) {
+        setPageError(planned.error);
+        return;
+      }
+      safeZ = planned.safeZ;
+      operations = planned.operations;
+      commands = planned.operations.map((operation) => operation.target);
       captureIndices = new Map(
         Object.entries(planned.capturePointByOperationIndex).map(
           ([index, point]) => [Number(index), point],
@@ -4547,7 +4675,11 @@ export function PaperCoordinateStudy({
         "연결된 실행 기록은 보존됩니다. 수정 이유를 적고 새 시도를 시작하세요.",
       target: "prediction",
     });
-  if (!autoMappedPaperLesson && !paperConceptValid(active?.pathConcept))
+  if (
+    !autoMappedPaperLesson &&
+    !isV6Attempt &&
+    !paperConceptValid(active?.pathConcept)
+  )
     commonBlockers.push({
       message: "직선 이동 명령과 닫힌 경로의 ΔX·ΔY 합을 확인하세요.",
       target: "prediction",
@@ -4567,6 +4699,11 @@ export function PaperCoordinateStudy({
       message: autoMappedPaperLesson
         ? "펜 들기 간격(mm)을 입력하세요. 절대 Z값은 사용하지 않습니다."
         : "펜 들기 높이(Z)를 먼저 입력하세요.",
+      target: "height",
+    });
+  else if (isV6Attempt && !liftGapState.saved)
+    commonBlockers.push({
+      message: "펜 들기 간격(mm)을 저장해야 실행 높이를 계산할 수 있습니다.",
       target: "height",
     });
   else if (surfaceZ === null || liftHeight <= surfaceZ)
@@ -4625,8 +4762,23 @@ export function PaperCoordinateStudy({
         dtReadyForPhysical,
         frame,
         previewPoints,
+        isV6Attempt ? PAPER_GRID_SIZE_CM : 20,
       ),
     );
+  if (
+    isV6Attempt &&
+    frame &&
+    previewPoints.some(
+      (point) =>
+        paperBoundary(frame, point.pose, PAPER_GRID_SIZE_CM).distance >
+        PAPER_SUPERVISED_MARGIN_MM,
+    )
+  )
+    physicalBlockers.push({
+      message:
+        "학생 모델의 목표가 10×10 cm 종이 영역에서 30 mm 이상 벗어났습니다. 예측을 수정하거나 DT 결과만 확인하세요.",
+      target: "prediction",
+    });
   if (
     !autoMappedPaperLesson &&
     !dtReadyForPhysical &&
@@ -4668,6 +4820,7 @@ export function PaperCoordinateStudy({
       });
     if (
       !autoMappedPaperLesson &&
+      !isV6Attempt &&
       (!liftRecord ||
         liftRecord.source !== source ||
         !connectionToken ||
@@ -4692,6 +4845,7 @@ export function PaperCoordinateStudy({
           (s) => s.user === setup.user && s.tool === setup.tool,
         ) ||
         (!autoMappedPaperLesson &&
+          !isV6Attempt &&
           (!liftRecord ||
             liftRecord.user !== setup.user ||
             liftRecord.tool !== setup.tool ||
@@ -4892,6 +5046,47 @@ export function PaperCoordinateStudy({
       ["connection", "references", "height"].includes(blocker.target),
     )
     .map((blocker) => blocker.message);
+  const v6AttemptChain: PaperTrialRecord[] = [];
+  if (isV6Attempt && active) {
+    const seen = new Set<string>();
+    let cursor: PaperTrialRecord | undefined = active;
+    while (cursor && !seen.has(cursor.id)) {
+      seen.add(cursor.id);
+      v6AttemptChain.unshift(cursor);
+      cursor = cursor.parentAttemptId
+        ? records.find((record) => record.id === cursor!.parentAttemptId)
+        : undefined;
+    }
+  }
+  const v6PriorPatternCount =
+    isV6Attempt && active?.diagnosis?.pattern
+      ? records.filter(
+          (record) =>
+            record.id !== active.id &&
+            record.taskVersion === PAPER_HARDWARE_V6_VERSION &&
+            record.level === "advanced-paper-hardware" &&
+            record.diagnosis?.pattern === active.diagnosis?.pattern,
+        ).length
+      : 0;
+  const v6Assessment =
+    isV6Attempt &&
+    active?.targetSet === "revalidation" &&
+    active.frame &&
+    active.planHash
+      ? paperV6Assessment(
+          active.run,
+          active.id,
+          active.frame.id,
+          active.planHash,
+          PAPER_V6_REVALIDATION_POINT,
+          active.inkReadings?.find(
+            (reading) =>
+              reading.point === "V" &&
+              reading.recordId === active.id &&
+              reading.runId === active.run?.id,
+          ),
+        )
+      : null;
 
   const state: PaperCoordinateStudyViewState = {
     simplePaperLesson: autoMappedPaperLesson,
@@ -4913,6 +5108,25 @@ export function PaperCoordinateStudy({
       ? (records.find((record) => record.id === active.parentAttemptId) ?? null)
       : null,
     activeAttempt: active ?? null,
+    v6: isV6Attempt && active
+      ? {
+          step: active.stage ?? stage,
+          draft: paperV6Draft,
+          model: v6Model,
+          modelError: v6DraftModelResult.error,
+          predictions: v6Generated.predictions,
+          formulaWork: v6Generated.formulaWork,
+          predictionError: v6Generated.error,
+          saved: !!active.planHash && samePlan && !!active.predictions?.length,
+          supportMode:
+            active.v6?.supportMode ?? active.support ?? "guided",
+          supportLevel: active.v6?.supportLevel ??
+            (Math.min(3, 1 + v6PriorPatternCount) as 1 | 2 | 3),
+          promptVersion: active.v6?.promptVersion ?? PAPER_V6_PROMPT_VERSION,
+          assessment: v6Assessment,
+          attemptChain: v6AttemptChain,
+        }
+      : undefined,
     baselineLengthToleranceMm,
     baselineLengthToleranceAppliedAt:
       active?.baselineLengthTolerance?.appliedAt ?? null,
@@ -4925,7 +5139,15 @@ export function PaperCoordinateStudy({
     records,
     recordId: active?.id ?? null,
     attempt: active?.attempt ?? null,
-    analysisReady: false,
+    analysisReady:
+      isV6Attempt &&
+      !!active &&
+      paperAnalysisReady(
+        active,
+        active.planHash ?? "",
+        diagnosisOverride ?? active.diagnosis ?? null,
+        targetPoints,
+      ),
     revalidationScope: active?.revalidation?.scope ?? null,
     revalidationResult: active?.revalidation?.result,
     verificationCriteria: active?.verificationCriteria,
@@ -5023,6 +5245,7 @@ export function PaperCoordinateStudy({
     run,
     runAvailable:
       (autoMappedPaperLesson ||
+        isV6Attempt ||
         !isMergedPaper(level) ||
         paperConceptValid(active?.pathConcept)) &&
       (!run || run.source === "dt") &&

@@ -14,6 +14,9 @@ export type DisplayedExecutionAnalysis = {
   text: string;
   requestedAt: string;
   displayedAt: string;
+  promptVersion?: string;
+  fallbackUsed?: boolean;
+  evidenceSnapshot?: FeedbackContext;
 };
 
 export function ExecutionAiAnalysis({
@@ -25,6 +28,8 @@ export function ExecutionAiAnalysis({
   onDisplayed,
   evidenceDraftKey,
   prepareRequest,
+  promptVersion,
+  paperV6 = false,
 }: {
   ai: LearningAiController;
   scopeKey: string;
@@ -36,12 +41,15 @@ export function ExecutionAiAnalysis({
   prepareRequest?: () =>
     | { ok: true; context: FeedbackContext }
     | { ok: false; message: string; target?: "ink" };
+  promptVersion?: string;
+  paperV6?: boolean;
 }) {
   const [request, setRequest] = useState<{
     scopeKey: string;
     mode: "trial" | "gpt";
     question: string;
     requestedAt: string;
+    evidenceSnapshot: FeedbackContext;
   } | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [actionError, setActionError] = useState("");
@@ -68,7 +76,9 @@ export function ExecutionAiAnalysis({
     handled.current = "";
   }, [scopeKey]);
 
-  const question = `종이·도형 과제 ${attemptLabel}의 이번 실행자료를 근거로 검토해 주세요. 학생의 저장된 풀이와 목표-명령 차이, 명령-관측 차이를 구분하고, 출처가 실장비·DT·모의 중 무엇인지 밝히세요. 가능한 설명과 근거, 다음에 확인할 질문 하나를 제시하되 원인을 확정하거나 채점하지 마세요.`;
+  const question = paperV6
+    ? `2-4 심화2 ${attemptLabel}의 같은 시도 실행자료만 사용하세요. 학생의 O, ΔX/ΔY, θ 가정, 직접 대입한 수학식과 예측, 실행 출처(DT/모의/실장비), 같은 실행의 제어기 보고와 학생 잉크 측정 및 사전 허용오차를 구분하세요. 원인을 단정하거나 정답 좌표를 제시하지 말고, 가능한 설명과 근거를 바탕으로 학생이 확인할 관계 또는 추가 관측을 묻는 짧은 질문 하나만 하세요. 로봇을 제어하지 마세요.`
+    : `종이·도형 과제 ${attemptLabel}의 이번 실행자료를 근거로 검토해 주세요. 학생의 저장된 풀이와 목표-명령 차이, 명령-관측 차이를 구분하고, 출처가 실장비·DT·모의 중 무엇인지 밝히세요. 가능한 설명과 근거, 다음에 확인할 질문 하나를 제시하되 원인을 확정하거나 채점하지 마세요.`;
   let previewText: string | null = null;
   try {
     previewText = JSON.stringify(ai.previewRequest(question), null, 2) ?? null;
@@ -123,7 +133,13 @@ export function ExecutionAiAnalysis({
       );
       if (preview) setPreparedPreview({ scopeKey, draftKey, text: preview });
       const requestedAt = new Date().toISOString();
-      setRequest({ scopeKey, mode: latest.mode, question, requestedAt });
+      setRequest({
+        scopeKey,
+        mode: latest.mode,
+        question,
+        requestedAt,
+        evidenceSnapshot: snapshot,
+      });
       void latest.ask(question, snapshot);
     } catch {
       setActionError(
@@ -193,6 +209,10 @@ export function ExecutionAiAnalysis({
       text: ai.feedback.text,
       requestedAt: request.requestedAt,
       displayedAt: new Date().toISOString(),
+      ...(promptVersion ? { promptVersion } : {}),
+      fallbackUsed:
+        request.mode === "gpt" && ai.feedback.provider === "rules",
+      evidenceSnapshot: request.evidenceSnapshot,
     });
   }, [inView, resultMatches, resultId, request, ai.feedback]);
 

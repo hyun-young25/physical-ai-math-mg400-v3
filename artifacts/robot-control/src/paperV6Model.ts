@@ -9,10 +9,12 @@ import type {
   PaperPredictionPoint,
   PaperRunSnapshot,
   PaperStudentTransform,
+  PaperTrialRecord,
   PaperV6Draft,
   PaperV6FormulaWork,
   PaperV6StudentModel,
 } from "./paperCoordinateStudy";
+import type { LessonPose } from "./curriculum";
 
 export const PAPER_V6_PROMPT_VERSION = "paper-v6-question-1";
 export const PAPER_V6_VERIFICATION_TOLERANCE_MM = 2;
@@ -23,6 +25,75 @@ export const PAPER_V6_REVALIDATION_POINT: PaperGridPoint = {
   xCm: 5,
   yCm: 6,
 };
+
+export type PaperV6MoveOperation = {
+  kind: "move";
+  motion: "MoveL";
+  target: LessonPose;
+};
+
+/** The production run path uses this planner before handing operations to the
+ * practice/bridge executor. Tests can pass its output to an in-memory sink. */
+export function buildPaperV6MovePlan(input: {
+  startPose: LessonPose;
+  paperOriginPose: LessonPose;
+  predictions: PaperPredictionPoint[];
+  surfaceZ: number;
+  liftGapMm: number;
+}):
+  | {
+      ok: true;
+      safeZ: number;
+      operations: PaperV6MoveOperation[];
+      capturePointByOperationIndex: Record<string, string>;
+    }
+  | { ok: false; error: string } {
+  const { startPose, paperOriginPose, predictions, surfaceZ, liftGapMm } = input;
+  if (
+    ![startPose.x, startPose.y, startPose.z, startPose.r, paperOriginPose.r, surfaceZ, liftGapMm]
+      .every(Number.isFinite) ||
+    liftGapMm <= 0 ||
+    predictions.length === 0 ||
+    predictions.some((point) => ![point.robotX, point.robotY].every((value) => Number.isFinite(Number(value))))
+  )
+    return { ok: false, error: "실행 시작점, 종이 표면, 펜 들기 간격 또는 학생 예측을 확인하세요." };
+  const safeZ = Math.max(startPose.z, surfaceZ + liftGapMm);
+  const operations: PaperV6MoveOperation[] = [
+    {
+      kind: "move",
+      motion: "MoveL",
+      target: { x: startPose.x, y: startPose.y, z: safeZ, r: paperOriginPose.r },
+    },
+  ];
+  const capturePointByOperationIndex: Record<string, string> = {};
+  for (const point of predictions) {
+    const contactZ = Number(point.robotZ ?? surfaceZ);
+    if (!Number.isFinite(contactZ))
+      return { ok: false, error: `${point.name}의 종이 접촉 Z를 계산할 수 없습니다.` };
+    const elevated = {
+      x: Number(point.robotX),
+      y: Number(point.robotY),
+      z: safeZ,
+      r: paperOriginPose.r,
+    };
+    const contact = {
+      x: Number(point.robotX),
+      y: Number(point.robotY),
+      z: contactZ,
+      r: paperOriginPose.r,
+    };
+    operations.push({ kind: "move", motion: "MoveL", target: elevated });
+    operations.push({ kind: "move", motion: "MoveL", target: contact });
+    capturePointByOperationIndex[String(operations.length - 1)] = point.name;
+    operations.push({ kind: "move", motion: "MoveL", target: { ...elevated } });
+  }
+  operations.push({
+    kind: "move",
+    motion: "MoveL",
+    target: { x: paperOriginPose.x, y: paperOriginPose.y, z: safeZ, r: paperOriginPose.r },
+  });
+  return { ok: true, safeZ, operations, capturePointByOperationIndex };
+}
 
 export function isPaperHardwareV6(version: string | undefined): boolean {
   return version === PAPER_HARDWARE_V6_VERSION;
@@ -45,6 +116,22 @@ export function paperV6ThetaFromDeltas(
   if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.hypot(dx, dy) < 1e-6)
     return null;
   return (Math.atan2(dy, dx) * 180) / Math.PI;
+}
+
+export function paperV6EstimatedRotationDifference(
+  frame: PaperFrame,
+  model: PaperV6StudentModel,
+): number | null {
+  const origin = frame.samples.find((sample) => sample.point === "O")?.pose;
+  const xPoint = frame.samples.find((sample) => sample.point === "X")?.pose;
+  if (!origin || !xPoint) return null;
+  const dx = xPoint.x - origin.x;
+  const dy = xPoint.y - origin.y;
+  if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.hypot(dx, dy) < 1)
+    return null;
+  const observed = (Math.atan2(dy, dx) * 180) / Math.PI;
+  const difference = observed - model.thetaDeg;
+  return ((difference + 180) % 360 + 360) % 360 - 180;
 }
 
 export function paperV6ModelFromDraft(
@@ -206,10 +293,15 @@ export function paperV6PredictionsFromDraft(
           formulaWork,
           error: `${target.name}에서 입력한 식의 ${differences.join(", ")} 값이 본인 O·θ 모델과 맞지 않습니다. 단위와 부호를 다시 대입하세요.`,
         };
-      work = Object.fromEntries(
-        manualFields.map((field) => [field, parsed[field]!]),
-      ) as PaperV6FormulaWork;
-      work.point = target.name;
+      work = {
+        point: target.name,
+        aCos: parsed.aCos!,
+        bSin: parsed.bSin!,
+        aSin: parsed.aSin!,
+        bCos: parsed.bCos!,
+        robotX: parsed.robotX!,
+        robotY: parsed.robotY!,
+      };
     }
     formulaWork.push(work);
     predictions.push({
@@ -314,5 +406,60 @@ export function paperV6Assessment(
     message: within
       ? `실물 V 재검증 충족 · TCP ${tcpErrorMm.toFixed(2)} mm · 잉크 ${inkErrorMm.toFixed(2)} mm · 사전 기준 ±2.0 mm`
       : `실물 V 재검증 미충족 · TCP ${tcpErrorMm.toFixed(2)} mm · 잉크 ${inkErrorMm.toFixed(2)} mm · 사전 기준 ±2.0 mm`,
+  };
+}
+
+export function paperV6OperationalIndicators(record: PaperTrialRecord) {
+  const run = record.run;
+  const linkedAnalysis = (record.aiAnalyses ?? []).find(
+    (analysis) =>
+      !!analysis.evidenceSnapshot &&
+      analysis.recordId === record.id &&
+      !!run &&
+      analysis.runId === run.id &&
+      analysis.planHash === run.planHash &&
+      analysis.source === run.source,
+  );
+  const linkedInk = (record.inkReadings ?? []).some(
+    (reading) =>
+      reading.recordId === record.id &&
+      !!run &&
+      reading.runId === run.id &&
+      reading.frameId === run.frameId &&
+      reading.status === "measured",
+  );
+  return {
+    I1: {
+      evidenceSentForSameRun: !!linkedAnalysis,
+      provider: linkedAnalysis?.provider ?? null,
+      source: linkedAnalysis?.source ?? null,
+      actualOpenAi: linkedAnalysis?.provider === "openai",
+      promptVersion: linkedAnalysis?.promptVersion ?? null,
+    },
+    I2: {
+      studentJudgmentLinked:
+        !!record.v6?.decision &&
+        !!record.v6?.decisionReason?.trim() &&
+        !!record.v6?.followupChecks?.length &&
+        !!record.v6?.followupResult?.trim() &&
+        !!record.followupObservation &&
+        record.followupObservation.recordId === record.id &&
+        record.followupObservation.runId === run?.id,
+      decision: record.v6?.decision ?? null,
+    },
+    I3: {
+      independentlyRevalidated:
+        record.targetSet === "revalidation" &&
+        !!run &&
+        run.source === "hardware" &&
+        run.status === "completed" &&
+        record.v6?.assessment?.runId === run.id &&
+        record.v6.assessment.planHash === run.planHash &&
+        record.v6.assessment.status === "within-tolerance" &&
+        linkedInk,
+      source: run?.source ?? null,
+      status: record.v6?.assessment?.status ?? "incomplete",
+      toleranceMm: record.v6?.assessment?.toleranceMm ?? null,
+    },
   };
 }

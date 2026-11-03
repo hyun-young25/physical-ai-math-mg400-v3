@@ -292,6 +292,8 @@ export type PaperCoordinateStudyViewState = {
     predictionError: string | null;
     saved: boolean;
     supportMode: "guided" | "challenge";
+    supportLevel: 1 | 2 | 3;
+    promptVersion: string;
     assessment: {
       status: "incomplete" | "simulation-only" | "within-tolerance" | "outside-tolerance";
       tcpErrorMm: number | null;

@@ -254,6 +254,89 @@ export function PaperCoordinateStudyView({
           onFocus: () => selectPaperPoint(name),
         }
       : {};
+  const isV6PaperAttempt =
+    state.activeAttempt?.taskVersion === PAPER_HARDWARE_V6_VERSION;
+  const largestMismatchPoint =
+    state.diagnosis?.taskEvidence?.reduce(
+      (largest, row) =>
+        !largest || row.distance > largest.distance ? row : largest,
+      null as (typeof state.diagnosis.taskEvidence)[number] | null,
+    )?.point ??
+    state.diagnosis?.firstMismatch ??
+    state.targetPoints[0]?.name;
+  const requiredInkPoint =
+    state.targetSet === "revalidation"
+      ? (state.targetPoints.find((point) => point.name === "V")?.name ??
+        state.targetPoints[0]?.name)
+      : largestMismatchPoint;
+  const renderInkRow = (point: (typeof state.targetPoints)[number]) => {
+    const reading = state.inkReadings.find((item) => item.point === point.name);
+    return (
+      <fieldset
+        className="pcv-ink-row"
+        key={point.name}
+        {...rowProps(point.name)}
+      >
+        <legend>
+          <span className="pcv-point-tag">{point.name}</span>{" "}
+          눈금에서 읽은 위치
+        </legend>
+        <label>
+          <span>측정 상태</span>
+          <select
+            aria-label={`${point.name} 잉크 측정 상태`}
+            value={reading?.status ?? "not-measured"}
+            onChange={(event) =>
+              actions.onInkReadingChange(point.name, "status", event.target.value)
+            }
+          >
+            <option value="measured">읽을 수 있음</option>
+            <option value="unreadable">눈금 판독 불가</option>
+            <option value="outside-range">종이 범위 밖</option>
+            <option value="not-measured">측정하지 않음</option>
+          </select>
+        </label>
+        <label>
+          <span>x · cm</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={reading?.xCm ?? ""}
+            aria-label={`${point.name} 잉크 위치 x cm`}
+            onChange={(event) =>
+              actions.onInkReadingChange(point.name, "xCm", event.target.value)
+            }
+          />
+        </label>
+        <label>
+          <span>y · cm</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={reading?.yCm ?? ""}
+            aria-label={`${point.name} 잉크 위치 y cm`}
+            onChange={(event) =>
+              actions.onInkReadingChange(point.name, "yCm", event.target.value)
+            }
+          />
+        </label>
+        <label className="pcv-field">
+          <span>측정 상태/판독 이유</span>
+          <input
+            value={reading?.reason ?? ""}
+            aria-label={`${point.name} 잉크 측정 이유`}
+            onChange={(event) =>
+              actions.onInkReadingChange(point.name, "reason", event.target.value)
+            }
+          />
+        </label>
+        <small>
+          학생 수기 기록 · cm · 실행 {state.run?.id ?? "없음"} · 기준{" "}
+          {state.frame?.id ?? "없음"}
+        </small>
+      </fieldset>
+    );
+  };
   const focusedRetry = useRef<string | null>(null);
   useEffect(() => {
     if (
@@ -1893,7 +1976,7 @@ export function PaperCoordinateStudyView({
                 <p className="pcv-inline-note">
                   {state.paperSurfaceZ === null
                     ? "종이 표면 높이는 아직 O/X/Y에서 계산되지 않았습니다."
-                    : state.liftGapSaved && state.liftGapMm !== null
+                    : state.liftGapSaved && typeof state.liftGapMm === "number"
                       ? `저장됨 · 표면 Z ${numberLabel(state.paperSurfaceZ)} mm + 간격 ${state.liftGapMm} mm = 이동 기준 Z ${numberLabel(state.paperSurfaceZ + state.liftGapMm)} mm`
                       : "완성된 양수 간격이 저장되기 전에는 실행하지 않습니다. 기존 절대 Z값은 간격으로 바꾸어 쓰지 않습니다."}
                 </p>
@@ -2311,92 +2394,25 @@ export function PaperCoordinateStudyView({
               {renderPaperGrid()}
               <div className="pcv-ink-list">
                 <h3>종이 눈금에서 잉크 위치 읽기</h3>
-                {state.targetPoints.map((point) => {
-                  const reading = state.inkReadings.find(
-                    (item) => item.point === point.name,
-                  );
-                  return (
-                    <fieldset
-                      className="pcv-ink-row"
-                      key={point.name}
-                      {...rowProps(point.name)}
-                    >
-                      <legend>
-                        <span className="pcv-point-tag">{point.name}</span>{" "}
-                        눈금에서 읽은 위치
-                      </legend>
-                      <label>
-                        <span>측정 상태</span>
-                        <select
-                          aria-label={`${point.name} 잉크 측정 상태`}
-                          value={reading?.status ?? "not-measured"}
-                          onChange={(event) =>
-                            actions.onInkReadingChange(
-                              point.name,
-                              "status",
-                              event.target.value,
-                            )
-                          }
-                        >
-                          <option value="measured">읽을 수 있음</option>
-                          <option value="unreadable">눈금 판독 불가</option>
-                          <option value="outside-range">종이 범위 밖</option>
-                          <option value="not-measured">측정하지 않음</option>
-                        </select>
-                      </label>
-                      <label>
-                        <span>x · cm</span>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={reading?.xCm ?? ""}
-                          aria-label={`${point.name} 잉크 위치 x cm`}
-                          onChange={(event) =>
-                            actions.onInkReadingChange(
-                              point.name,
-                              "xCm",
-                              event.target.value,
-                            )
-                          }
-                        />
-                      </label>
-                      <label>
-                        <span>y · cm</span>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={reading?.yCm ?? ""}
-                          aria-label={`${point.name} 잉크 위치 y cm`}
-                          onChange={(event) =>
-                            actions.onInkReadingChange(
-                              point.name,
-                              "yCm",
-                              event.target.value,
-                            )
-                          }
-                        />
-                      </label>
-                      <label className="pcv-field">
-                        <span>측정 상태/판독 이유</span>
-                        <input
-                          value={reading?.reason ?? ""}
-                          aria-label={`${point.name} 잉크 측정 이유`}
-                          onChange={(event) =>
-                            actions.onInkReadingChange(
-                              point.name,
-                              "reason",
-                              event.target.value,
-                            )
-                          }
-                        />
-                      </label>
-                      <small>
-                        학생 수기 기록 · cm · 실행 {state.run?.id ?? "없음"} ·
-                        기준 {state.frame?.id ?? "없음"}
-                      </small>
-                    </fieldset>
-                  );
-                })}
+                {isV6PaperAttempt ? (
+                  <>
+                    <p className="pcv-note">
+                      필수 잉크 읽기:{" "}
+                      {requiredInkPoint ?? "실행 결과 대기"} · 다른 점은 선택 입력에 접어 두었습니다.
+                    </p>
+                    {state.targetPoints
+                      .filter((point) => point.name === requiredInkPoint)
+                      .map(renderInkRow)}
+                    <details>
+                      <summary>다른 꼭짓점 잉크는 선택 입력</summary>
+                      {state.targetPoints
+                        .filter((point) => point.name !== requiredInkPoint)
+                        .map(renderInkRow)}
+                    </details>
+                  </>
+                ) : (
+                  state.targetPoints.map(renderInkRow)
+                )}
                 {!conciseFlow && (
                   <button
                     type="button"
@@ -2537,6 +2553,8 @@ export function PaperCoordinateStudyView({
               evidenceDraftKey={JSON.stringify(state.inkReadings)}
               attemptLabel={`종이 좌표 시도 ${state.attempt ?? "—"}`}
               sourceLabel={sourceLabel(state.run?.source)}
+              paperV6={state.activeAttempt?.taskVersion === PAPER_HARDWARE_V6_VERSION}
+              promptVersion={state.v6?.promptVersion}
               available={state.analysisReady}
               prepareRequest={prepareAiAnalysis}
               onDisplayed={(analysis) => {
@@ -2548,6 +2566,11 @@ export function PaperCoordinateStudyView({
                   runId: run.id,
                   planHash: run.planHash,
                   source: run.source,
+                  ...(state.v6?.promptVersion
+                    ? { promptVersion: state.v6.promptVersion }
+                    : {}),
+                  fallbackUsed:
+                    analysis.mode === "gpt" && analysis.provider === "rules",
                 });
               }}
             />
@@ -3308,12 +3331,6 @@ export function PaperCoordinateStudyView({
           actions={actions}
           blocks={{
             references: renderStage(1),
-            execution: (
-              <>
-                {renderExecutionControls(state.targetSet === "revalidation")}
-                {renderStage(4)}
-              </>
-            ),
             observationsAndInk: renderStage(5),
             analysis: renderStage(6),
           }}

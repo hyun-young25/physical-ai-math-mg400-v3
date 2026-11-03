@@ -52,6 +52,7 @@ export type PaperV6AttemptData = {
   decision?: "revise" | "retain";
   decisionReason?: string;
   promptVersion?: string;
+  aiProvider?: "rules" | "openai";
   aiModel?: string;
   verificationPoint?: { name: "V"; xCm: 5; yCm: 6 };
   finalQuestionAnswer?: "model-points" | "independent-point";
@@ -241,6 +242,7 @@ export type PaperDiagnosis = {
   why: string;
   tutorSource: "AI phrasing" | "default question";
   pattern?: "match" | "tracking" | "origin-missing" | "translation" | "rotation" | "scale" | "mixed" | "calculation";
+  estimatedRotationDifferenceDeg?: number | null;
   taskEvidence?: Array<{ point: string; dx: number; dy: number; distance: number; xCm: number; yCm: number }>;
   toleranceMm?: number;
   supportLevel?: number;
@@ -264,6 +266,8 @@ export type PaperAiAnalysisRecord = {
   promptVersion?: string;
   fallbackUsed?: boolean;
   fallbackReason?: string;
+  /** Sanitized exact payload snapshot passed to the analysis controller. */
+  evidenceSnapshot?: unknown;
 };
 
 export type PaperTrialRecord = {
