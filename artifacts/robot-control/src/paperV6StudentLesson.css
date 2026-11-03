@@ -1218,3 +1218,10 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+.paper-v6-paper-note--lead { font-weight:750; color:#0b2d5c; background:#fef3c7; border-left:4px solid #f59e0b; padding:8px 10px; border-radius:6px; }
+.paper-v6-ready-checks { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 0; padding:0; list-style:none; }
+.paper-v6-ready-checks li { display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:999px; font-size:12px; font-weight:700; border:1px solid #cbd5e1; background:#f8fafc; color:#475569; }
+.paper-v6-ready-checks li.is-ok { background:#ecfdf5; border-color:#86efac; color:#166534; }
+.paper-v6-ready-checks li span { font-weight:900; }
+.paper-v6-shell__status-spacer { flex:1; }

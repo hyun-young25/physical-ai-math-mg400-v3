@@ -239,6 +239,35 @@ export function paperV6MockReferencePose(point: PaperPointName): LessonPose {
   };
 }
 
+/** Pen touches down only on the sheet (plus this margin); elsewhere it passes lifted. */
+export const PAPER_V6_PEN_DOWN_MARGIN_MM = 5;
+/** Mock ink imitates a real ruler reading: about ±0.5 mm, deterministic per point. */
+export const PAPER_V6_MOCK_INK_NOISE_MM = 0.5;
+
+export function paperPenDownAllowed(
+  frame: PaperFrame,
+  pose: Pick<LessonPose, "x" | "y">,
+  sheetSizeCm = PAPER_GRID_SIZE_CM,
+  marginMm = PAPER_V6_PEN_DOWN_MARGIN_MM,
+) {
+  const paper = frameInversePoint(frame, { x: pose.x, y: pose.y, z: 0, r: 0 });
+  if (!paper || !Number.isFinite(paper.xCm) || !Number.isFinite(paper.yCm))
+    return false;
+  const margin = marginMm / 10;
+  return (
+    paper.xCm >= -margin &&
+    paper.yCm >= -margin &&
+    paper.xCm <= sheetSizeCm + margin &&
+    paper.yCm <= sheetSizeCm + margin
+  );
+}
+
+const mockNoiseCm = (point: string, axis: "x" | "y") => {
+  let hash = axis === "x" ? 17 : 31;
+  for (const char of point) hash = (hash * 33 + char.charCodeAt(0)) % 1009;
+  return ((hash / 1009) * 2 - 1) * (PAPER_V6_MOCK_INK_NOISE_MM / 10);
+};
+
 /** Convert the in-app mock TCP path to explicitly synthetic paper-ink drafts. */
 export function paperV6MockInkDrafts(
   frame: PaperFrame,
@@ -248,11 +277,22 @@ export function paperV6MockInkDrafts(
     const paper = frameInversePoint(frame, pose);
     if (!paper || !Number.isFinite(paper.xCm) || !Number.isFinite(paper.yCm))
       return null;
+    if (!paperPenDownAllowed(frame, pose))
+      return {
+        point,
+        status: "outside-range" as const,
+        xCm: "",
+        yCm: "",
+        reason: "내 식의 점이 종이 밖이라 펜을 들고 지나가 잉크가 남지 않았습니다.",
+        source: "mock-simulation" as const,
+      };
+    const clamp = (value: number) =>
+      Math.min(PAPER_GRID_SIZE_CM, Math.max(0, value));
     return {
       point,
       status: "measured" as const,
-      xCm: paper.xCm.toFixed(2),
-      yCm: paper.yCm.toFixed(2),
+      xCm: clamp(paper.xCm + mockNoiseCm(point, "x")).toFixed(2),
+      yCm: clamp(paper.yCm + mockNoiseCm(point, "y")).toFixed(2),
       reason: "",
       source: "mock-simulation" as const,
     };

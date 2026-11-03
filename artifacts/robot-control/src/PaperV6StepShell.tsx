@@ -73,7 +73,7 @@ export function PaperV6StepShell({
       </div>
 
       <footer className="paper-v6-shell__footer">
-        <div
+        {message ? <div
           className={`paper-v6-shell__status paper-v6-shell__status--${message ? statusKind : "info"}`}
           role={message && statusKind === "error" ? "alert" : "status"}
           aria-live={statusKind === "error" ? "assertive" : "polite"}
@@ -83,10 +83,10 @@ export function PaperV6StepShell({
           <span className="paper-v6-shell__status-copy">
             <strong>{message ? statusKind === "success" ? "저장됨" : statusKind === "error" ? "확인 필요" : "안내" : "저장 상태"}</strong>
             <span>
-              {message ?? "이 단계의 저장 안내가 여기에 표시됩니다."}
+              {message}
             </span>
           </span>
-        </div>
+        </div> : <span className="paper-v6-shell__status-spacer" aria-hidden="true" />}
 
         <nav className="paper-v6-shell__navigation" aria-label="단계 이동">
           <button

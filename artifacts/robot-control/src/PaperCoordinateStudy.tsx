@@ -1,7 +1,6 @@
 import { paperRetryInputs, paperRetryFields } from "./paperRetry";
 import {
   paperBoundary,
-  PAPER_SUPERVISED_MARGIN_MM,
   supervisedPaperBlockers,
   type PaperRunBlocker,
 } from "./paperExecutionGuards";
@@ -91,6 +90,7 @@ import {
   initialPaperAttemptForLevel,
   paperV6MockReferencePose,
   paperV6MockInkDrafts,
+  paperPenDownAllowed,
 } from "./paperCoordinateStudy";
 import type {
   PaperCoordinateLevel,
@@ -4059,8 +4059,14 @@ export function PaperCoordinateStudy({
       );
       return;
     }
+    // v6 scenes: stage 5 is "로봇이 그려요". Stage 4 belongs to the prediction
+    // scene, so using it here sent students back to scene 2 mid-run.
     const runStage: PaperLessonStage =
-      isMergedPaper(level) && active.targetSet === "revalidation" ? 7 : 4;
+      isMergedPaper(level) && active.targetSet === "revalidation"
+        ? 7
+        : isV6Attempt
+          ? 5
+          : 4;
     if (
       liftHeight === null ||
       !Number.isFinite(liftHeight) ||
@@ -4101,6 +4107,7 @@ export function PaperCoordinateStudy({
         active.frame,
         points,
         PAPER_GRID_SIZE_CM,
+        true,
       );
       if (blockers.length) {
         setPageError(blockers.map((blocker) => blocker.message).join(" · "));
@@ -4178,6 +4185,7 @@ export function PaperCoordinateStudy({
         predictions: active.predictions ?? [],
         surfaceZ: surfaceZ!,
         liftGapMm: liftGapForPlan!,
+        penDownAt: (pose) => paperPenDownAllowed(active.frame!, pose),
       });
       if (!planned.ok) {
         setPageError(planned.error);
@@ -4974,22 +4982,12 @@ export function PaperCoordinateStudy({
         frame,
         previewPoints,
         PAPER_GRID_SIZE_CM,
+        isV6Attempt,
       ),
     );
-  if (
-    isV6Attempt &&
-    frame &&
-    previewPoints.some(
-      (point) =>
-        paperBoundary(frame, point.pose, PAPER_GRID_SIZE_CM).distance >
-        PAPER_SUPERVISED_MARGIN_MM,
-    )
-  )
-    physicalBlockers.push({
-      message:
-        "학생 모델의 목표가 10×10 cm 종이 영역에서 30 mm 이상 벗어났습니다. 예측을 수정하거나 DT 결과만 확인하세요.",
-      target: "prediction",
-    });
+  // v6: a prediction off the sheet is still run (case A of the thesis: θ=0
+  // drawn on a rotated sheet). Off-sheet points pass with the pen lifted; only
+  // unreachable poses block, which canReach() checks before any motion.
   if (
     !autoMappedPaperLesson &&
     !dtReadyForPhysical &&

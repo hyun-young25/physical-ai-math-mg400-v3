@@ -1565,8 +1565,12 @@ export function RobotArm({
       moveTo: pose => onMoveTo(pose.x, pose.y, pose.z, pose.r),
       moveEnd: onMoveEnd,
       scheduler: {
-        requestFrame: callback => window.requestAnimationFrame(callback),
-        cancelFrame: id => window.cancelAnimationFrame(id),
+        // Browsers pause animation frames in hidden tabs/panes; fall back to a timer
+        // so a practice run still finishes instead of staying "실행 중" forever.
+        requestFrame: callback => document.hidden
+          ? -(window.setTimeout(() => callback(window.performance.now()), 16) as unknown as number)
+          : window.requestAnimationFrame(callback),
+        cancelFrame: id => id < 0 ? window.clearTimeout(-id) : window.cancelAnimationFrame(id),
         setTimer: (callback, delayMs) => window.setTimeout(callback, delayMs),
         clearTimer: timer => window.clearTimeout(timer as number),
         now: () => window.performance.now(),

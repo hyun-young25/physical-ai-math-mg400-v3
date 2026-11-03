@@ -197,6 +197,12 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
     x: 40 + xCm * 9.6 - yCm * 0.9,
     y: 103 + xCm * 0.9 - yCm * 8,
   });
+  const blockerTargets = new Set((state.physicalBlockers ?? []).map((blocker) => blocker.target));
+  const readyChecks = [
+    { label: "MG400 연결", ok: !blockerTargets.has("connection") },
+    { label: "DT로 먼저 확인", ok: !blockerTargets.has("dt") },
+    { label: "교사 확인", ok: !blockerTargets.has("teacher") && !blockerTargets.has("criteria") && !blockerTargets.has("height") },
+  ];
   const executionControls = (
     <section className="paper-v6-run-controls" aria-label="명시적 실행 선택">
       <div className="paper-v6-run-buttons">
@@ -215,7 +221,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
               ? "DT에서 다시 검증"
               : "DT에서 실행"}
         </button>
-        <button
+        {!state.mockPracticeEnabled && <button
           type="button"
           className="paper-v6-primary paper-v6-primary--hardware"
           disabled={state.running || !state.physicalAvailable}
@@ -223,7 +229,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
           data-testid="paper-v6-run-hardware"
         >
           {revalidation ? "실장비에서 다시 검증" : "교사 확인 후 실장비 실행"}
-        </button>
+        </button>}
         {state.running && (
           <button
             type="button"
@@ -235,21 +241,24 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
           </button>
         )}
       </div>
-      {!state.runAvailable && (
+      {!state.runAvailable && !state.running && (
         <p className="paper-v6-error" role="status">
-          DT 실행 차단: {state.dtBlockers?.map((blocker) => blocker.message).join(" · ") || "저장된 계획·높이·작업 범위를 확인하세요."}
+          {state.dtBlockers?.[0]?.message ?? "예측을 저장한 뒤 실행할 수 있어요."}
         </p>
       )}
-      {!state.physicalAvailable && (
-        <p className="paper-v6-error" role="status">
-          실장비 실행 차단: {state.physicalBlockers?.map((blocker) => blocker.message).join(" · ") || state.physicalUnavailableReason || "현재 실장비 준비를 확인하세요."}
+      {state.mockPracticeEnabled ? (
+        <p className="paper-v6-callout" data-testid="paper-v6-mock-run-note">
+          지금은 연습 로봇이에요. 실제 MG400을 연결하면 이 화면, 이 버튼 그대로 실물 로봇이 움직여요.
         </p>
-      )}
-      {state.physicalAvailable && (
-        <p className="paper-v6-callout">
-          실장비 실행 가능 상태입니다. 이 버튼을 누른 뒤 기존 교사 감독·실행 확인을
-          완료해야 모션이 시작됩니다. 화면 이동이나 저장으로 로봇은 움직이지 않습니다.
-        </p>
+      ) : (
+        <ul className="paper-v6-ready-checks" aria-label="실물 실행 준비" data-testid="paper-v6-ready-checks">
+          {readyChecks.map((check) => (
+            <li key={check.label} className={check.ok ? "is-ok" : "is-pending"}>
+              <span aria-hidden="true">{check.ok ? "✓" : "○"}</span>
+              {check.label}
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   );
@@ -368,8 +377,9 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 </svg>
               </section>
             </div>
-            <p className="paper-v6-paper-note">
-              종이가 어떻게 놓였는지는 로봇으로 재 봐야 알 수 있어요.
+            <p className="paper-v6-paper-note paper-v6-paper-note--lead">
+              로봇은 종이가 어디 있는지 몰라요. 내가 세운 식이 로봇 펜이 갈 곳을 정해요.
+              그래서 먼저 로봇 팔로 종이의 O·X·Y를 재요.
             </p>
             <p className="paper-v6-reference-prompt" role="status" data-testid="paper-v6-current-reference">
               {referencePrompt}
@@ -404,6 +414,11 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 ? `현재 위치를 ${missingReference}로 기록`
                 : "O · X · Y 기록 완료"}
             </button>
+            {!hasAllReferences && (
+              <p className="paper-v6-hint" data-testid="paper-v6-references-required">
+                O·X·Y 세 점을 모두 기록하면 다음 장면으로 넘어가요.
+              </p>
+            )}
             {state.referenceError && (
               <p className="paper-v6-error" role="status">
                 {state.referenceError}
@@ -448,10 +463,6 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 기록하세요.
               </p>
             )}
-            <p className="paper-v6-callout">
-              학생이 O와 회전각을 정합니다. 측정된 프레임의 자동 회전값을 학생 답으로
-              채우지 않습니다.
-            </p>
             <div className="paper-v6-form-grid">
               {field("O의 로봇 X (mm)", draft.originXmm, (value) => updateDraft({ originXmm: value }), "학생 모델 O X mm", "paper-v6-origin-x")}
               {field("O의 로봇 Y (mm)", draft.originYmm, (value) => updateDraft({ originYmm: value }), "학생 모델 O Y mm", "paper-v6-origin-y")}
@@ -682,33 +693,24 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
         {scene === 3 && step === 5 && (
           <div className="paper-v6-step" data-testid="paper-v6-run">
             <p className="paper-v6-callout">
-              {state.mockPracticeEnabled
-                ? "연습 자료로 경로를 실행합니다. 모의 O/X/Y·잉크는 실제 장비 측정값이 아닙니다."
-                : "모델을 만드는 데 사용한 O/X/Y와 학생 목표가 저장됐습니다. ±2.0 mm는 이 시도의 실행 전에 고정한 비교 기준이며, DT는 실제 측정이 아닙니다."}
+              로봇은 내 식이 가리키는 곳에 펜을 찍어요. 종이 밖을 가리키면 펜을 든 채 지나가요.
+              {state.verificationCriteria && ` 판정 기준: ±${state.verificationCriteria.positionToleranceMm.toFixed(1)} mm`}
             </p>
-            {state.verificationCriteria && (
-              <div className="paper-v6-criteria" data-testid="paper-v6-criteria">
-                <strong>사전 고정 기준 · ±{state.verificationCriteria.positionToleranceMm.toFixed(1)} mm</strong>
-                <span>독립 확인점: {state.verificationCriteria.independentVerificationPoints.join(", ") || "없음"}</span>
-                <small>{state.verificationCriteria.rationale}</small>
-              </div>
-            )}
             {executionControls}
             {run && (
               <section className="paper-v6-run-result" aria-label="현재 실행 상태">
-                <h3>현재 시도 실행</h3>
+                <h3>🤖 로봇 실행</h3>
                 <p>
-                  {run.status === "completed" ? "완료" : run.status === "running" ? "실행 중" : "미완료"}
-                  {" · "}
-                  {run.source === "hardware"
-                    ? "MG400 제어기 TCP"
-                    : run.source === "dt"
-                      ? state.mockPracticeEnabled
-                        ? "DT · 연습 자료"
-                        : "DT · 실측 아님"
-                      : "연습 자료"}
+                  {run.status === "completed" ? "완료 · 다음 장면에서 비교해요" : run.status === "running" ? "그리는 중…" : "끝나지 않았어요 · 다시 실행하세요"}
                 </p>
-                <small>명령 {run.commands.length}개 · 새 관측 {run.observations.length}개</small>
+                <small>
+                  {run.source === "hardware"
+                    ? "MG400 실물"
+                    : state.mockPracticeEnabled
+                      ? "연습 로봇"
+                      : "DT 미리보기"}
+                  {" · "}찍은 점 {run.observations.length}/{run.commands.length}
+                </small>
                 {run.error && <p className="paper-v6-error">{run.error}</p>}
               </section>
             )}
@@ -977,6 +979,15 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
           <span>기준 프레임 ID: {state.frame?.id ?? "—"}</span>
           <span>실행 ID: {run?.id ?? "—"}</span>
         </div>
+        {state.verificationCriteria && (
+          <p data-testid="paper-v6-criteria">
+            사전 고정 기준 ±{state.verificationCriteria.positionToleranceMm.toFixed(1)} mm · 독립 확인점{" "}
+            {state.verificationCriteria.independentVerificationPoints.join(", ") || "없음"} · {state.verificationCriteria.rationale}
+          </p>
+        )}
+        {(state.physicalBlockers?.length ?? 0) > 0 && (
+          <p>실장비 차단 사유: {state.physicalBlockers!.map((blocker) => blocker.message).join(" · ")}</p>
+        )}
         {state.diagnosis && <p>진단: {state.diagnosis.candidate} · {state.diagnosis.question} · {state.diagnosis.why}</p>}
         {blocks.teacherDetails}
         <button type="button" className="paper-v6-export" onClick={actions.onV6Export} data-testid="paper-v6-export">
