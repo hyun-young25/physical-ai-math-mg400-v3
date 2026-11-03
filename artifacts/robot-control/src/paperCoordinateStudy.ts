@@ -432,6 +432,54 @@ export function frameTransformPoint(frame: PaperFrame, point: Pick<PaperGridPoin
   };
 }
 
+export type PaperCoordinateCmDraft = {
+  point: string;
+  xCm: string;
+  yCm: string;
+};
+
+/** Convert student-entered 0–10 cm points using the measured O/X/Y basis. */
+export function mapPaperCoordinatesToRobotTargets(
+  frame: PaperFrame,
+  coordinates: readonly PaperCoordinateCmDraft[],
+): PaperPredictionPoint[] | null {
+  const names = ["P1", "P2", "P3", "P4"];
+  if (coordinates.length !== names.length) return null;
+  const parsed = coordinates.map((point, index) => ({
+    point: point.point,
+    xCm: point.xCm.trim() ? Number(point.xCm) : NaN,
+    yCm: point.yCm.trim() ? Number(point.yCm) : NaN,
+    valid:
+      point.point === names[index] &&
+      point.xCm.trim() !== "" &&
+      point.yCm.trim() !== "" &&
+      Number.isFinite(Number(point.xCm)) &&
+      Number.isFinite(Number(point.yCm)) &&
+      Number(point.xCm) >= 0 &&
+      Number(point.xCm) <= PAPER_GRID_SIZE_CM &&
+      Number(point.yCm) >= 0 &&
+      Number(point.yCm) <= PAPER_GRID_SIZE_CM,
+  }));
+  if (
+    parsed.some((point) => !point.valid) ||
+    new Set(parsed.map((point) => `${point.xCm},${point.yCm}`)).size !==
+      parsed.length
+  )
+    return null;
+  return parsed.map(({ point, xCm, yCm }) => {
+    const pose = frameTransformPoint(frame, { xCm, yCm });
+    return {
+      name: point as PaperPointName,
+      xCm,
+      yCm,
+      robotX: String(Number(pose.x.toFixed(4))),
+      robotY: String(Number(pose.y.toFixed(4))),
+      robotZ: String(Number(pose.z.toFixed(4))),
+      robotR: String(Number(pose.r.toFixed(4))),
+    };
+  });
+}
+
 export function studentTransformPoint(transform: PaperStudentTransform, point: Pick<PaperGridPoint, "xCm" | "yCm">): LessonPose | null {
   if (![transform.originX, transform.originY, transform.millimetersPerCentimeter, transform.rotationDegrees].every(v => v.trim())) return null;
   const originX = Number(transform.originX), originY = Number(transform.originY);

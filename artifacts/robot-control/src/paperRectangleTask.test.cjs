@@ -18,6 +18,37 @@ test("rectangle targets are four corners; legacy triangle sets are not rewritten
  assert.equal(v.paperTaskTargets("rotated","initial"),p.PAPER_TARGETS.initial);
  assert.equal(v.paperTaskTargets("basic","revalidation").length,3);
 });
+test("10 cm O/X/Y measurements drive an affine target despite length, skew, Z and R differences",()=>{
+ const samples=[["O",100,200,60,25],["X",203,205,64,-130],["Y",105,304,52,170]]
+  .map(([point,x,y,z,r],i)=>({point,pose:{x,y,z,r},source:"teacher",seq:null,capturedAt:now-100+i,
+    ageMsAtCapture:null,user:0,tool:0,coordinateSystem:"teacher",verifiedCoordinates:false}));
+ const result=p.validatePaperFrame(samples,now,2);
+ assert.equal(result.ok,true,result.reason);
+ const f=result.frame;
+ assert.deepEqual(p.frameTransformPoint(f,{xCm:10,yCm:0}),{x:203,y:205,z:64,r:25});
+ assert.deepEqual(p.frameTransformPoint(f,{xCm:0,yCm:10}),{x:105,y:304,z:52,r:25});
+ const center=p.frameTransformPoint(f,{xCm:5,yCm:5});
+ assert.deepEqual(center,{x:154,y:254.5,z:58,r:25});
+ assert.equal(p.paperBaselineLengthMetrics(f.samples,2).every(item=>item.status==="informational"),true);
+ const mapped=p.mapPaperCoordinatesToRobotTargets(f,[
+  {point:"P1",xCm:"0",yCm:"0"},{point:"P2",xCm:"10",yCm:"0"},
+  {point:"P3",xCm:"10",yCm:"10"},{point:"P4",xCm:"0",yCm:"10"},
+ ]);
+ assert.deepEqual(mapped.map(({xCm,yCm,robotX,robotY,robotZ,robotR})=>[xCm,yCm,robotX,robotY,robotZ,robotR]),[
+  [0,0,"100","200","60","25"],[10,0,"203","205","64","25"],
+  [10,10,"208","309","56","25"],[0,10,"105","304","52","25"],
+ ]);
+ assert.equal(p.mapPaperCoordinatesToRobotTargets(f,[
+  {point:"P1",xCm:"1",yCm:"1"},{point:"P2",xCm:"1",yCm:"1"},
+  {point:"P3",xCm:"9",yCm:"9"},{point:"P4",xCm:"0",yCm:"9"},
+ ]),null,"duplicate physical targets are not saved");
+ assert.equal(p.mapPaperCoordinatesToRobotTargets(f,[
+  {point:"P1",xCm:"",yCm:"1"},{point:"P2",xCm:"1",yCm:"1"},
+  {point:"P3",xCm:"9",yCm:"9"},{point:"P4",xCm:"0",yCm:"9"},
+ ]),null,"blank student coordinates are never interpreted as zero");
+ const collinear=samples.map((sample,i)=>({...sample,pose:{...sample.pose,x:100+i,y:200+i*10}}));
+ assert.equal(p.validatePaperFrame(collinear,now,2).ok,false);
+});
 test("same paper classifier detects an omitted rotation and accepts its correction for four points",()=>{
  const f=frame(),wrong=transform(0),r=run(f,wrong);
  const d=p.diagnosePaperRun(r,f,"plan",{transform:wrong,targets});

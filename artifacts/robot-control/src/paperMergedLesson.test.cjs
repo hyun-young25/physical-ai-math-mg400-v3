@@ -8,10 +8,12 @@ function trial(omit=false,offset=0){const frame=m.givenPaperFrame(),start=Date.n
  return {frame,run};
 }
 const diagnose=(t,options={})=>p.diagnosePaperRun(t.run,t.frame,"plan",{targets,detectOriginMissing:true,...options});
-test("new course keeps 110x150 mm corners and legacy rotation records retain their targets",()=>{
- assert.deepEqual(targets.map(t=>[t.xCm,t.yCm]),[[0,0],[11,0],[11,15],[0,15]]);
+test("current merged course uses a 10x10 cm paper and v4 records retain their original targets",()=>{
+  assert.deepEqual(targets.map(t=>[t.xCm,t.yCm]),[[1,1],[9,1],[9,9],[1,9]]);
+  assert.deepEqual(r.paperTaskTargets("advanced-paper-dt","revalidation").map(t=>[t.xCm,t.yCm]),[[2,2],[8,2],[8,8],[2,8]]);
+  assert.deepEqual(r.paperTaskTargets("advanced-paper-dt","initial","v4-paper-merged").map(t=>[t.xCm,t.yCm]),[[0,0],[11,0],[11,15],[0,15]]);
  assert.deepEqual(r.paperTaskTargets("advanced-paper-rotated","initial").map(t=>[t.xCm,t.yCm]),[[2,2],[8,2],[8,6],[2,6]]);
- assert.equal(m.PAPER_TASK_VERSION,"v4-paper-merged");
+  assert.equal(m.PAPER_TASK_VERSION,"v5-paper-10cm");
  assert.equal(m.paperConceptValid({motion:"MoveJ",closeX:"0",closeY:"0"}),false);
  assert.equal(m.paperConceptValid({motion:"MoveL",closeX:"0",closeY:"0"}),true);
 });

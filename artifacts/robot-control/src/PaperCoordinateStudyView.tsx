@@ -24,6 +24,7 @@ import {
   paperVerificationCriteriaSavedForAttempt,
 } from "./paperCoordinateViewModel";
 import { ExecutionAiAnalysis } from "./ExecutionAiAnalysis";
+import { frameTransformPoint } from "./paperCoordinateStudy";
 import type { PaperPointName, PaperRunSnapshot } from "./paperCoordinateStudy";
 import {
   paperStudentScreenForStage,
@@ -128,7 +129,10 @@ export function PaperCoordinateStudyView({
   const rectangle = isPaperRectangle(state.level),
     merged = isMergedPaper(state.level),
     dtOnly = isPaperDT(state.level),
-    grid = merged ? 20 : 10;
+    grid =
+      merged && state.activeAttempt?.taskVersion === "v4-paper-merged"
+        ? 20
+        : 10;
   const verificationPointGuide = paperVerificationPointGuide(
     state.targetPoints,
   );
@@ -277,6 +281,8 @@ export function PaperCoordinateStudyView({
     ? (state.displayPose ?? state.currentPose)
     : state.currentPose;
   const conciseFlow = merged && rectangle;
+  const autoMappedPaper =
+    merged && state.activeAttempt?.taskVersion === "v5-paper-10cm";
   const screenIndex = paperStudentScreenForStage(state.stage);
   const criteriaSavedForPlan = paperVerificationCriteriaSavedForAttempt(
     state.verificationCriteria,
@@ -886,9 +892,8 @@ export function PaperCoordinateStudyView({
     <section className="pcv-alignment">
       <h3>종이 정렬과 기준점 기록</h3>
       <p className="pcv-callout">
-        실제 출력물의 격자 교차점에 펜 끝을 맞춰 기록합니다. O는 (0,0),
-        X는 (10 cm,0), Y는 (0,10 cm)입니다. 20×20 cm 격자의 맨 끝이 아니라
-        O에서 각 축으로 10 cm 떨어진 인쇄 표시를 사용하세요. 화면의 P1~P4는
+        종이는 가로·세로 각각 10 cm입니다. 격자 교차점에 펜 끝을 맞춰 기록합니다.
+        O는 (0,0) cm, X는 (10,0) cm, Y는 (0,10) cm입니다. 화면의 P1~P4는
         과제 점이며 기준점 O/X/Y와 구분합니다.
       </p>
       <p>
@@ -1100,51 +1105,32 @@ export function PaperCoordinateStudyView({
       <div className="pcv-reference-grid">
         {POINTS.map(renderReferenceEntry)}
       </div>
-      <fieldset className="pcv-callout" disabled={state.running}>
-        <legend>교사용 기준선 길이 허용오차</legend>
+      <section className="pcv-callout" aria-label="기준선 길이 참고">
+        <h3>기준선 길이 (참고)</h3>
         <p>
-          O–X와 O–Y의 기준 길이는 각각 100 mm입니다. 현장 테스트 결과에 따라
-          길이 허용오차를 조정한 뒤 적용하세요. 입력만으로는 변경되지 않습니다.
+          각 축은 종이 전체 10 cm를 사용합니다. O–X와 O–Y의 기준 길이는 각각
+          100 mm이며, 실제 길이 차이는 측정 자료로 표시하고 좌표 변환에 반영합니다.
+          2 mm 정밀도 기준으로 기록·실행을 막지 않습니다.
         </p>
-        <label htmlFor={`${id}-baseline-tolerance`}>
-          기준선 길이 허용오차 ± (mm)
-          <input
-            id={`${id}-baseline-tolerance`}
-            type="number"
-            inputMode="decimal"
-            min="0.1"
-            max="100"
-            step="any"
-            value={state.baselineLengthToleranceDraft}
-            onChange={(event) =>
-              actions.onBaselineLengthToleranceDraftChange(event.target.value)
-            }
-          />
-        </label>
-        <button className="pcv-button" type="button" onClick={actions.onApplyBaselineLengthTolerance}>
-          허용오차 저장·적용
-        </button>
-        <p>현재 적용: ±{state.baselineLengthToleranceMm} mm · {state.baselineLengthToleranceAppliedAt ? timeLabel(state.baselineLengthToleranceAppliedAt) : "기본값"}</p>
         <ul>
           {state.baselineLengthMetrics.map((metric) => (
             <li key={metric.baseline}>
               {metric.baseline}: {metric.measuredMm === null
                 ? `${metric.missingPoint} 기록 필요`
-                : `${numberLabel(metric.measuredMm)} mm · 기준 대비 ${metric.signedDifferenceMm! >= 0 ? "+" : ""}${numberLabel(metric.signedDifferenceMm!)} mm · ${metric.status === "pass" ? "길이 허용범위 안" : "길이 허용범위 초과"}`}
+                : `${numberLabel(metric.measuredMm)} mm · 100 mm 대비 ${metric.signedDifferenceMm! >= 0 ? "+" : ""}${numberLabel(metric.signedDifferenceMm!)} mm (절대 ${numberLabel(metric.absoluteErrorMm!)} mm) · Z 차이 ${numberLabel(metric.zDifferenceMm!)} mm`}
             </li>
           ))}
         </ul>
         <p className="pcv-note">
-          허용오차는 이 시도에 저장되며 기준점 XY 길이 검사에만 적용됩니다.
-          Z 높이·종이 축 직각·User/Tool 검사는 그대로입니다. 기준을 바꾸면
-          이전 실행은 이력으로 보존하고 DT 확인과 실행 승인을 다시 받아야 합니다.
+          Z 좌표는 O/X/Y에서 각각 읽은 값으로 목표점 높이를 계산합니다. 축의
+          비직각·길이 차이도 변환에 반영하고, R은 기록만 하며 O의 R을 모든 이동에 사용합니다.
         </p>
         <p className="pcv-note">
           Unlock 중 달라진 O/X/Y의 R 차이는 종이 좌표계 판정에 사용하지 않습니다.
           R은 기록에 남으며 이동 목표의 방향은 O의 R을 유지합니다.
           펜 끝 TCP가 올바르게 교정되어 있는지 확인하세요.
         </p>
-      </fieldset>
+      </section>
       <div className="pcv-callout">
         <strong>기준 자료의 출처</strong>
         <p>
@@ -1207,7 +1193,7 @@ export function PaperCoordinateStudyView({
           <>
             <p className="pcv-lead">
               {merged
-                ? "종이 원점에서 시작하는 가로 110 mm, 세로 150 mm (11×15 cm) 직사각형을 예측합니다."
+                ? "10×10 cm 종이 안에 네 점을 정하고, 기록한 O/X/Y 위치로 로봇 목표를 계산합니다."
                 : rectangle
                   ? "종이 (2, 2) cm에서 시작하는 가로 6 cm, 세로 4 cm 직사각형의 네 꼭짓점을 예측합니다."
                   : "기존 사각형 수업의 좌표 생각을 종이 위의 10×10 cm 격자로 옮겨 봅니다."}
@@ -1281,7 +1267,7 @@ export function PaperCoordinateStudyView({
               className="pcv-button"
               href={
                 merged
-                  ? "/paper-coordinate-grid-20cm.svg"
+                  ? "/paper-coordinate-grid-10cm.svg"
                   : "/paper-coordinate-grid-a4.pdf"
               }
               target="_blank"
@@ -1672,23 +1658,74 @@ export function PaperCoordinateStudyView({
                       {...rowProps(point.name)}
                     >
                       <legend>
-                        <span className="pcv-point-tag">{point.name}</span> 종이
-                        좌표 ({point.xCm}, {point.yCm}) cm
+                        <span className="pcv-point-tag">{point.name}</span>
+                        {autoMappedPaper ? " 종이 좌표 입력" : ` 종이 좌표 (${point.xCm}, ${point.yCm}) cm`}
                       </legend>
-                      <div className="pcv-prediction-grid">
-                        {renderPredictionField(
-                          point.name,
-                          "robotX",
-                          "X · mm",
-                          prediction?.robotX ?? "",
-                        )}
-                        {renderPredictionField(
-                          point.name,
-                          "robotY",
-                          "Y · mm",
-                          prediction?.robotY ?? "",
-                        )}
-                      </div>
+                      {autoMappedPaper ? (() => {
+                        const coordinate = state.paperCoordinates.find(
+                          (item) => item.point === point.name,
+                        );
+                        const xCm = Number(coordinate?.xCm);
+                        const yCm = Number(coordinate?.yCm);
+                        const mapped =
+                          state.frame &&
+                          coordinate?.xCm.trim() &&
+                          coordinate?.yCm.trim() &&
+                          Number.isFinite(xCm) &&
+                          Number.isFinite(yCm) &&
+                          xCm >= 0 && xCm <= 10 &&
+                          yCm >= 0 && yCm <= 10
+                            ? frameTransformPoint(state.frame, { xCm, yCm })
+                            : null;
+                        return (
+                          <>
+                            <div className="pcv-prediction-grid">
+                              {(["xCm", "yCm"] as const).map((field) => (
+                                <label className="pcv-prediction-input" key={field}>
+                                  <span>{field === "xCm" ? "종이 X · cm" : "종이 Y · cm"}</span>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={10}
+                                    step="any"
+                                    inputMode="decimal"
+                                    value={coordinate?.[field] ?? ""}
+                                    disabled={state.running}
+                                    aria-label={`${point.name} 종이 ${field === "xCm" ? "X" : "Y"} 좌표 cm`}
+                                    onChange={(event) =>
+                                      actions.onPaperCoordinateChange(
+                                        point.name,
+                                        field,
+                                        event.target.value,
+                                      )
+                                    }
+                                  />
+                                </label>
+                              ))}
+                            </div>
+                            <p className="pcv-note" role="status">
+                              {mapped
+                                ? `O/X/Y 실제 기록으로 계산한 로봇 목표: X ${mapped.x.toFixed(2)} · Y ${mapped.y.toFixed(2)} · Z ${mapped.z.toFixed(2)} mm · R ${mapped.r.toFixed(1)}° (O 기준)`
+                                : "종이 좌표를 0~10 cm로 입력하면 O/X/Y 기록으로 로봇 목표(mm)를 계산합니다."}
+                            </p>
+                          </>
+                        );
+                      })() : (
+                        <div className="pcv-prediction-grid">
+                          {renderPredictionField(
+                            point.name,
+                            "robotX",
+                            "X · mm",
+                            prediction?.robotX ?? "",
+                          )}
+                          {renderPredictionField(
+                            point.name,
+                            "robotY",
+                            "Y · mm",
+                            prediction?.robotY ?? "",
+                          )}
+                        </div>
+                      )}
                     </fieldset>
                   );
                 })
@@ -2838,11 +2875,18 @@ export function PaperCoordinateStudyView({
         <div className="pcv-guided-flow">
           {renderGuidedProgress(
             1,
-            "예상하고 실행하기",
-            "목표 도형을 보고 좌표 관계와 이유를 적은 뒤, 점별 로봇 좌표를 직접 예측합니다.",
-            "관계와 모든 예측이 한 번에 저장되고 실행 전 계획으로 고정됩니다.",
+            "10×10 종이에서 점을 정하고 목표 계산하기",
+            "O/X/Y를 종이의 세 끝점에 기록한 뒤 P1~P4를 cm로 입력합니다. 로봇 목표는 기록된 세 점으로 계산됩니다.",
+            "네 점이 종이 안에 있고 각 로봇 목표(mm)가 표시됩니다.",
             3,
           )}
+          <ol className="pcv-flow-summary" aria-label="실습 순서">
+            <li>10×10 cm 종이</li>
+            <li>O/X/Y 끝점 기록</li>
+            <li>P1~P4 좌표 입력(cm)</li>
+            <li>경로 실행</li>
+            <li>예상·관측 비교</li>
+          </ol>
           {renderInlineTeacherPreparation()}
           <section className="pcv-flow-section" aria-label="목표 도형 확인">
             <h3>목표 도형과 준비 상태</h3>
@@ -2850,11 +2894,18 @@ export function PaperCoordinateStudyView({
           </section>
           <section
             className="pcv-flow-section"
-            aria-label="좌표 관계와 예측 입력"
+            aria-label="P1부터 P4까지 종이 좌표 입력"
           >
-            <h3>좌표 관계와 가정</h3>
-            {renderStage(2)}
-            <h3>점별 좌표 예측</h3>
+            <h3>{autoMappedPaper ? "P1~P4 종이 좌표와 자동 계산 목표" : "좌표 관계와 점별 예측"}</h3>
+            {autoMappedPaper ? (
+              <p className="pcv-note">
+                종이 좌표는 0~10 cm, 계산된 로봇 목표는 mm입니다. 실제 O/X/Y 위치가
+                종이의 크기·회전·기울기를 반영합니다. R은 O에서 기록한 방향을 모든 점에
+                사용하며 O/X/Y 사이 R 차이는 계산·판정에 쓰지 않습니다.
+              </p>
+            ) : (
+              renderStage(2)
+            )}
             {renderStage(3)}
           </section>
           <div className="pcv-flow-footer">
@@ -2864,7 +2915,7 @@ export function PaperCoordinateStudyView({
               disabled={state.running}
               onClick={() => runFlowAction(actions.onSavePlanAndContinue)}
             >
-              관계와 예측 저장 후 실행으로
+              {autoMappedPaper ? "종이 좌표와 로봇 목표 저장 후 실행으로" : "관계와 예측 저장 후 실행으로"}
             </button>
           </div>
           {flowGuidance && (

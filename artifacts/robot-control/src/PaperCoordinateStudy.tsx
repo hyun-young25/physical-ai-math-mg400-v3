@@ -68,6 +68,7 @@ import {
   diagnosePaperRun,
   frameInversePoint,
   frameTransformPoint,
+  mapPaperCoordinatesToRobotTargets,
   getPaperFrameAngleDegrees,
   makePaperPlanHash,
   studentTransformPoint,
@@ -372,8 +373,7 @@ export function PaperCoordinateStudy({
   const persistedPredictions = active?.predictions ?? [];
   const selectedPlanHash = active?.planHash ?? "";
   const surfaceZ = frame
-    ? frame.samples.reduce((sum, sample) => sum + sample.pose.z, 0) /
-      frame.samples.length
+    ? Math.max(...frame.samples.map((sample) => sample.pose.z))
     : null;
   const originPose =
     frame?.samples.find((sample) => sample.point === "O")?.pose ?? null;
@@ -397,22 +397,36 @@ export function PaperCoordinateStudy({
     !!selectedTransform.explanation.trim();
   const planHash =
     frame &&
-    active?.transform &&
     persistedPredictions.length === targetPoints.length
       ? paperPlanHashFor(
           frame.id,
           currentTargetSet,
-          active.transform,
+          active?.transform,
           persistedPredictions,
           liftHeight,
           baselineLengthToleranceMm,
+          active?.taskVersion,
         )
       : "";
+  const savedCoordinatesMatchDraft =
+    autoMappedPaperLesson &&
+    paperCoordinateDrafts.length === persistedPredictions.length &&
+    paperCoordinateDrafts.every((point, index) =>
+      point.point === persistedPredictions[index]?.name &&
+      point.xCm === String(persistedPredictions[index]?.xCm) &&
+      point.yCm === String(persistedPredictions[index]?.yCm),
+    );
   const samePlan =
     !!planHash &&
     planHash === selectedPlanHash &&
-    JSON.stringify(transformDraft) === JSON.stringify(active?.transform) &&
-    JSON.stringify(draftTargets) === JSON.stringify(persistedPredictions);
+    (autoMappedPaperLesson
+      ? (!active?.transform ||
+        JSON.stringify(transformDraft) === JSON.stringify(active.transform)) &&
+        savedCoordinatesMatchDraft
+      : !!active?.transform &&
+        JSON.stringify(transformDraft) === JSON.stringify(active.transform) &&
+        JSON.stringify(draftTargets) === JSON.stringify(persistedPredictions));
+  const planTransformReady = autoMappedPaperLesson || !!active?.transform;
   const run = active?.run ?? null;
   const dtReadyForPhysical =
     !!active?.dtRunPlanHash && active.dtRunPlanHash === planHash;
@@ -637,13 +651,28 @@ export function PaperCoordinateStudy({
     setPredictionDraft(
       active.drafts?.predictions ??
         active.predictions ??
-        paperTaskTargets(active.level, active.targetSet).map((point) => ({
+        paperTaskTargets(active.level, active.targetSet, active.taskVersion).map((point) => ({
           ...point,
           robotX: "",
           robotY: "",
           robotZ: "",
           robotR: "",
         })),
+    );
+    setPaperCoordinateDrafts(
+      active.drafts?.paperCoordinates ??
+        active.predictions?.map((point) => ({
+          point: point.name,
+          xCm: String(point.xCm),
+          yCm: String(point.yCm),
+        })) ??
+        paperTaskTargets(active.level, active.targetSet, active.taskVersion).map(
+          (point) => ({
+            point: point.name,
+            xCm: String(point.xCm),
+            yCm: String(point.yCm),
+          }),
+        ),
     );
     setInkDraft(
       active.drafts?.inkReadings ??
@@ -654,7 +683,7 @@ export function PaperCoordinateStudy({
           status: reading.status,
           reason: reading.reason,
         })) ??
-        paperTaskTargets(active.level, active.targetSet).map((point) => ({
+        paperTaskTargets(active.level, active.targetSet, active.taskVersion).map((point) => ({
           point: point.name,
           xCm: "",
           yCm: "",
@@ -752,6 +781,7 @@ export function PaperCoordinateStudy({
     const tilted =
       validation?.ok &&
       isMergedPaper(level) &&
+      current.taskVersion !== PAPER_TASK_VERSION &&
       !rotationAllowed &&
       Math.abs(getPaperFrameAngleDegrees(validation.frame)) > 2;
     const validFrame = validation?.ok && !tilted ? validation.frame : undefined;
@@ -815,51 +845,67 @@ export function PaperCoordinateStudy({
         target: "references",
       };
     }
+    if (active.taskVersion !== PAPER_TASK_VERSION) {
+      const message =
+        "이전 20×20 cm 과제 기록은 보존되어 읽기 전용입니다. ‘새 시도’에서 10×10 cm 종이 계획을 시작하세요.";
+      setPageError(message);
+      return { message, target: "run" };
+    }
+    const autoMap = isMergedPaper(active.level);
     const values = transformDraft;
-    if (
-      !values.axisDirection ||
-      !values.explanation.trim() ||
-      ![
-        values.originX,
-        values.originY,
-        values.millimetersPerCentimeter,
-        values.rotationDegrees,
-      ].every((value) => value.trim() && Number.isFinite(Number(value))) ||
-      Number(values.millimetersPerCentimeter) <= 0
-    ) {
+    if (!autoMap && !transformComplete) {
       setPageError("원점·축 방향·단위 배율·회전과 선택 이유를 확인하세요.");
       return {
         message: "원점, 축 방향, 단위 배율, 회전과 선택 이유를 입력하세요.",
         target: "transform",
       };
     }
-    if (!paperConceptValid(active.pathConcept)) {
+    if (!autoMap && !paperConceptValid(active.pathConcept)) {
       setPageError("직선 경로 명령과 닫힌 경로의 ΔX·ΔY 합을 확인하세요.");
       return {
         message: "직선 경로 명령과 닫힌 경로의 ΔX·ΔY 합을 확인하세요.",
         target: "predictions",
       };
     }
-    const valuesForPlan = draftTargets.map((point) => ({
-      ...point,
-      robotZ: "",
-      robotR: "",
-    }));
-    if (
-      valuesForPlan.length !== targetPoints.length ||
-      valuesForPlan.some(
-        (point) =>
-          ![point.robotX, point.robotY].every(
-            (value) => value.trim() && Number.isFinite(Number(value)),
-          ),
-      )
-    ) {
-      setPageError("모든 목표점의 X·Y 예측을 입력하세요.");
-      return {
-        message:
-          "모든 목표점의 X·Y 예측을 입력하세요. 학생 답은 자동으로 채우지 않습니다.",
-        target: "predictions",
-      };
+    let valuesForPlan: PaperPredictionPoint[];
+    if (autoMap) {
+      const mapped = mapPaperCoordinatesToRobotTargets(
+        active.frame,
+        paperCoordinateDrafts,
+      );
+      if (
+        !mapped ||
+        mapped.length !== targetPoints.length ||
+        mapped.some((point, index) => point.name !== targetPoints[index]?.name)
+      ) {
+        const message =
+          "P1~P4 종이 좌표를 각각 0~10 cm로 입력하고 같은 위치가 없는지 확인하세요.";
+        setPageError(message);
+        return { message, target: "predictions" };
+      }
+      valuesForPlan = mapped;
+    } else {
+      valuesForPlan = draftTargets.map((point) => ({
+        ...point,
+        robotZ: "",
+        robotR: "",
+      }));
+      if (
+        valuesForPlan.length !== targetPoints.length ||
+        valuesForPlan.some(
+          (point) =>
+            ![point.robotX, point.robotY].every(
+              (value) => value.trim() && Number.isFinite(Number(value)),
+            ),
+        )
+      ) {
+        setPageError("모든 목표점의 X·Y 예측을 입력하세요.");
+        return {
+          message:
+            "모든 목표점의 X·Y 예측을 입력하세요. 학생 답은 자동으로 채우지 않습니다.",
+          target: "predictions",
+        };
+      }
     }
     if (active.run) {
       setPageError(
@@ -870,13 +916,15 @@ export function PaperCoordinateStudy({
         target: "run",
       };
     }
+    const savedTransform = transformComplete ? values : undefined;
     const hash = paperPlanHashFor(
       active.frame.id,
       active.targetSet,
-      values,
+      savedTransform,
       valuesForPlan,
       liftHeight,
       baselineLengthToleranceFor(active),
+      active.taskVersion,
     );
     const modelComparison = comparePaperPredictionToFrame(
       active.frame,
@@ -901,7 +949,7 @@ export function PaperCoordinateStudy({
           planHash: hash,
           targetSet: active.targetSet,
           modelConstructionPoints: ["O", "X", "Y"],
-          ...classifyPaperVerificationPoints(targetPoints),
+          ...classifyPaperVerificationPoints(valuesForPlan),
           confirmedAt: Date.now(),
         };
       }
@@ -909,7 +957,7 @@ export function PaperCoordinateStudy({
     upsert(
       {
         ...active,
-        transform: values,
+        transform: savedTransform,
         predictions: valuesForPlan,
         planHash: hash,
         predictionModelComparison: modelComparison,
@@ -923,9 +971,12 @@ export function PaperCoordinateStudy({
           ...active.drafts,
           transform: undefined,
           predictions: undefined,
+          paperCoordinates: undefined,
         },
       },
-      "관계와 좌표 예측을 한 번에 저장했습니다.",
+      autoMap
+        ? "O/X/Y 실측 기준으로 P1~P4 좌표와 로봇 목표를 저장했습니다."
+        : "관계와 좌표 예측을 한 번에 저장했습니다.",
     );
     if (!lastSaveSucceededRef.current) {
       const message =
@@ -933,10 +984,21 @@ export function PaperCoordinateStudy({
       setPageError(message);
       return { message, target: "predictions" };
     }
-    setTransformDraft(values);
+    if (savedTransform) setTransformDraft(savedTransform);
     setPredictionDraft(valuesForPlan);
+    setPaperCoordinateDrafts(
+      valuesForPlan.map((point) => ({
+        point: point.name,
+        xCm: String(point.xCm),
+        yCm: String(point.yCm),
+      })),
+    );
     setPageError("");
-    setTransformFeedback("저장됨 · 이 예측이 이번 실행의 기준입니다.");
+    setTransformFeedback(
+      autoMap
+        ? "저장됨 · O/X/Y 제어기 위치로 종이 좌표를 로봇 목표로 변환했습니다."
+        : "저장됨 · 이 예측이 이번 실행의 기준입니다.",
+    );
     setPredictionFeedback("저장됨 · 실행 전 예측을 고정했습니다.");
     if (advance) setStage(4);
     return null;
@@ -1957,6 +2019,19 @@ export function PaperCoordinateStudy({
           drafts: { ...active.drafts, predictions: current },
         });
     },
+    onPaperCoordinateChange: (point, field, value) => {
+      if (running) return;
+      setPredictionFeedback("");
+      const current = paperCoordinateDrafts.map((item) =>
+        item.point === point ? { ...item, [field]: value } : item,
+      );
+      setPaperCoordinateDrafts(current);
+      if (active && !active.run)
+        upsert({
+          ...active,
+          drafts: { ...active.drafts, paperCoordinates: current },
+        });
+    },
     onSavePrediction: () => {
       if (running) return;
       if (!active?.frame || !active.transform || !predictionsComplete) {
@@ -1983,6 +2058,7 @@ export function PaperCoordinateStudy({
         values,
         liftHeight,
         baselineLengthToleranceFor(active),
+        active.taskVersion,
       );
       const modelComparison = comparePaperPredictionToFrame(
         active.frame,
@@ -2167,7 +2243,8 @@ export function PaperCoordinateStudy({
         ...active,
         liftHeight: lift,
         planHash:
-          active.transform && active.predictions
+          (active.transform || active.taskVersion === PAPER_TASK_VERSION) &&
+          active.predictions
             ? paperPlanHashFor(
                 active.frame!.id,
                 active.targetSet,
@@ -2175,6 +2252,7 @@ export function PaperCoordinateStudy({
                 active.predictions,
                 lift.z,
                 baselineLengthToleranceFor(active),
+                active.taskVersion,
               )
             : undefined,
         dtRunPlanHash: undefined,
@@ -2231,7 +2309,8 @@ export function PaperCoordinateStudy({
             coordinateSystem: `교사 입력 · User ${currentUser} / Tool ${currentTool}`,
           },
           planHash:
-            active.transform && active.predictions
+            (active.transform || active.taskVersion === PAPER_TASK_VERSION) &&
+            active.predictions
               ? paperPlanHashFor(
                   active.frame!.id,
                   active.targetSet,
@@ -2239,6 +2318,7 @@ export function PaperCoordinateStudy({
                   active.predictions,
                   number,
                   baselineLengthToleranceFor(active),
+                  active.taskVersion,
                 )
               : undefined,
           dtRunPlanHash: undefined,
@@ -2841,12 +2921,12 @@ export function PaperCoordinateStudy({
     }
     if (
       !active?.frame ||
-      !active.transform ||
+      !planTransformReady ||
       !samePlan ||
       persistedPredictions.length !== targetPoints.length
     ) {
       setPageError(
-        "현재 기준점·변환식·예측이 같은 저장본인지 확인하세요. 바뀐 계획에는 새 예측이 필요합니다.",
+        "현재 기준점과 종이 좌표 계획이 같은 저장본인지 확인하세요. 바뀐 계획은 다시 저장해야 합니다.",
       );
       return;
     }
@@ -2864,15 +2944,18 @@ export function PaperCoordinateStudy({
       return;
     }
     const O = active.frame.samples.find((sample) => sample.point === "O")!;
-    const points = persistedPredictions.map((prediction) => ({
-      point: prediction.name,
-      pose: {
-        x: Number(prediction.robotX),
-        y: Number(prediction.robotY),
-        z: surfaceZ,
-        r: O.pose.r,
-      } satisfies LessonPose,
-    }));
+    const points = persistedPredictions.map((prediction) => {
+      const mapped = frameTransformPoint(active.frame!, prediction);
+      return {
+        point: prediction.name,
+        pose: {
+          x: Number(prediction.robotX),
+          y: Number(prediction.robotY),
+          z: Number(prediction.robotZ || mapped.z),
+          r: O.pose.r,
+        } satisfies LessonPose,
+      };
+    });
     if (
       points.some((item) => !Object.values(item.pose).every(Number.isFinite))
     ) {
@@ -3148,8 +3231,7 @@ export function PaperCoordinateStudy({
         liveMeasurement.pose.x - O.pose.x,
         liveMeasurement.pose.y - O.pose.y,
       ) > setup.positionTolerance ||
-      Math.abs(liveMeasurement.pose.z - surfaceZ) > setup.positionTolerance ||
-      Math.abs(liveMeasurement.pose.r - O.pose.r) > setup.rotationTolerance
+      Math.abs(liveMeasurement.pose.z - O.pose.z) > setup.positionTolerance
     ) {
       setPageError(
         "사람이 제조사 프로그램에서 펜을 O에 맞추고 종이 표면 높이로 둔 뒤, 새 현재 위치를 확인하세요. 이 앱은 그 위치로 이동시키지 않습니다.",
@@ -3304,10 +3386,8 @@ export function PaperCoordinateStudy({
                 saved.planHash !== planHash ||
                 saved.dtRunPlanHash !== planHash ||
                 saved.frame?.id !== active.frame!.id ||
-                poseDistance(latest.measurement.pose, {
-                  ...O.pose,
-                  z: surfaceZ,
-                }) > setup.positionTolerance ||
+                poseDistance(latest.measurement.pose, O.pose) >
+                  setup.positionTolerance ||
                 Math.abs(latest.measurement.pose.r - O.pose.r) >
                   setup.rotationTolerance
               )
@@ -3472,7 +3552,7 @@ export function PaperCoordinateStudy({
       return "실제 TCP 보고 좌표 기준점 O/X/Y가 필요합니다.";
     if (
       !frame ||
-      !active?.transform ||
+      !planTransformReady ||
       !samePlan ||
       persistedPredictions.length !== targetPoints.length
     )
@@ -3503,7 +3583,7 @@ export function PaperCoordinateStudy({
     if (
       !currentPoseRead ||
       !originPose ||
-      poseDistance(currentPoseRead, { ...originPose, z: surfaceZ! }) >
+      poseDistance(currentPoseRead, originPose) >
         practice.snap.setup.positionTolerance
     )
       return "사람이 제조사 프로그램에서 O에 펜 끝을 맞춘 뒤, 현재 위치를 다시 확인하세요.";
@@ -3519,7 +3599,10 @@ export function PaperCoordinateStudy({
     const commands = persistedPredictions.map((prediction) => ({
       x: Number(prediction.robotX),
       y: Number(prediction.robotY),
-      z: surfaceZ!,
+      z: Number(
+        prediction.robotZ ||
+          frameTransformPoint(frame!, prediction).z,
+      ),
       r: originPose!.r,
     }));
     const unsafe = commands.find(
@@ -3539,7 +3622,9 @@ export function PaperCoordinateStudy({
     pose: {
       x: Number(p.robotX),
       y: Number(p.robotY),
-      z: surfaceZ ?? 0,
+      z: Number(
+        p.robotZ || (frame ? frameTransformPoint(frame, p).z : surfaceZ ?? 0),
+      ),
       r: originPose?.r ?? 0,
     },
   }));
@@ -3571,7 +3656,7 @@ export function PaperCoordinateStudy({
     });
   if (
     !frame ||
-    !active?.transform ||
+    !planTransformReady ||
     !samePlan ||
     persistedPredictions.length !== targetPoints.length
   )
@@ -4015,6 +4100,7 @@ export function PaperCoordinateStudy({
     transformFeedback,
     targetPoints,
     predictions: draftTargets,
+    paperCoordinates: paperCoordinateDrafts,
     predictionsReady: predictionsComplete,
     predictionFeedback:
       predictionsComplete &&
@@ -4033,7 +4119,7 @@ export function PaperCoordinateStudy({
       (!run || run.source === "dt") &&
       criteriaMatches &&
       !!frame &&
-      !!active?.transform &&
+      planTransformReady &&
       samePlan &&
       persistedPredictions.length === targetPoints.length &&
       liftHeight !== null &&
@@ -4044,7 +4130,10 @@ export function PaperCoordinateStudy({
         canReach({
           x: Number(item.robotX),
           y: Number(item.robotY),
-          z: surfaceZ ?? 0,
+          z: Number(
+            item.robotZ ||
+              (frame ? frameTransformPoint(frame, item).z : surfaceZ ?? 0),
+          ),
           r: frame.samples.find((sample) => sample.point === "O")?.pose.r ?? 0,
         }),
       ),
@@ -4115,6 +4204,7 @@ export function PaperCoordinateStudy({
         answers: JSON.stringify({
           transform: transformDraft,
           predictions: draftTargets,
+          paperCoordinates: paperCoordinateDrafts,
         }),
         reason: privateText(
           hypothesisDraft || transformDraft.explanation,
@@ -4130,8 +4220,20 @@ export function PaperCoordinateStudy({
     context = {
       ...context,
       answers: JSON.stringify({
-        saved: { transform: active.transform, predictions: active.predictions },
-        currentDraft: { transform: transformDraft, predictions: draftTargets },
+        saved: {
+          transform: active.transform,
+          predictions: active.predictions,
+          paperCoordinates: active.predictions?.map((point) => ({
+            point: point.name,
+            xCm: point.xCm,
+            yCm: point.yCm,
+          })),
+        },
+        currentDraft: {
+          transform: transformDraft,
+          predictions: draftTargets,
+          paperCoordinates: paperCoordinateDrafts,
+        },
       }),
       reason: privateText(hypothesisDraft || transformDraft.explanation).slice(
         0,
