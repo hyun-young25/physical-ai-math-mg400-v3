@@ -3057,13 +3057,18 @@ export function PaperCoordinateStudy({
       setPageError("심화 1은 DT 전용입니다.");
       return;
     }
-    if (isMergedPaper(level) && !paperConceptValid(active?.pathConcept)) {
+    if (
+      isMergedPaper(level) &&
+      !autoMappedPaperLesson &&
+      !paperConceptValid(active?.pathConcept)
+    ) {
       setPageError("직선 이동 명령과 닫힌 경로의 ΔX·ΔY 합을 먼저 확인하세요.");
       return;
     }
     if (
       kind === "connected" &&
       isMergedPaper(level) &&
+      !autoMappedPaperLesson &&
       attemptSupport === "guided" &&
       !supervisedMismatch &&
       active?.frame &&
@@ -3102,7 +3107,9 @@ export function PaperCoordinateStudy({
       liftHeight <= surfaceZ
     ) {
       setPageError(
-        "기록한 종이 표면보다 높은 펜 들기 Z를 정하세요. 실장비 높이는 제조사 프로그램에서 사람이 확인한 위치만 기록하세요.",
+        autoMappedPaperLesson
+          ? "O/X/Y의 종이 표면과 펜 들기 간격(mm)을 입력하세요. 절대 Z값으로 대체하지 않습니다."
+          : "기록한 종이 표면보다 높은 펜 들기 Z를 정하세요.",
       );
       return;
     }
@@ -3136,9 +3143,13 @@ export function PaperCoordinateStudy({
       setPageError("실행 전 위치를 확인할 측정값이 없습니다.");
       return;
     }
-    const safeZ = Math.max(startPose.z, liftHeight);
+    let safeZ = Math.max(startPose.z, liftHeight);
     const raisedOnly = new Set<string>();
-    if (kind === "connected" && supervisedMismatch) {
+    if (
+      kind === "connected" &&
+      !autoMappedPaperLesson &&
+      supervisedMismatch
+    ) {
       const blocked = supervisedPaperBlockers(
         allowMismatchedHardware,
         true,
@@ -3156,32 +3167,51 @@ export function PaperCoordinateStudy({
           point.pose = { ...point.pose, z: safeZ };
         }
     }
-    const operations: PracticeOperation[] = [];
-    const commands: LessonPose[] = [
-      { x: startPose.x, y: startPose.y, z: safeZ, r: O.pose.r },
-    ];
-    operations.push({ kind: "move", motion: "MoveL", target: commands[0] });
-    const captureIndices = new Map<number, string>();
-    for (const point of points) {
-      const elevated = {
-        x: point.pose.x,
-        y: point.pose.y,
-        z: safeZ,
-        r: O.pose.r,
-      };
-      const touch = { ...point.pose };
-      const up = { ...elevated };
-      operations.push({ kind: "move", motion: "MoveL", target: elevated });
-      commands.push(elevated);
-      operations.push({ kind: "move", motion: "MoveL", target: touch });
-      captureIndices.set(operations.length - 1, point.point);
-      commands.push(touch);
-      operations.push({ kind: "move", motion: "MoveL", target: up });
-      commands.push(up);
+    let operations: PracticeOperation[];
+    let commands: LessonPose[];
+    let captureIndices: Map<number, string>;
+    if (autoMappedPaperLesson) {
+      const planned = buildPaperPathOperations(
+        startPose,
+        O.pose,
+        points,
+        surfaceZ!,
+        liftGapState.value!,
+      );
+      safeZ = planned.safeZ;
+      operations = planned.operations;
+      commands = operations.map((operation) => operation.target);
+      captureIndices = new Map(
+        Object.entries(planned.capturePointByOperationIndex).map(
+          ([index, point]) => [Number(index), point],
+        ),
+      );
+    } else {
+      operations = [];
+      commands = [{ x: startPose.x, y: startPose.y, z: safeZ, r: O.pose.r }];
+      operations.push({ kind: "move", motion: "MoveL", target: commands[0] });
+      captureIndices = new Map<number, string>();
+      for (const point of points) {
+        const elevated = {
+          x: point.pose.x,
+          y: point.pose.y,
+          z: safeZ,
+          r: O.pose.r,
+        };
+        const touch = { ...point.pose };
+        const up = { ...elevated };
+        operations.push({ kind: "move", motion: "MoveL", target: elevated });
+        commands.push(elevated);
+        operations.push({ kind: "move", motion: "MoveL", target: touch });
+        captureIndices.set(operations.length - 1, point.point);
+        commands.push(touch);
+        operations.push({ kind: "move", motion: "MoveL", target: up });
+        commands.push(up);
+      }
+      const returnAtLift = { x: O.pose.x, y: O.pose.y, z: safeZ, r: O.pose.r };
+      operations.push({ kind: "move", motion: "MoveL", target: returnAtLift });
+      commands.push(returnAtLift);
     }
-    const returnAtLift = { x: O.pose.x, y: O.pose.y, z: safeZ, r: O.pose.r };
-    operations.push({ kind: "move", motion: "MoveL", target: returnAtLift });
-    commands.push(returnAtLift);
     if (operations.length > 30) {
       setPageError("실행 계획의 명령 수가 허용 범위를 넘었습니다.");
       return;
@@ -3207,14 +3237,15 @@ export function PaperCoordinateStudy({
       }
       const criteria = active.verificationCriteria;
       if (
-        !criteria ||
-        criteria.recordId !== active.id ||
-        criteria.frameId !== active.frame.id ||
-        criteria.planHash !== planHash ||
-        criteria.targetSet !== active.targetSet ||
-        criteria.confirmedAt > now ||
-        !criteria.rationale.trim() ||
-        !paperVerificationPointsMatch(criteria, targetPoints)
+        !autoMappedPaperLesson &&
+        (!criteria ||
+          criteria.recordId !== active.id ||
+          criteria.frameId !== active.frame.id ||
+          criteria.planHash !== planHash ||
+          criteria.targetSet !== active.targetSet ||
+          criteria.confirmedAt > now ||
+          !criteria.rationale.trim() ||
+          !paperVerificationPointsMatch(criteria, targetPoints))
       ) {
         setPageError(
           "이 시도의 독립 검증점과 허용오차를 실행 전에 확인·저장해야 합니다.",
@@ -4159,6 +4190,7 @@ export function PaperCoordinateStudy({
     .map((blocker) => blocker.message);
 
   const state: PaperCoordinateStudyViewState = {
+    simplePaperLesson: autoMappedPaperLesson,
     dtBlockers: isMergedPaper(level) ? dtBlockers : undefined,
     physicalBlockers: isMergedPaper(level) ? physicalBlockers : undefined,
     allowMismatchedHardware,
@@ -4286,9 +4318,11 @@ export function PaperCoordinateStudy({
         : predictionFeedback,
     run,
     runAvailable:
-      (!isMergedPaper(level) || paperConceptValid(active?.pathConcept)) &&
+      (autoMappedPaperLesson ||
+        !isMergedPaper(level) ||
+        paperConceptValid(active?.pathConcept)) &&
       (!run || run.source === "dt") &&
-      criteriaMatches &&
+      (autoMappedPaperLesson || criteriaMatches) &&
       !!frame &&
       planTransformReady &&
       samePlan &&
@@ -4313,6 +4347,9 @@ export function PaperCoordinateStudy({
     liftHeightInput: liftDraft,
     liftHeightInputSaved: liftDraftState.saved,
     liftHeight,
+    liftGapInput: liftGapDraft,
+    liftGapMm: liftGapState.value,
+    liftGapSaved: liftGapState.saved,
     liftHeightSource: liftDraftState.source,
     liftHeightSequence: liftDraftState.sequence,
     paperSurfaceZ: surfaceZ,

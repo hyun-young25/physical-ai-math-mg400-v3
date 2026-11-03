@@ -281,8 +281,11 @@ export function PaperCoordinateStudyView({
     ? (state.displayPose ?? state.currentPose)
     : state.currentPose;
   const conciseFlow = merged && rectangle;
+  const simplePaperLesson = conciseFlow && state.simplePaperLesson === true;
   const autoMappedPaper =
-    merged && state.activeAttempt?.taskVersion === "v5-paper-10cm";
+    merged &&
+    (state.simplePaperLesson ??
+      (state.activeAttempt?.taskVersion === "v5-paper-10cm"));
   const screenIndex = paperStudentScreenForStage(state.stage);
   const criteriaSavedForPlan = paperVerificationCriteriaSavedForAttempt(
     state.verificationCriteria,
@@ -335,7 +338,7 @@ export function PaperCoordinateStudyView({
     element?.focus({ preventScroll: true });
   };
   const openTeacherPreparationTarget = (target: string) => {
-    if (!conciseFlow) return false;
+    if (!conciseFlow || simplePaperLesson) return false;
     const panel = paperTeacherPreparationPanelForTarget(target);
     if (!panel) return false;
     setInlineTeacherPreparation({ panel, target });
@@ -393,6 +396,36 @@ export function PaperCoordinateStudyView({
         );
         panel?.scrollIntoView({ block: "center", behavior: "smooth" });
         panel?.focus({ preventScroll: true });
+      });
+      return;
+    }
+    if (simplePaperLesson && target === "height") {
+      requestAnimationFrame(() => {
+        const element = root.current?.querySelector<HTMLElement>(
+          '[data-testid="paper-lift-gap-input"]',
+        );
+        element?.scrollIntoView({ block: "center", behavior: "smooth" });
+        element?.focus({ preventScroll: true });
+      });
+      return;
+    }
+    if (simplePaperLesson && target === "references") {
+      requestAnimationFrame(() => {
+        const element = root.current?.querySelector<HTMLElement>(
+          '[data-testid="paper-reference-section"]',
+        );
+        element?.scrollIntoView({ block: "center", behavior: "smooth" });
+        element?.focus({ preventScroll: true });
+      });
+      return;
+    }
+    if (simplePaperLesson && target === "prediction") {
+      requestAnimationFrame(() => {
+        const element = root.current?.querySelector<HTMLElement>(
+          ".pcv-simple-flow .pcv-predictions input",
+        );
+        element?.scrollIntoView({ block: "center", behavior: "smooth" });
+        element?.focus({ preventScroll: true });
       });
       return;
     }
@@ -484,7 +517,9 @@ export function PaperCoordinateStudyView({
     Math.max(0, state.targetPoints.length - 1),
   );
   const visiblePredictionPoints = conciseFlow
-    ? state.targetPoints.slice(predictionIndex, predictionIndex + 1)
+    ? simplePaperLesson
+      ? state.targetPoints
+      : state.targetPoints.slice(predictionIndex, predictionIndex + 1)
     : state.targetPoints;
   const resolveBlocker = (
     target: import("./paperExecutionGuards").PaperRunBlocker["target"],
@@ -561,6 +596,21 @@ export function PaperCoordinateStudyView({
                     {numberLabel(observation.pose.y)} mm · Z{" "}
                     {numberLabel(observation.pose.z)} mm · R{" "}
                     {numberLabel(observation.pose.r)}°
+                    <small className="pcv-run-point-difference">
+                      명령 대비 보고값 · ΔX{" "}
+                      {numberLabel(
+                        observation.pose.x - observation.command.x,
+                      )}{" "}
+                      · ΔY{" "}
+                      {numberLabel(
+                        observation.pose.y - observation.command.y,
+                      )}{" "}
+                      · ΔZ{" "}
+                      {numberLabel(
+                        observation.pose.z - observation.command.z,
+                      )}{" "}
+                      mm
+                    </small>
                   </li>
                 ))}
               </ul>
@@ -596,8 +646,12 @@ export function PaperCoordinateStudyView({
               ·{" "}
               {state.activeAttempt?.planHash === state.planHash &&
               !!state.planHash
-                ? "현재 계획과 저장본 일치"
-                : "저장된 예측과 기준을 확인해야 실행 가능"}
+                ? simplePaperLesson
+                  ? "현재 종이 좌표와 목표 저장됨"
+                  : "현재 계획과 저장본 일치"
+                : simplePaperLesson
+                  ? "좌표와 목표를 먼저 저장하세요"
+                  : "저장된 예측과 기준을 확인해야 실행 가능"}
             </p>
             {retryExecution && (
               <p className="pcv-note">
@@ -607,14 +661,16 @@ export function PaperCoordinateStudyView({
               </p>
             )}
           </div>
-          <button
-            type="button"
-            className="pcv-button pcv-button--quiet"
-            disabled={state.running}
-            onClick={() => focusRunRequirement("criteria")}
-          >
-            실행 준비·기준 열기
-          </button>
+          {!simplePaperLesson && (
+            <button
+              type="button"
+              className="pcv-button pcv-button--quiet"
+              disabled={state.running}
+              onClick={() => focusRunRequirement("criteria")}
+            >
+              실행 준비·기준 열기
+            </button>
+          )}
         </div>
         <div className="pcv-run-panel" aria-live="polite">
           <span className="pcv-eyebrow">현재 계획의 실행 상태</span>
@@ -682,6 +738,21 @@ export function PaperCoordinateStudyView({
             )}
           </div>
         </div>
+        {state.running && (
+          <div className="pcv-run-stop">
+            <button
+              type="button"
+              className="pcv-button pcv-button--danger"
+              data-testid="paper-run-stop"
+              onClick={actions.onStopRun}
+            >
+              경로 정지
+            </button>
+            <small>
+              소프트웨어 정지 요청이며 물리 비상정지를 대신하지 않습니다.
+            </small>
+          </div>
+        )}
         <div
           className="pcv-run-evidence-pair"
           aria-label="같은 계획의 이전 실행과 현재 실행 비교"
@@ -836,33 +907,44 @@ export function PaperCoordinateStudyView({
         <legend>
           <span className="pcv-point-tag">{point}</span> 기준점
         </legend>
-        <div className="pcv-reference-values">
-          {POSE_FIELDS.map((field) => (
-            <label key={field.key} htmlFor={`${id}-${point}-${field.key}`}>
-              <span>
-                {field.label} <small>{field.unit}</small>
-              </span>
-              <input
-                id={`${id}-${point}-${field.key}`}
-                inputMode="decimal"
-                type="number"
-                step="any"
-                aria-label={`${point} 기준점 ${field.label} 좌표 (${field.unit})`}
-                value={state.manualInputs[point][field.key]}
-                onChange={(event) =>
-                  actions.onManualReferenceChange(
-                    point,
-                    field.key,
-                    event.target.value,
-                  )
-                }
-              />
-            </label>
-          ))}
-        </div>
+        {simplePaperLesson ? (
+          <dl className="pcv-reference-readout" aria-label={`${point} 저장 좌표`}>
+            {POSE_FIELDS.map((field) => (
+              <div key={field.key}>
+                <dt>{field.label} · {field.unit}</dt>
+                <dd>{sample ? numberLabel(sample.pose[field.key]) : "미기록"}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <div className="pcv-reference-values">
+            {POSE_FIELDS.map((field) => (
+              <label key={field.key} htmlFor={`${id}-${point}-${field.key}`}>
+                <span>
+                  {field.label} <small>{field.unit}</small>
+                </span>
+                <input
+                  id={`${id}-${point}-${field.key}`}
+                  inputMode="decimal"
+                  type="number"
+                  step="any"
+                  aria-label={`${point} 기준점 ${field.label} 좌표 (${field.unit})`}
+                  value={state.manualInputs[point][field.key]}
+                  onChange={(event) =>
+                    actions.onManualReferenceChange(
+                      point,
+                      field.key,
+                      event.target.value,
+                    )
+                  }
+                />
+              </label>
+            ))}
+          </div>
+        )}
         <p className="pcv-inline-note">
           {sample
-            ? `${sourceLabel(sample.source)} · 기록 ${timeLabel(sample.capturedAt)}`
+            ? `${sourceLabel(sample.source)} · 기록 ${timeLabel(sample.capturedAt)} · seq ${sample.seq ?? "—"} · User ${sample.user} / Tool ${sample.tool}`
             : "기록된 기준점이 없습니다."}
         </p>
         <div className="pcv-button-row">
@@ -875,35 +957,62 @@ export function PaperCoordinateStudyView({
           >
             현재 위치를 {point}로 기록
           </button>
-          <button
-            type="button"
-            className="pcv-button pcv-button--quiet"
-            onClick={() => actions.onSaveManualReference(point)}
-            disabled={state.running}
-          >
-            입력값 저장
-          </button>
+          {!simplePaperLesson && (
+            <button
+              type="button"
+              className="pcv-button pcv-button--quiet"
+              onClick={() => actions.onSaveManualReference(point)}
+              disabled={state.running}
+            >
+              입력값 저장
+            </button>
+          )}
         </div>
       </fieldset>
     );
   };
 
   const renderReferencePreparation = () => (
-    <section className="pcv-alignment">
-      <h3>종이 정렬과 기준점 기록</h3>
+    <section
+      className="pcv-alignment"
+      data-testid="paper-reference-section"
+      tabIndex={-1}
+    >
+      <h3>{simplePaperLesson ? "O/X/Y 종이 기준점" : "종이 정렬과 기준점 기록"}</h3>
       <p className="pcv-callout">
         종이는 가로·세로 각각 10 cm입니다. 격자 교차점에 펜 끝을 맞춰 기록합니다.
         O는 (0,0) cm, X는 (10,0) cm, Y는 (0,10) cm입니다. 화면의 P1~P4는
         과제 점이며 기준점 O/X/Y와 구분합니다.
       </p>
-      <p>
-        교사는 종이를 고정하고 안전 상태를 확인한 뒤, 웹 TCP 미세 이동이나 현재
-        장비에서 허용되는 공식 손가이딩(Unlock) 절차로 펜 끝을 O, X, Y에
-        맞춥니다. 위치를 맞춘 뒤에는 장비를 다시 고정하고 손을 뗀 다음, 같은
-        연결에서 새 TCP 보고를 받아 해당 위치를 기록하세요.
+      <p className="pcv-note">
+        펜 끝을 각 교차점에 맞추고 화면에서 <strong>현재 위치를 O/X/Y로 기록</strong>하세요.
+        자동계산은 저장된 좌표를 사용합니다. DT는 가상 경로이며 실장비 이동은
+        별도 실행 버튼에서만 시작됩니다.
       </p>
+      <p className="pcv-reference-progress" role="status">
+        {state.frame
+          ? `기준점 ${state.samples.length}/3 · ${sourceLabel(state.frame.source)} 자료`
+          : "기준점 0/3 · 같은 연결에서 새 위치 보고를 받은 뒤 각 점을 기록하세요."}
+        {!state.currentPose && " 현재 위치 보고가 없어 기준점 기록은 아직 사용할 수 없습니다."}
+      </p>
+      {!state.currentPose && (
+        <button
+          type="button"
+          className="pcv-button pcv-button--quiet"
+          onClick={actions.onOpenConnection}
+        >
+          연결·현재 위치 확인
+        </button>
+      )}
       {state.level === "advanced-paper-hardware" && (
-        <section className="pcv-tcp-jog" aria-label="교사용 TCP 미세 이동">
+        <details
+          className="pcv-details pcv-position-adjustment"
+          open={!simplePaperLesson}
+        >
+          <summary>
+            {simplePaperLesson ? "위치 맞춤 도구 (필요할 때)" : "TCP 미세 이동"}
+          </summary>
+          <section className="pcv-tcp-jog" aria-label="TCP 미세 이동">
           <div className="pcv-tcp-jog__heading">
             <div>
               <span className="pcv-eyebrow">교사 준비 · 명시적 조작</span>
@@ -1025,7 +1134,8 @@ export function PaperCoordinateStudyView({
             </button>
             <small>앱 정지는 물리 비상정지가 아닙니다.</small>
           </div>
-        </section>
+          </section>
+        </details>
       )}
       {state.level === "advanced-paper-hardware" && (
         <details className="pcv-details pcv-hand-guiding-guide">
@@ -1561,10 +1671,11 @@ export function PaperCoordinateStudyView({
               </aside>
             )}
             <p className="pcv-lead">
-              2단계에서 세운 관계를 참고해, 각 종이 목표점의 로봇 좌표를 직접
-              예측하고 실행 전에 저장합니다.
+              {simplePaperLesson
+                ? "P1~P4의 종이 좌표(cm)를 입력하면 저장된 O/X/Y로 로봇 목표(mm)를 계산합니다."
+                : "2단계에서 세운 관계를 참고해, 각 종이 목표점의 로봇 좌표를 직접 예측하고 실행 전에 저장합니다."}
             </p>
-            {merged && (
+            {merged && !simplePaperLesson && (
               <fieldset className="pcv-concept-block">
                 <legend>직선 이동과 닫힘 관계</legend>
                 <label>
@@ -1611,12 +1722,13 @@ export function PaperCoordinateStudyView({
               </fieldset>
             )}
             <div className="pcv-predictions">
-              <h3>내 로봇 좌표 예측</h3>
+              <h3>{autoMappedPaper ? "종이 좌표와 자동 계산 목표" : "내 로봇 좌표 예측"}</h3>
               <p className="pcv-note">
-                아래는 직접 적는 예측 입력입니다. 목표 로봇 좌표는 자동으로
-                공개되지 않습니다.
+                {autoMappedPaper
+                  ? "종이 입력은 cm, 계산된 로봇 목표는 mm입니다. 네 점 모두 한 화면에서 확인할 수 있습니다."
+                  : "아래는 직접 적는 예측 입력입니다. 목표 로봇 좌표는 자동으로 공개되지 않습니다."}
               </p>
-              {conciseFlow && state.targetPoints.length > 1 && (
+              {conciseFlow && !simplePaperLesson && state.targetPoints.length > 1 && (
                 <nav
                   className="pcv-point-stepper"
                   aria-label="목표점 한 점씩 예측"
@@ -1754,8 +1866,50 @@ export function PaperCoordinateStudyView({
         return (
           <>
             <p className="pcv-lead">
-              예측을 저장한 뒤 선택한 환경의 결과를 살펴봅니다.
+              {simplePaperLesson
+                ? "펜 들기 간격은 종이 표면부터 위로 띄울 거리입니다. 종이 높이와 간격으로 절대 Z를 계산하고, 현재 시작 위치가 더 높으면 그 높이를 유지합니다."
+                : "예측을 저장한 뒤 선택한 환경의 결과를 살펴봅니다."}
             </p>
+            {simplePaperLesson && (
+              <details className="pcv-details pcv-lift-gap">
+                <summary>펜 들기 간격 (mm)</summary>
+                <label className="pcv-field">
+                  <span>종이 표면에서 펜을 띄울 간격 · mm</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    data-testid="paper-lift-gap-input"
+                    aria-label="펜 들기 간격 mm"
+                    value={state.liftGapInput ?? ""}
+                    disabled={state.running || state.run?.status === "running"}
+                    onChange={(event) =>
+                      actions.onLiftGapChange?.(event.target.value)
+                    }
+                  />
+                </label>
+                <p className="pcv-inline-note">
+                  {state.paperSurfaceZ === null
+                    ? "종이 표면 높이는 아직 O/X/Y에서 계산되지 않았습니다."
+                    : state.liftGapSaved && state.liftGapMm !== null
+                      ? `저장됨 · 표면 Z ${numberLabel(state.paperSurfaceZ)} mm + 간격 ${state.liftGapMm} mm = 이동 기준 Z ${numberLabel(state.paperSurfaceZ + state.liftGapMm)} mm`
+                      : "완성된 양수 간격이 저장되기 전에는 실행하지 않습니다. 기존 절대 Z값은 간격으로 바꾸어 쓰지 않습니다."}
+                </p>
+                {state.liftGapSaved &&
+                  state.currentPose &&
+                  state.liftHeight !== null &&
+                  state.currentPose.z > state.liftHeight && (
+                    <p className="pcv-inline-note">
+                      현재 시작 Z {numberLabel(state.currentPose.z)} mm가 더 높아 그대로 유지합니다.
+                    </p>
+                  )}
+                {state.liftRecordFeedback && (
+                  <p className="pcv-inline-note" role="status" aria-live="polite">
+                    {state.liftRecordFeedback}
+                  </p>
+                )}
+              </details>
+            )}
             {!conciseFlow && (
               <>
                 <div className="pcv-run-panel" tabIndex={-1}>
@@ -2898,6 +3052,80 @@ export function PaperCoordinateStudyView({
   );
 
   const renderConciseFlow = () => {
+    if (simplePaperLesson) {
+      return (
+        <div className="pcv-simple-flow" data-testid="paper-simple-flow">
+          <section
+            id="paper-simple-references"
+            className="pcv-flow-section pcv-simple-flow__section"
+            aria-label="종이의 O X Y 기준점 기록"
+          >
+            <h3>① 종이의 O/X/Y 기준점 기록</h3>
+            <p className="pcv-simple-flow__hint">
+              10×10 cm 종이의 O=(0,0), X=(10,0), Y=(0,10)을 맞춰 기록합니다.
+              저장된 세 점이 종이 좌표를 로봇 목표로 바꿉니다.
+            </p>
+            {renderReferencePreparation()}
+          </section>
+          <section
+            id="paper-simple-coordinates"
+            className="pcv-flow-section pcv-simple-flow__section"
+            aria-label="P1부터 P4 입력과 자동 계산"
+          >
+            <h3>② P1~P4 좌표 입력과 목표 자동 계산</h3>
+            <p className="pcv-simple-flow__hint">
+              종이 좌표는 cm, 계산된 로봇 목표는 mm로 표시합니다. 예측은 저장 후
+              사용할 수 있고 실행하지 않습니다.
+            </p>
+            {renderStage(3)}
+            <div className="pcv-flow-footer">
+              <button
+                type="button"
+                className="pcv-button pcv-button--primary"
+                disabled={state.running || !state.predictionsReady}
+                onClick={() =>
+                  runFlowAction(actions.onSavePlanAndContinue)
+                }
+              >
+                좌표와 목표 저장
+              </button>
+              {state.saveState !== "ready" && (
+                <p className="pcv-save-status" role="status">
+                  {state.saveState === "saving"
+                    ? "저장 중…"
+                    : state.saveState === "saved"
+                      ? "저장됨"
+                      : `저장 실패 · ${state.saveMessage}`}
+                </p>
+              )}
+            </div>
+          </section>
+          <section
+            id="paper-simple-execution"
+            className="pcv-flow-section pcv-simple-flow__section"
+            aria-label="경로 실행 정지와 결과 비교"
+          >
+            <h3>③ 경로 실행·정지와 예상/실제 비교</h3>
+            <p className="pcv-simple-flow__hint">
+              DT는 화면 안의 가상 실행입니다. 실장비는 연결·최신 위치·좌표계·작업
+              범위가 확인된 뒤 별도 실행 버튼을 눌러야 움직입니다.
+            </p>
+            {renderExecutionControls(state.targetSet === "revalidation")}
+            {renderStage(4)}
+            {renderStage(5)}
+            <details className="pcv-details pcv-optional-analysis">
+              <summary>관찰 질문과 선택적 분석</summary>
+              {renderStage(6)}
+            </details>
+          </section>
+          {flowGuidance && (
+            <p className="pcv-navigation-guidance" role="alert">
+              {flowGuidance.message}
+            </p>
+          )}
+        </div>
+      );
+    }
     if (screenIndex === 1) {
       return (
         <div className="pcv-guided-flow">
@@ -3080,8 +3308,8 @@ export function PaperCoordinateStudyView({
         </header>
       )}
 
-      <div className="pcv-stage-details">
-        {conciseFlow ? (
+      <div className={`pcv-stage-details${simplePaperLesson ? " is-simple" : ""}`}>
+        {simplePaperLesson ? null : conciseFlow ? (
           <nav
             className="pcv-stage-nav pcv-stage-nav--three"
             aria-label="종이 좌표 학습 세 화면"
@@ -3132,22 +3360,29 @@ export function PaperCoordinateStudyView({
       )}
       {!conciseFlow && <LearningRevisionJourney data={journey} />}
       <div
-        className={`pcv-edit-workspace${merged && (conciseFlow ? screenIndex === 3 : state.stage === 3 || state.stage === 7) ? " is-editing" : ""}`}
+        className={`pcv-edit-workspace${merged && !simplePaperLesson && (conciseFlow ? screenIndex === 3 : state.stage === 3 || state.stage === 7) ? " is-editing" : ""}`}
       >
         {merged && (
-          <PaperSceneMap
-            key={state.level}
-            compact={
-              conciseFlow
-                ? screenIndex === 3
-                : state.stage === 3 || state.stage === 7
-            }
-          />
+          simplePaperLesson ? (
+            <details className="pcv-details pcv-simple-scene">
+              <summary>3D 경로 보기 · 푸른 DT 고스트</summary>
+              <PaperSceneMap key={state.level} compact />
+            </details>
+          ) : (
+            <PaperSceneMap
+              key={state.level}
+              compact={
+                conciseFlow
+                  ? screenIndex === 3
+                  : state.stage === 3 || state.stage === 7
+              }
+            />
+          )
         )}
         <div className="pcv-edit-content">
           <RevisionEditingLayout data={journey}>
             <main className="pcv-main">
-              {conciseFlow && (
+              {conciseFlow && !simplePaperLesson && (
                 <div
                   className="pcv-preparation-summary"
                   aria-label="교사용 수업 준비 상태"
@@ -3182,7 +3417,7 @@ export function PaperCoordinateStudyView({
                   </details>
                 </div>
               )}
-              {conciseFlow && (
+              {conciseFlow && !simplePaperLesson && (
                 <section
                   className="pcv-student-criteria-summary"
                   aria-label="학생용 실행 기준 요약"
@@ -3242,20 +3477,25 @@ export function PaperCoordinateStudyView({
                 aria-labelledby={`${id}-activity-heading`}
               >
                 <div className="pcv-activity-kicker">
-                  <span>지금 하는 일</span>
+                  <span>{simplePaperLesson ? "세 가지 활동" : "지금 하는 일"}</span>
                   <span>
-                    {conciseFlow
+                    {simplePaperLesson
+                      ? "종이 좌표 · 경로 · 결과"
+                      : conciseFlow
                       ? `화면 ${screenIndex} / 3 · ${screenIndex === 1 ? "예측" : screenIndex === 2 ? "실행·비교" : "수정·재확인"}`
                       : `단계 ${state.stage} / 7`}
                   </span>
                 </div>
                 <h2 id={`${id}-activity-heading`}>
-                  {conciseFlow
+                  {simplePaperLesson
+                    ? "10×10 cm 종이 좌표 경로 실습"
+                    : conciseFlow
                     ? PAPER_FLOW_SCREENS[screenIndex - 1]
                     : activeTitle}
                 </h2>
                 {conciseFlow ? renderConciseFlow() : renderStage(state.stage)}
               </section>
+              {!simplePaperLesson && (
               <aside className="pcv-side-note" aria-label="현재 좌표 정보">
                 <span className="pcv-eyebrow">
                   {state.stage === 1 || state.stage === 4
@@ -3322,6 +3562,7 @@ export function PaperCoordinateStudyView({
                   잉크 위치를 뜻하지 않습니다.
                 </p>
               </aside>
+              )}
             </main>
           </RevisionEditingLayout>
 

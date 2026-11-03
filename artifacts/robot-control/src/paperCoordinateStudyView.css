@@ -703,6 +703,21 @@
 .pcv-save-status { display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .pcv-save-status.is-failed { color:#9f2f24; background:#fff5f3; border-color:#e8b4ad; }
 .pcv-guided-flow { display:grid; gap:14px; }
+.pcv-simple-flow { display:grid; gap:14px; }
+.pcv-simple-flow__section { scroll-margin-top:18px; }
+.pcv-simple-flow__hint { margin:0; color:#526174; font-size:13px; line-height:1.5; }
+.pcv-simple-scene { min-width:0; margin:0 0 12px; padding:10px 12px; background:#f8fbff; border:1px solid #cbdcf2; border-radius:9px; }
+.pcv-simple-scene > summary { cursor:pointer; color:#17458b; font-weight:750; }
+.pcv-simple-scene[open] { display:grid; gap:10px; }
+.pcv-reference-readout { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; margin:0; }
+.pcv-reference-readout > div { min-width:0; padding:7px 8px; border:1px solid #e2e8f0; border-radius:7px; background:#f8fafc; }
+.pcv-reference-readout dt { color:#64748b; font-size:10px; font-weight:700; }
+.pcv-reference-readout dd { margin:3px 0 0; color:#172b4d; font-size:12px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.pcv-lift-gap { display:grid; gap:9px; padding:10px 12px; border-color:#d5deea; background:#f8fafc; }
+.pcv-lift-gap > summary { cursor:pointer; font-weight:750; }
+.pcv-run-stop { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:10px; }
+.pcv-button--danger { color:#8d2118; border-color:#e7a7a1; background:#fff5f4; }
+.pcv-stage-details.is-simple { display:none; }
 .pcv-flow-section { display:grid; min-width:0; gap:12px; padding:14px; background:#fff; border:1px solid #dbe4ef; border-radius:10px; }
 .pcv-flow-section > h3 { margin:0; color:#173b73; font-size:15px; line-height:1.4; }
 .pcv-flow-section > .pcv-flow-footer { margin-top:4px; }
@@ -771,6 +786,8 @@
   .pcv-guided-progress > div { align-items:flex-start; flex-direction:column; gap:4px; }
   .pcv-point-stepper { flex-wrap:wrap; }
   .pcv-point-stepper strong { flex:1 1 100%; order:-1; text-align:center; }
+  .pcv-reference-readout { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .pcv-run-stop { align-items:stretch; flex-direction:column; }
   .pcv-tcp-jog__telemetry,
   .pcv-tcp-jog__axes { grid-template-columns:1fr; }
   .pcv-tcp-jog__increment { max-width:none; }
