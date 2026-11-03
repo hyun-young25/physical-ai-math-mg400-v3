@@ -19,6 +19,9 @@ import type {
   PaperVerificationCriteria,
   PaperBaselineLengthMetric,
   PaperTrialDrafts,
+  PaperV6Draft,
+  PaperV6StudentModel,
+  PaperV6FormulaWork,
 } from "./paperCoordinateStudy";
 import type { LearningAiController } from "./LearningAiFeedback";
 import type { FeedbackContext } from "./learningAiContext";
@@ -279,6 +282,24 @@ export type PaperCoordinateStudyViewState = {
   liftConnectionCurrent: boolean;
   running: boolean;
   error: string;
+  v6?: {
+    step: number;
+    draft: PaperV6Draft;
+    model: PaperV6StudentModel | null;
+    modelError: string | null;
+    predictions: PaperPredictionPoint[] | null;
+    formulaWork: PaperV6FormulaWork[];
+    predictionError: string | null;
+    saved: boolean;
+    supportMode: "guided" | "challenge";
+    assessment: {
+      status: "incomplete" | "simulation-only" | "within-tolerance" | "outside-tolerance";
+      tcpErrorMm: number | null;
+      inkErrorMm: number | null;
+      message: string;
+    } | null;
+    attemptChain: PaperTrialRecord[];
+  };
 };
 
 export type PaperCoordinateStudyViewActions = {
@@ -379,6 +400,15 @@ export type PaperCoordinateStudyViewActions = {
   }) => { message: string; target?: "hypothesis" | "analysis" | "run" } | null;
   onChooseNewTarget: () => void;
   onMovePaper: (reason: string) => void;
+  onV6DraftChange?: (draft: PaperV6Draft) => void | { message: string; kind?: "info" | "success" | "error" };
+  onV6Navigate?: (step: number) => { message: string; kind?: "info" | "success" | "error" } | null;
+  onV6SaveModel?: () => { message: string; kind?: "info" | "success" | "error" } | null;
+  onV6SavePrediction?: () => { message: string; kind?: "info" | "success" | "error" } | null;
+  onV6CreateRevalidation?: () => { message: string; kind?: "info" | "success" | "error" } | null;
+  onV6SaveRevalidationPlan?: () => { message: string; kind?: "info" | "success" | "error" } | null;
+  onV6Finalize?: (input: { finalQuestionAnswer: "model-points" | "independent-point" }) => { message: string; kind?: "info" | "success" | "error" } | null;
+  onV6Export?: () => void;
+  onStartV6Attempt?: () => void;
 };
 
 export type PaperCoordinateStudyViewProps = {

@@ -25,6 +25,8 @@ import {
 } from "./paperCoordinateViewModel";
 import { ExecutionAiAnalysis } from "./ExecutionAiAnalysis";
 import { frameTransformPoint } from "./paperCoordinateStudy";
+import { PAPER_HARDWARE_V6_VERSION } from "./paperCoordinateStudy";
+import { PaperV6StudentLesson } from "./PaperV6StudentLesson";
 import type { PaperPointName, PaperRunSnapshot } from "./paperCoordinateStudy";
 import {
   paperStudentScreenForStage,
@@ -3273,6 +3275,53 @@ export function PaperCoordinateStudyView({
     );
   };
 
+  if (
+    state.level === "advanced-paper-hardware" &&
+    state.activeAttempt?.taskVersion === PAPER_HARDWARE_V6_VERSION &&
+    state.v6
+  ) {
+    return (
+      <section
+        ref={root}
+        className="paper-coordinate-view"
+        data-paper-sync="true"
+        data-task-version={PAPER_HARDWARE_V6_VERSION}
+        aria-label="2-4 사각형 심화 2 · 종이 위 좌표 모델 수업 v6"
+      >
+        <header className="pcv-header">
+          <button
+            type="button"
+            className="pcv-back"
+            onClick={actions.onBack}
+            disabled={state.running}
+          >
+            ← <span>사각형 수업으로</span>
+          </button>
+          <div className="pcv-header-title">
+            <span className="pcv-eyebrow">2-4 · 심화 2 · v6</span>
+            <h1>비스듬한 종이에서 좌표 모델 만들기</h1>
+            <p>내 식으로 예측하고, 실행 자료를 보고, 다른 점에서 다시 확인합니다.</p>
+          </div>
+        </header>
+        <PaperV6StudentLesson
+          state={state}
+          actions={actions}
+          blocks={{
+            references: renderStage(1),
+            execution: (
+              <>
+                {renderExecutionControls(state.targetSet === "revalidation")}
+                {renderStage(4)}
+              </>
+            ),
+            observationsAndInk: renderStage(5),
+            analysis: renderStage(6),
+          }}
+        />
+      </section>
+    );
+  }
+
   return (
     <section
       ref={root}
@@ -3307,6 +3356,24 @@ export function PaperCoordinateStudyView({
           </div>
         </header>
       )}
+      {state.level === "advanced-paper-hardware" &&
+        state.activeAttempt?.taskVersion !== PAPER_HARDWARE_V6_VERSION && (
+          <section className="pcv-callout" aria-label="새 종이 좌표 수업 버전">
+            <strong>새 수학 모델 흐름 v6</strong>
+            <p>
+              기존 v4/v5 시도는 그대로 열람됩니다. 새 시도에서는 종이 좌표를
+              학생이 회전·평행이동 식으로 계산합니다.
+            </p>
+            <button
+              type="button"
+              className="pcv-button pcv-button--primary"
+              onClick={actions.onStartV6Attempt}
+              disabled={state.running}
+            >
+              새 v6 심화 2 시도 시작
+            </button>
+          </section>
+        )}
 
       <div className={`pcv-stage-details${simplePaperLesson ? " is-simple" : ""}`}>
         {simplePaperLesson ? null : conciseFlow ? (

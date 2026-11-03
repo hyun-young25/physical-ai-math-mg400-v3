@@ -1,5 +1,5 @@
 import { paperDiagnosisLabel, PAPER_AXIS_SWAP_CANDIDATE } from "./paperDiagnosisLabel";
-import { PAPER_TASK_VERSION, PAPER_TARGETS, frameInversePoint, frameTransformPoint, getPaperFrameAngleDegrees } from "./paperCoordinateStudy";
+import { PAPER_HARDWARE_V6_VERSION, PAPER_TASK_VERSION, PAPER_TARGETS, frameInversePoint, frameTransformPoint, getPaperFrameAngleDegrees } from "./paperCoordinateStudy";
 import type { PaperCoordinateLevel, PaperTargetSet, PaperGridPoint, PaperFrame, PaperRunSnapshot, PaperDiagnosis } from "./paperCoordinateStudy";
 import { getShapeLesson } from "./shapeLearning";
 import { diagnoseSquare, LEVEL_LABELS, squareFeedbackPlan, squareMismatchName } from "./squareMismatchDiagnosis";
@@ -16,6 +16,8 @@ export const isPaperRectangle = (level:PaperCoordinateLevel) => level==="advance
 export function paperTaskTargets(level:PaperCoordinateLevel,set:PaperTargetSet,taskVersion=PAPER_TASK_VERSION):PaperGridPoint[] {
   if(!isPaperRectangle(level))return PAPER_TARGETS[set];
   if(level==="advanced-paper-dt"||level==="advanced-paper-hardware") {
+    if(level==="advanced-paper-hardware"&&taskVersion===PAPER_HARDWARE_V6_VERSION&&set==="revalidation")
+      return [{name:"V",xCm:5,yCm:6}];
     // v4 records retain their original task coordinates when viewed. New
     // attempts use points wholly inside the 10 × 10 cm teaching sheet.
     const legacy = taskVersion === "v4-paper-merged";

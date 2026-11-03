@@ -9,6 +9,84 @@ export type PaperPointName = "O" | "X" | "Y";
 export type PaperReferenceSource = "hardware" | "mock" | "teacher";
 export type PaperEvidenceSource = PaperReferenceSource | "dt";
 export const PAPER_TASK_VERSION = "v5-paper-10cm";
+/** New research flow is versioned only for the MG400 slanted-paper level. */
+export const PAPER_HARDWARE_V6_VERSION = "v6-paper-transform";
+
+export type PaperV6StudentModel = {
+  originXmm: number;
+  originYmm: number;
+  deltaXmm: number;
+  deltaYmm: number;
+  thetaDeg: number;
+  thetaAssumption: "calculated" | "zero";
+  savedAt: number;
+};
+
+export type PaperV6FormulaWork = {
+  point: string;
+  aCos: number;
+  bSin: number;
+  aSin: number;
+  bCos: number;
+  robotX: number;
+  robotY: number;
+};
+
+export type PaperV6FollowupKind =
+  | "remeasure-y"
+  | "review-ox-direction"
+  | "remeasure-ink"
+  | "substitute-one-point"
+  | "check-units";
+
+export type PaperV6AttemptData = {
+  model?: PaperV6StudentModel;
+  initialModel?: PaperV6StudentModel;
+  initialPrediction?: PaperPredictionPoint[];
+  formulaWork?: PaperV6FormulaWork[];
+  explanation?: string;
+  supportMode: "guided" | "challenge";
+  supportLevel?: 1 | 2 | 3;
+  followupChecks?: PaperV6FollowupKind[];
+  followupResult?: string;
+  decision?: "revise" | "retain";
+  decisionReason?: string;
+  promptVersion?: string;
+  aiModel?: string;
+  verificationPoint?: { name: "V"; xCm: 5; yCm: 6 };
+  finalQuestionAnswer?: "model-points" | "independent-point";
+  assessment?: {
+    runId: string;
+    planHash: string;
+    source: PaperEvidenceSource;
+    status: "incomplete" | "simulation-only" | "within-tolerance" | "outside-tolerance";
+    tcpErrorMm: number | null;
+    inkErrorMm: number | null;
+    judgedAt: number;
+    toleranceMm: 2;
+  };
+};
+
+export type PaperV6Draft = {
+  supportMode?: "guided" | "challenge";
+  originXmm?: string;
+  originYmm?: string;
+  deltaXmm?: string;
+  deltaYmm?: string;
+  thetaDeg?: string;
+  thetaAssumption?: "calculated" | "zero";
+  explanation?: string;
+  formulaWork?: Record<
+    string,
+    Partial<Record<keyof Omit<PaperV6FormulaWork, "point">, string>>
+  >;
+  followupChecks?: PaperV6FollowupKind[];
+  followupResult?: string;
+  decision?: "revise" | "retain";
+  decisionReason?: string;
+  revisionReason?: string;
+  finalQuestionAnswer?: "model-points" | "independent-point";
+};
 
 export type PaperGridPoint = { name: string; xCm: number; yCm: number };
 export type PaperReferenceSample = {
@@ -75,6 +153,8 @@ export type PaperTrialDrafts = {
   inkReadings?: PaperInkReadingDraft[];
   verificationReason?: string;
   liftGapMm?: string;
+  /** Student-only v6 draft. Draft values never count as saved evidence. */
+  v6?: PaperV6Draft;
 };
 
 export type PaperPredictionPoint = PaperGridPoint & {
@@ -180,6 +260,10 @@ export type PaperAiAnalysisRecord = {
   runId: string;
   planHash: string;
   source: PaperEvidenceSource;
+  model?: string;
+  promptVersion?: string;
+  fallbackUsed?: boolean;
+  fallbackReason?: string;
 };
 
 export type PaperTrialRecord = {
@@ -227,6 +311,8 @@ export type PaperTrialRecord = {
     result: "physical-verified" | "simulation-only" | "incomplete"; tcpWithinTolerance?: boolean; inkWithinTolerance?: boolean };
   verificationCriteria?: PaperVerificationCriteria;
   diagnosisToleranceMm?: number;
+  /** Present only on the v6 MG400 paper-transform attempt chain. */
+  v6?: PaperV6AttemptData;
   /** Unsubmitted form contents are recoverable, but never count as completed evidence. */
   drafts?: PaperTrialDrafts;
 };
