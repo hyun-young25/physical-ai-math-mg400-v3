@@ -111,10 +111,17 @@ test("advanced v6 student UI maps seven saved stages to the five requested scene
   assert.match(ui, /editingRevisionModel \? 2 : step <= 2 \? 1 : step <= 4 \? 2 : step === 5 \? 3 : step === 6 \? 4 : 5/);
   assert.match(ui, /if \(scene === 1\) navigate\(3\)/);
   assert.match(ui, /canGoNext=.*hasAllReferences/s);
-  assert.match(ui, /paper-v6-references-required/);
+  assert.match(ui, /data-testid="paper-v6-current-reference"/);
+  assert.match(ui, /data-testid="paper-v6-record-current-reference"/);
   assert.match(ui, /const saveModelAndPrediction = \(\) => \{\s*const modelResult = actions\.onV6SaveModel\?\.\(\);[\s\S]*?if \(modelResult\?\.kind === "error"\)[\s\S]*?const predictionResult = actions\.onV6SavePrediction\?\.\(\);/);
   assert.match(ui, /scene === 2 && \(step === 3 \|\| step === 4 \|\| editingRevisionModel\)/);
   assert.match(ui, /scene === 2 && !editingRevisionModel/);
+  assert.match(ui, /data-testid="paper-v6-lift-gap-input"/);
+  assert.match(ui, /aria-label="펜 들기 간격 mm"/);
+  assert.match(ui, /value=\{state\.liftGapInput \?\? ""\}/);
+  assert.match(ui, /actions\.onLiftGapChange\?\.\(event\.target\.value\)/);
+  assert.match(ui, /state\.liftGapSaved[\s\S]*state\.paperSurfaceZ/);
+  assert.match(ui, /state\.currentPose\.z > state\.liftHeight/);
   assert.match(ui, /paper-v6-revision-deltas/);
   assert.match(ui, /totalSteps=\{5\}/);
   assert.match(ui, /state\.error\?\.trim\(\) \|\| message\?\.trim\(\) \|\| undefined/);

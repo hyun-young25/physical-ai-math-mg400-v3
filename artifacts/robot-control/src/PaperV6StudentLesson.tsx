@@ -517,6 +517,68 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 있습니다.
               </p>
             )}
+            <section
+              className="paper-v6-lift-gap"
+              aria-labelledby="paper-v6-lift-gap-heading"
+              data-testid="paper-v6-lift-gap"
+            >
+              <div className="paper-v6-lift-gap__intro">
+                <h3 id="paper-v6-lift-gap-heading">
+                  <span className="paper-v6-role">🤖 로봇</span>
+                  펜 들기 간격
+                </h3>
+                <p>
+                  종이 표면에서 펜을 띄울 거리입니다. 종이 표면 Z에 더해 이동 높이를
+                  계산합니다.
+                </p>
+              </div>
+              <label className="paper-v6-field">
+                <span>펜 들기 간격 (mm)</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  aria-label="펜 들기 간격 mm"
+                  data-testid="paper-v6-lift-gap-input"
+                  value={state.liftGapInput ?? ""}
+                  disabled={state.running || state.run?.status === "running"}
+                  onChange={(event) =>
+                    actions.onLiftGapChange?.(event.target.value)
+                  }
+                  placeholder="예: 10"
+                />
+              </label>
+              <p
+                className="paper-v6-lift-gap__status"
+                role="status"
+                aria-live="polite"
+                data-testid="paper-v6-lift-gap-status"
+              >
+                {state.liftGapSaved &&
+                typeof state.liftGapMm === "number" &&
+                state.paperSurfaceZ !== null
+                  ? `저장됨 · 종이 표면 Z ${numberText(state.paperSurfaceZ)} mm + 간격 ${numberText(state.liftGapMm)} mm = 이동 기준 Z ${numberText(state.paperSurfaceZ + state.liftGapMm)} mm`
+                  : state.paperSurfaceZ === null
+                    ? "O/X/Y 기록 후 종이 표면 Z에 이 간격을 더해 이동 높이를 계산합니다."
+                    : state.mockPracticeEnabled
+                      ? "모의 연습은 미입력 시 연습용 30 mm를 씁니다. 실장비 실행 전에는 간격을 직접 저장해야 합니다."
+                      : "양수 간격을 입력하면 현재 시도에 저장됩니다. 저장되지 않은 값은 실장비 실행에 사용되지 않습니다."}
+              </p>
+              {state.liftGapSaved &&
+                state.currentPose &&
+                state.liftHeight !== null &&
+                state.currentPose.z > state.liftHeight && (
+                  <p className="paper-v6-hint">
+                    현재 시작 Z {numberText(state.currentPose.z)} mm가 계산된 이동 높이보다
+                    높아 그대로 유지합니다.
+                  </p>
+                )}
+              {state.liftRecordFeedback && (
+                <p className="paper-v6-lift-gap__feedback" role="status" aria-live="polite">
+                  {state.liftRecordFeedback}
+                </p>
+              )}
+            </section>
             {state.frame && (
               <details className="paper-v6-details">
                 <summary>Y점 방향·축척 참고</summary>

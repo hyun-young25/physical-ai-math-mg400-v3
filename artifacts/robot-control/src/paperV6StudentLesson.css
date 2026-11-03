@@ -97,6 +97,49 @@
   border: 1px solid #e4e9e3;
 }
 
+.paper-v6-lift-gap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.55fr);
+  align-items: end;
+  gap: 10px 16px;
+  min-width: 0;
+  padding: 13px 14px;
+  background: #f5f8f3;
+  border: 1px solid #d9e4d8;
+  border-radius: 9px;
+}
+
+.paper-v6-lift-gap__intro {
+  min-width: 0;
+}
+
+.paper-v6-lift-gap__intro h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 4px;
+  color: #34483a;
+  font-size: 13px;
+}
+
+.paper-v6-lift-gap__intro p,
+.paper-v6-lift-gap__status,
+.paper-v6-lift-gap__feedback {
+  margin: 0;
+  color: #53645a;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.paper-v6-lift-gap__status,
+.paper-v6-lift-gap__feedback {
+  grid-column: 1 / -1;
+  padding-top: 8px;
+  border-top: 1px solid #e0e8df;
+}
+
 .paper-v6-error {
   color: #7d352d;
   background: #fff3f1;
@@ -330,7 +373,8 @@
 
 @media (max-width: 640px) {
   .paper-v6-coordinate-pair,
-  .paper-v6-form-grid {
+  .paper-v6-form-grid,
+  .paper-v6-lift-gap {
     grid-template-columns: minmax(0, 1fr);
   }
   .paper-v6-coordinate-pair svg {
