@@ -135,7 +135,7 @@ export function PaperSceneOverlay(){
   const v6Scene=isV6Scene(data);
   // v6 keeps the whole MG400 and the sheet in frame: the robot is the point of the lesson.
   const baseWorld=position({x:0,y:0,z:center.z});
-  const loopStep=v6Scene?paperLoopPosition(data):0;
+  const loopStep=v6Scene&&data?paperLoopPosition(data):0;
   const paperFocus=v6Scene&&loopStep>=2;
   const view=useMemo(()=>{
     // From step 2 the sheet is the subject: close, higher view centred on the paper (pen still in frame).
