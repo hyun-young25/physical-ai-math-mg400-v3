@@ -243,7 +243,7 @@ export function paperV6MockReferencePose(point: PaperPointName): LessonPose {
 }
 
 /** Simulation capture: pen tip must be this close (xy) to the sheet corner it is recorded as. */
-export const PAPER_V6_MOCK_CAPTURE_TOLERANCE_MM = 2;
+export const PAPER_V6_MOCK_CAPTURE_TOLERANCE_MM = 10;
 /** Simulation capture: pen counts as touching the sheet at or below this height. */
 export const PAPER_V6_MOCK_TOUCH_MAX_Z_MM = 1;
 /** Simulation floor: the sheet surface (z = 0); lower would push into the table. */

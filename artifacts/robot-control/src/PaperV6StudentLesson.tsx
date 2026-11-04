@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { PaperV6StepShell } from "./PaperV6StepShell";
 import type {
   PaperV6Draft,
@@ -116,6 +116,26 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
       setMessageKind("info");
     }
   };
+  // ② starts from what the robot measured in ①: O and the O→X change are filled in, θ is the student's job.
+  const sampleO = state.samples.find((sample) => sample.point === "O")?.pose;
+  const sampleX = state.samples.find((sample) => sample.point === "X")?.pose;
+  const prefillKey =
+    scene === 2 && sampleO && sampleX ? `${sampleO.x},${sampleO.y},${sampleX.x},${sampleX.y}` : "";
+  useEffect(() => {
+    if (!prefillKey || !sampleO || !sampleX) return;
+    const empty = (value?: string) => !String(value ?? "").trim();
+    if (!empty(draft.originXmm) || !empty(draft.originYmm) || !empty(draft.deltaXmm) || !empty(draft.deltaYmm))
+      return;
+    const mm = (value: number) => String(Math.round(value * 100) / 100);
+    actions.onV6DraftChange?.({
+      ...draft,
+      originXmm: mm(sampleO.x),
+      originYmm: mm(sampleO.y),
+      deltaXmm: mm(sampleX.x - sampleO.x),
+      deltaYmm: mm(sampleX.y - sampleO.y),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillKey]);
   const updateWork = (
     point: string,
     key: keyof Omit<PaperV6FormulaWork, "point">,
@@ -196,14 +216,14 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
   const needsModeChoice = !state.mockPracticeEnabled && state.tcpJog?.connection !== "connected" && !state.samples.length;
   const referencePrompt = missingReference
     ? state.mockPracticeEnabled
-      ? `① 버튼으로 로봇을 움직여 펜 끝을 종이의 ${missingReference} 꼭짓점에 맞추고 ② Z↓로 종이에 닿게 한 뒤 ③ 기록하세요.`
+      ? `X·Y 버튼으로 펜을 종이의 ${missingReference} 꼭짓점 근처로 옮기고, 아래 파란 버튼을 누르세요. 로봇이 펜을 내려 꼭짓점을 찍어요.`
       : state.tcpJog?.connection === "connected"
         ? `① 실제 MG400 팔을 손으로 옮기거나(교사 확인) 아래 미세 이동으로 펜 끝을 종이의 ${missingReference}에 대고 ② 기록하세요.`
         : "먼저 위에서 ‘시뮬레이션으로 하기’ 또는 ‘MG400 연결하기’를 고르세요."
     : "O·X·Y 기록 완료 → 아래 ‘다음’ 버튼으로 내 식 예측하러 가요.";
-  const [jogStep, setJogStep] = useState(10);
+  const [jogStep, setJogStep] = useState(20);
   const jogSim = state.mockPracticeEnabled;
-  const jogSteps = jogSim ? [20, 5, 1, 0.5] : [2, 1, 0.5];
+  const jogSteps = jogSim ? [20, 5] : [2, 1, 0.5];
   const jogStepMm = jogSteps.includes(jogStep) ? jogStep : jogSteps[0];
   const jogBusy = state.running || (!jogSim && (state.tcpJog.busy || !state.tcpJog.canMove));
   const jog = (axis: "x" | "y" | "z", sign: 1 | -1) =>
@@ -525,10 +545,10 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                     <button type="button" disabled={jogBusy} onClick={() => jog("y", -1)} data-testid="paper-v6-jog-y-" style={{ gridArea: "right" }}>Y−</button>
                     <button type="button" disabled={jogBusy} onClick={() => jog("x", -1)} data-testid="paper-v6-jog-x-" style={{ gridArea: "down" }}>X−</button>
                   </div>
-                  <div className="paper-v6-jog__z">
+                  {!jogSim && <div className="paper-v6-jog__z">
                     <button type="button" disabled={jogBusy} onClick={() => jog("z", 1)} data-testid="paper-v6-jog-z+">Z↑ 펜 들기</button>
                     <button type="button" disabled={jogBusy} onClick={() => jog("z", -1)} data-testid="paper-v6-jog-z-">Z↓ 펜 내리기</button>
-                  </div>
+                  </div>}
                 </div>
                 {!jogSim && state.tcpJog.message && <p className="paper-v6-jog__note" role="status">{state.tcpJog.message}</p>}
                 {!jogSim && !state.tcpJog.canMove && state.tcpJog.blocker && <p className="paper-v6-jog__note">{state.tcpJog.blocker}</p>}
@@ -545,7 +565,9 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
               data-testid="paper-v6-record-current-reference"
             >
               {missingReference
-                ? `현재 위치를 ${missingReference}로 기록`
+                ? state.mockPracticeEnabled
+                  ? `여기가 ${missingReference}! 펜 내려 찍기`
+                  : `현재 위치를 ${missingReference}로 기록`
                 : "O · X · Y 기록 완료"}
             </button>}
             {!hasAllReferences && (
