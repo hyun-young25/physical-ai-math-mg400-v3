@@ -193,3 +193,8 @@
 .paper-loop-ring li:has(.paper-loop-ring__back):hover { background:#ede9fe; }
 .paper-loop-ring__back:focus-visible { outline:2px solid #a5b4fc; outline-offset:4px; border-radius:999px; }
 .paper-target-caption { display:inline-block; white-space:nowrap; padding:2px 8px; border-radius:999px; background:#ecfdf5; border:1px solid #34d399; color:#065f46; font-size:11px; font-weight:700; pointer-events:none; }
+.paper-ruler-tick { display:inline-block; min-width:14px; padding:0 3px; border-radius:4px; background:#ffffffd9; color:#334155; font:700 10.5px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; text-align:center; pointer-events:none; }
+.paper-ruler-tick--unit { color:#64748b; font-weight:600; }
+.paper-ab-tag { display:inline-block; white-space:nowrap; padding:1px 7px; border-radius:999px; background:#fff; font-size:11.5px; font-weight:800; pointer-events:none; box-shadow:0 1px 3px #0f172a22; }
+.paper-ab-tag--a { color:#be185d; border:1.5px solid #db2777; }
+.paper-ab-tag--b { color:#0e7490; border:1.5px solid #0891b2; }

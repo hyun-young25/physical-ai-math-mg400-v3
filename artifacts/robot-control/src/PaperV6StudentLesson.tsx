@@ -7,6 +7,7 @@ import {
   speakNow,
   writtenForm,
 } from "./PaperV6Narration";
+import { selectPaperPoint } from "./paperSceneStore";
 import { PaperV6StepShell } from "./PaperV6StepShell";
 import type {
   PaperV6Draft,
@@ -834,7 +835,9 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
               x = {linkedFormulaTerm("originX", "xO")} + {linkedFormulaTerm("aCos", "a·cosθ")} − {linkedFormulaTerm("bSin", "b·sinθ")}
               <br />
               y = {linkedFormulaTerm("originY", "yO")} + {linkedFormulaTerm("aSin", "a·sinθ")} + {linkedFormulaTerm("bCos", "b·cosθ")}
-              <small>a, b는 종이 좌표를 mm로 바꾼 값입니다. 1 cm = 10 mm.</small>
+              <small className="paper-v6-equation__note">
+                a = 목표점까지 O에서 <b>종이 x축 방향</b>으로 간 거리, b = <b>종이 y축 방향</b>으로 간 거리 (mm). 종이 좌표 1 cm = 10 mm.
+              </small>
             </p>
             {!v6?.model && (
               <p className="paper-v6-callout" data-testid="paper-v6-model-pending">
@@ -846,10 +849,18 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 const work = pointCalculation(point);
                 const manual = manualPointNames.includes(point.name);
                 return (
-                  <fieldset className="paper-v6-point" key={point.name}>
+                  <fieldset
+                    className="paper-v6-point"
+                    key={point.name}
+                    onFocus={() => selectPaperPoint(point.name, "lesson")}
+                    onMouseEnter={() => selectPaperPoint(point.name, "lesson")}
+                  >
                     <legend>
                       {point.name} · 종이 ({point.xCm}, {point.yCm}) cm
                     </legend>
+                    <p className="paper-v6-point__ab" data-testid={`paper-v6-${point.name}-ab`}>
+                      O에서 종이 x축으로 {point.xCm} cm → <b>a = {point.xCm * 10} mm</b> · 종이 y축으로 {point.yCm} cm → <b>b = {point.yCm * 10} mm</b>
+                    </p>
                     {manual ? (
                       <div className="paper-v6-form-grid">
                         {field(`${point.name} a·cosθ`, draft.formulaWork?.[point.name]?.aCos, (value) => updateWork(point.name, "aCos", value), `${point.name} a 코사인 세타`, `paper-v6-${point.name}-acos`)}
