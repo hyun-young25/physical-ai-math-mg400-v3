@@ -344,6 +344,7 @@ export type PaperCoordinateStudyViewActions = {
   ) => { message: string; target?: string } | null;
   onLevelChange: (level: PaperCoordinateLevel) => void;
   onRecordCurrentReference: (point: PaperPointName) => void;
+  onMockJog: (axis: "x" | "y" | "z", deltaMm: number) => void;
   onToggleMockPractice: (enabled: boolean) => void;
   onPreparationTcpJog: (axis: "x" | "y" | "z", deltaMm: number) => void;
   onStopPreparationMovement: () => void;

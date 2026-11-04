@@ -90,6 +90,9 @@ import {
   paperBaselineLengthMetrics,
   initialPaperAttemptForLevel,
   paperV6MockReferencePose,
+  PAPER_V6_MOCK_CAPTURE_TOLERANCE_MM,
+  PAPER_V6_MOCK_TOUCH_MAX_Z_MM,
+  PAPER_V6_MOCK_MIN_Z_MM,
   paperV6MockInkDrafts,
   paperPenDownAllowed,
 } from "./paperCoordinateStudy";
@@ -234,6 +237,8 @@ export type PaperCoordinateStudyProps = {
   canReach: (pose: LessonPose) => boolean;
   runDigitalTwin: (commands: LessonPose[]) => Promise<void>;
   stopDigitalTwin?: (reason?: string) => void;
+  /** Simulation only: move the virtual robot one jog step (false = unreachable/busy). */
+  jogDigitalTwin?: (pose: LessonPose) => boolean;
 };
 
 export function PaperCoordinateStudy({
@@ -243,6 +248,7 @@ export function PaperCoordinateStudy({
   canReach,
   runDigitalTwin,
   stopDigitalTwin,
+  jogDigitalTwin,
   initialLevel,
   onRunningChange,
   supportMode = "guided",
@@ -415,9 +421,11 @@ export function PaperCoordinateStudy({
     (point) => !samples.some((sample) => sample.point === point),
   );
   const mockCurrentPoint = nextMockReference ?? "O";
+  // Simulation: the student jogs the virtual robot to the sheet; the pen tip is the DT pose.
+  void mockCurrentPoint;
   const mockPoseAvailable =
     mockPracticeEnabled && !mockPracticeBlockedByConnection
-      ? paperV6MockReferencePose(mockCurrentPoint)
+      ? { x: currentPose.x, y: currentPose.y, z: currentPose.z, r: currentPose.r }
       : null;
   const currentMeasurement = practice.snap.measurement;
   const measurementAvailable =
@@ -2678,6 +2686,25 @@ export function PaperCoordinateStudy({
           );
           return;
         }
+        const target = paperV6MockReferencePose(point);
+        const offPlane = Math.hypot(
+          mockPoseAvailable.x - target.x,
+          mockPoseAvailable.y - target.y,
+        );
+        if (offPlane > PAPER_V6_MOCK_CAPTURE_TOLERANCE_MM) {
+          setReferenceError(
+            offPlane > 30
+              ? `펜 끝이 아직 종이의 ${point}와 멀어요. 3D 화면에서 ${point} 꼭짓점을 보고 X·Y 버튼으로 더 옮겨 보세요.`
+              : `거의 다 왔어요! ${point}까지 약 ${offPlane.toFixed(1)} mm 남았어요. 이동 간격을 줄여서 맞춰 보세요.`,
+          );
+          return;
+        }
+        if (mockPoseAvailable.z > PAPER_V6_MOCK_TOUCH_MAX_Z_MM) {
+          setReferenceError(
+            `펜이 종이 위에 떠 있어요(Z ${mockPoseAvailable.z.toFixed(1)} mm). Z↓로 내려 종이에 닿게 하세요.`,
+          );
+          return;
+        }
         const capturedAt = Date.now();
         const sample: PaperReferenceSample = {
           point,
@@ -2744,6 +2771,19 @@ export function PaperCoordinateStudy({
       };
       saveReference(sample);
     },
+    onMockJog: (axis, deltaMm) => {
+      if (!mockPracticeEnabled || running || hardwareConnected) return;
+      const next = { ...currentPose, [axis]: currentPose[axis] + deltaMm };
+      if (axis === "z" && next.z < PAPER_V6_MOCK_MIN_Z_MM) {
+        setReferenceError("더 내리면 펜이 종이를 뚫고 책상에 부딪혀요. 지금 높이가 종이 표면이에요.");
+        return;
+      }
+      if (!jogDigitalTwin?.(next)) {
+        setReferenceError("그 방향으로는 로봇 팔이 닿지 않아요. 다른 방향으로 움직여 보세요.");
+        return;
+      }
+      setReferenceError("");
+    },
     onToggleMockPractice: (enabled) => {
       if (enabled) {
         if (mockPracticeReason) {
@@ -2753,6 +2793,9 @@ export function PaperCoordinateStudy({
         setRequestedPaperV6MockPractice(true);
         setReferenceError("");
         setPageError("");
+        // Start like a real class: pen lifted at the robot's ready spot, paper somewhere in front.
+        if (!samples.length && currentPose.z < 20)
+          jogDigitalTwin?.({ x: currentPose.x, y: currentPose.y, z: 40, r: currentPose.r });
         return;
       }
       if (mockReferencesSaved) {

@@ -196,11 +196,19 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
   const needsModeChoice = !state.mockPracticeEnabled && state.tcpJog?.connection !== "connected" && !state.samples.length;
   const referencePrompt = missingReference
     ? state.mockPracticeEnabled
-      ? `연습 로봇 펜 끝이 종이의 ${missingReference}에 와 있어요 → 아래 파란 버튼을 눌러 기록하세요.`
+      ? `① 버튼으로 로봇을 움직여 펜 끝을 종이의 ${missingReference} 꼭짓점에 맞추고 ② Z↓로 종이에 닿게 한 뒤 ③ 기록하세요.`
       : state.tcpJog?.connection === "connected"
-        ? `지금 찍을 점: ${missingReference} · 펜 끝을 맞춘 뒤 현재 위치를 기록하세요.`
+        ? `① 실제 MG400 팔을 손으로 옮기거나(교사 확인) 아래 미세 이동으로 펜 끝을 종이의 ${missingReference}에 대고 ② 기록하세요.`
         : "먼저 위에서 ‘시뮬레이션으로 하기’ 또는 ‘MG400 연결하기’를 고르세요."
     : "O·X·Y 기록 완료 → 아래 ‘다음’ 버튼으로 내 식 예측하러 가요.";
+  const [jogStep, setJogStep] = useState(10);
+  const jogSim = state.mockPracticeEnabled;
+  const jogSteps = jogSim ? [20, 5, 1, 0.5] : [2, 1, 0.5];
+  const jogStepMm = jogSteps.includes(jogStep) ? jogStep : jogSteps[0];
+  const jogBusy = state.running || (!jogSim && (state.tcpJog.busy || !state.tcpJog.canMove));
+  const jog = (axis: "x" | "y" | "z", sign: 1 | -1) =>
+    jogSim ? actions.onMockJog(axis, sign * jogStepMm) : actions.onPreparationTcpJog(axis, sign * jogStepMm);
+  const tip = state.currentPose;
   const sketchPoint = (xCm: number, yCm: number) => ({
     x: 40 + xCm * 9.6 - yCm * 0.9,
     y: 103 + xCm * 0.9 - yCm * 8,
@@ -493,6 +501,39 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 })}
               </div>
             </section>
+            {!needsModeChoice && missingReference && (
+              <section className="paper-v6-jog" aria-label="펜 끝 옮기기" data-testid="paper-v6-jog" data-mode={jogSim ? "sim" : "hardware"}>
+                <header>
+                  <strong>{jogSim ? "🕹️ 시뮬레이션 로봇 움직이기" : "🦾 MG400 펜 끝 맞추기"}</strong>
+                  <span className="paper-v6-jog__tip" data-testid="paper-v6-jog-tip">
+                    펜 끝 {tip ? `X ${tip.x.toFixed(1)} · Y ${tip.y.toFixed(1)} · Z ${tip.z.toFixed(1)}` : "보고 대기"}
+                  </span>
+                </header>
+                {!jogSim && (
+                  <p className="paper-v6-jog__note">실제 장비에서는 팔을 손으로 옮겨(드래그 모드) 대략 맞추고, 마지막은 아래 버튼으로 미세하게 맞춰요. 버튼을 누를 때마다 확인창이 떠요.</p>
+                )}
+                <div className="paper-v6-jog__steps" role="group" aria-label="한 번에 움직일 거리">
+                  {jogSteps.map((mm) => (
+                    <button key={mm} type="button" aria-pressed={mm === jogStepMm} onClick={() => setJogStep(mm)}>{mm} mm</button>
+                  ))}
+                </div>
+                <div className="paper-v6-jog__pad">
+                  <div className="paper-v6-jog__xy">
+                    <button type="button" disabled={jogBusy} onClick={() => jog("x", 1)} data-testid="paper-v6-jog-x+" style={{ gridArea: "up" }}>X+</button>
+                    <button type="button" disabled={jogBusy} onClick={() => jog("y", 1)} data-testid="paper-v6-jog-y+" style={{ gridArea: "left" }}>Y+</button>
+                    <span style={{ gridArea: "mid" }} aria-hidden="true">✛</span>
+                    <button type="button" disabled={jogBusy} onClick={() => jog("y", -1)} data-testid="paper-v6-jog-y-" style={{ gridArea: "right" }}>Y−</button>
+                    <button type="button" disabled={jogBusy} onClick={() => jog("x", -1)} data-testid="paper-v6-jog-x-" style={{ gridArea: "down" }}>X−</button>
+                  </div>
+                  <div className="paper-v6-jog__z">
+                    <button type="button" disabled={jogBusy} onClick={() => jog("z", 1)} data-testid="paper-v6-jog-z+">Z↑ 펜 들기</button>
+                    <button type="button" disabled={jogBusy} onClick={() => jog("z", -1)} data-testid="paper-v6-jog-z-">Z↓ 펜 내리기</button>
+                  </div>
+                </div>
+                {!jogSim && state.tcpJog.message && <p className="paper-v6-jog__note" role="status">{state.tcpJog.message}</p>}
+                {!jogSim && !state.tcpJog.canMove && state.tcpJog.blocker && <p className="paper-v6-jog__note">{state.tcpJog.blocker}</p>}
+              </section>
+            )}
             {!needsModeChoice && <button
               type="button"
               className="paper-v6-reference-record"

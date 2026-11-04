@@ -1383,3 +1383,30 @@
   align-items: center;
   gap: 8px;
 }
+
+/* Scene 1 — find the sheet by moving the robot (sim: virtual arm, hardware: MG400) */
+.paper-v6-jog {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid #c7d2fe;
+  border-radius: 12px;
+  background: #f5f7ff;
+}
+.paper-v6-jog header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px; }
+.paper-v6-jog header strong { font-size: 14px; color: #312e81; }
+.paper-v6-jog__tip { font: 600 12px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; color: #3730a3; background: #fff; border: 1px solid #c7d2fe; border-radius: 999px; padding: 2px 8px; }
+.paper-v6-jog__note { margin: 0; font-size: 12px; color: #475569; }
+.paper-v6-jog__steps { display: flex; gap: 4px; flex-wrap: wrap; }
+.paper-v6-jog__steps button { padding: 3px 10px; border-radius: 999px; border: 1px solid #c7d2fe; background: #fff; color: #3730a3; font-size: 12px; font-weight: 700; cursor: pointer; }
+.paper-v6-jog__steps button[aria-pressed="true"] { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+.paper-v6-jog__pad { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.paper-v6-jog__xy { display: grid; grid-template-areas: ". up ." "left mid right" ". down ."; grid-template-columns: repeat(3, 48px); grid-template-rows: repeat(3, 38px); gap: 4px; }
+.paper-v6-jog__xy span { display: grid; place-items: center; color: #a5b4fc; font-size: 18px; }
+.paper-v6-jog__xy button, .paper-v6-jog__z button { border: 1px solid #a5b4fc; background: #fff; color: #312e81; border-radius: 10px; font-weight: 800; font-size: 13px; cursor: pointer; }
+.paper-v6-jog__xy button:hover:not(:disabled), .paper-v6-jog__z button:hover:not(:disabled) { background: #e0e7ff; }
+.paper-v6-jog__xy button:active:not(:disabled), .paper-v6-jog__z button:active:not(:disabled) { background: #c7d2fe; }
+.paper-v6-jog__z { display: grid; gap: 6px; }
+.paper-v6-jog__z button { padding: 8px 12px; }
+.paper-v6-jog button:disabled { opacity: .45; cursor: not-allowed; }
