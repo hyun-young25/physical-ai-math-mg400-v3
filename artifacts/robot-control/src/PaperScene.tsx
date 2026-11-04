@@ -188,7 +188,7 @@ export function PaperSceneOverlay(){
     .filter(r=>r.runId===data.run?.id&&r.status==="measured"&&r.xCm!==null&&r.yCm!==null)
     .map(r=>({point:r.point,world:position(displayPoint(r.xCm!,r.yCm!))}));
   return <group name="measured-paper-sheet">
-    <CoordinateStudyCamera requestKey={cameraKey} preset="free" view={view} minimumAspect={1.05}/>
+    <CoordinateStudyCamera requestKey={cameraKey} preset="free" view={view} minimumAspect={v6Scene?1.8:1.05}/>
     <mesh renderOrder={5}><bufferGeometry><bufferAttribute attach="attributes-position" args={[vertices,3]}/></bufferGeometry><meshBasicMaterial color="#ffffff" transparent opacity={frame ? .9 : v6Scene ? .78 : .23} side={DoubleSide} depthWrite={false}/></mesh>
     {v6Scene&&<Line points={[...corners,corners[0]].map(raised)} color={frame?"#334155":"#64748b"} lineWidth={frame?2.2:1.6} dashed={!frame} dashSize={6} gapSize={4} depthTest={false} renderOrder={6}/>}
     {grid.map((line,i)=><Line key={i} points={line.map(raised)} color={i%2===0?"#cbd5e1":"#94a3b8"} lineWidth={i%2===0?.55:1} transparent opacity={frame ? .75 : v6Scene ? .6 : .2}/>)}
