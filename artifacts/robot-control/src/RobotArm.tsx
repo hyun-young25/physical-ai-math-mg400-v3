@@ -1608,6 +1608,13 @@ export function RobotArm({
           canReach={pose => !!onComputeIK(pose.x, pose.y, pose.z, pose.r, onGetJoints().j3)}
           runDigitalTwin={runPaperDigitalTwin}
           stopDigitalTwin={reason => paperDtAbortRef.current?.(reason)}
+          jogDigitalTwin={pose => {
+            if (hardwareConnected || status === "running") return false;
+            if (!onComputeIK(pose.x, pose.y, pose.z, pose.r, onGetJoints().j3)) return false;
+            onMoveTo(pose.x, pose.y, pose.z, pose.r);
+            onMoveEnd();
+            return true;
+          }}
         />
         <details className="pcv-details"><summary>이전 심화 과제·학습 기록 보기</summary>{[4,5].map(index=><button key={index} disabled={paperBusy||status==="running"} onClick={()=>{setPaperLevel(null);selectShapeLesson(index);}}>이전 심화 {index-3} · {getShapeLesson("사각형",index).title}</button>)}</details>
       </div>

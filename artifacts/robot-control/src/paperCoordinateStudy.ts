@@ -242,6 +242,13 @@ export function paperV6MockReferencePose(point: PaperPointName): LessonPose {
   };
 }
 
+/** Simulation capture: pen tip must be this close (xy) to the sheet corner it is recorded as. */
+export const PAPER_V6_MOCK_CAPTURE_TOLERANCE_MM = 2;
+/** Simulation capture: pen counts as touching the sheet at or below this height. */
+export const PAPER_V6_MOCK_TOUCH_MAX_Z_MM = 1;
+/** Simulation floor: the sheet surface (z = 0); lower would push into the table. */
+export const PAPER_V6_MOCK_MIN_Z_MM = 0;
+
 /** Pen touches down only on the sheet (plus this margin); elsewhere it passes lifted. */
 export const PAPER_V6_PEN_DOWN_MARGIN_MM = 5;
 /** Mock ink imitates a real ruler reading: about ±0.5 mm, deterministic per point. */
