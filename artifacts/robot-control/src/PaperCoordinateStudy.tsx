@@ -1891,7 +1891,12 @@ export function PaperCoordinateStudy({
       );
       if (!current.run || current.run.status !== "completed" || !displayedAi)
         return { message: "현재 실행과 연결된 AI 질문 또는 규칙 질문을 명시적으로 요청해 표시하세요.", kind: "error" as const };
-      if (!hypothesisDraft.trim())
+      // The v6 card types into its own field and auto-saves it as a draft.
+      const typedHypothesis = (
+        hypothesisDraft.trim() ||
+        String(current.drafts?.studentHypothesis ?? "").trim()
+      );
+      if (!typedHypothesis)
         return { message: "비교 화면의 ‘떠올린 원인 후보’에 생각을 입력하세요.", kind: "error" as const };
       const samePatternCount = current.diagnosis?.pattern
         ? records.filter(
@@ -1906,7 +1911,7 @@ export function PaperCoordinateStudy({
         {
           ...current,
           stage: 7,
-          studentHypothesis: privateText(hypothesisDraft.trim()),
+          studentHypothesis: privateText(typedHypothesis),
           status: "reasoned",
           drafts: { ...current.drafts, v6: paperV6Draft },
           v6: current.v6
