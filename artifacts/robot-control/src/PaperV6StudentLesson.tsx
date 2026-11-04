@@ -1,5 +1,12 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { PaperV6Narration } from "./PaperV6Narration";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  PAPER_V6_REFERENCE_MEANING,
+  PAPER_V6_SCENE_SCRIPTS,
+  PaperV6Narration,
+  referenceAnnouncement,
+  speakNow,
+  writtenForm,
+} from "./PaperV6Narration";
 import { PaperV6StepShell } from "./PaperV6StepShell";
 import type {
   PaperV6Draft,
@@ -137,6 +144,26 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefillKey]);
+  // Each new O·X·Y measurement is read aloud with what the coordinate means.
+  const sampleOrigin = state.samples.find((sample) => sample.point === "O")?.pose;
+  const [lastAnnouncement, setLastAnnouncement] = useState("");
+  const measuredKey = state.samples.map((sample) => `${sample.point}@${sample.capturedAt}`).join("|");
+  const announcedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (announcedRef.current === null) {
+      announcedRef.current = measuredKey; // existing records on load are not re-read
+      return;
+    }
+    if (measuredKey === announcedRef.current) return;
+    const previous = new Set(announcedRef.current.split("|"));
+    announcedRef.current = measuredKey;
+    const fresh = state.samples.find((sample) => !previous.has(`${sample.point}@${sample.capturedAt}`));
+    if (!fresh || !["O", "X", "Y"].includes(fresh.point)) return;
+    const line = referenceAnnouncement(fresh.point as "O" | "X" | "Y", fresh.pose, sampleOrigin);
+    setLastAnnouncement(line);
+    speakNow(line);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [measuredKey]);
   const updateWork = (
     point: string,
     key: keyof Omit<PaperV6FormulaWork, "point">,
@@ -426,6 +453,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
         statusMessage={state.error?.trim() || message?.trim() || undefined}
         statusKind={state.error?.trim() ? (/^(연습 완료|DT 완료)/.test(state.error.trim()) ? "success" : "error") : messageKind}
       >
+        <PaperV6Narration key={`guide-${scene}`} script={PAPER_V6_SCENE_SCRIPTS[scene - 1]} />
         {scene === 1 && (
           <div className="paper-v6-step" data-testid="paper-v6-understand">
             <div className="paper-v6-coordinate-pair">
@@ -471,7 +499,6 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 </svg>
               </section>
             </div>
-            <PaperV6Narration />
             <p className="paper-v6-paper-note paper-v6-paper-note--lead">
               로봇은 종이의 위치를 알지 못합니다. 학생이 세운 변환식이 펜의 목표 좌표를 결정합니다.
               먼저 로봇으로 종이의 기준점 O·X·Y를 측정합니다.
@@ -518,10 +545,19 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                   return <article key={name} data-testid={`paper-v6-live-point-${name}`}>
                     <strong>{name}</strong>
                     {sample ? <p>X {sample.pose.x.toFixed(2)} · Y {sample.pose.y.toFixed(2)} mm</p> : <p>측정 대기</p>}
-                    <small>{sample ? `${sample.source === "hardware" ? "MG400 TCP" : sample.source === "mock" ? "연습 자료" : "교사 입력"}` : "기록 전"}</small>
+                    <small className="paper-v6-live-points__meaning">{PAPER_V6_REFERENCE_MEANING[name].paper} · {PAPER_V6_REFERENCE_MEANING[name].role}</small>
+                    {name === "X" && sample && sampleOrigin && (
+                      <small className="paper-v6-live-points__delta">O→X: ΔX {(sample.pose.x - sampleOrigin.x).toFixed(1)} · ΔY {(sample.pose.y - sampleOrigin.y).toFixed(1)} mm</small>
+                    )}
+                    <small>{sample ? `${sample.source === "hardware" ? "MG400 TCP" : sample.source === "mock" ? "시뮬레이션" : "교사 입력"}` : "기록 전"}</small>
                   </article>;
                 })}
               </div>
+              {lastAnnouncement && (
+                <p className="paper-v6-live-points__said" aria-live="polite" data-testid="paper-v6-reference-said">
+                  🔊 {writtenForm(lastAnnouncement)}
+                </p>
+              )}
             </section>
             {!needsModeChoice && missingReference && !state.mockPracticeEnabled && (
               <section className="paper-v6-jog" aria-label="펜 끝 옮기기" data-testid="paper-v6-jog" data-mode={jogSim ? "sim" : "hardware"}>

@@ -1419,3 +1419,6 @@
 .paper-v6-narration__caption b { color: #4338ca; margin-right: 4px; }
 .paper-v6-narration__script summary { cursor: pointer; font-size: 12px; color: #4338ca; }
 .paper-v6-narration__script ol { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; line-height: 1.5; color: #334155; }
+.paper-v6-live-points__meaning { display: block; color: #4338ca; font-weight: 600; }
+.paper-v6-live-points__delta { display: block; color: #0f172a; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.paper-v6-live-points__said { margin: 8px 0 0; padding: 6px 10px; border-radius: 8px; background: #eef2ff; color: #1e293b; font-size: 12.5px; line-height: 1.5; }
