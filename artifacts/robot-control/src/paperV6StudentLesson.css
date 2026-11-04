@@ -1353,9 +1353,7 @@
   color: #fff;
   animation: paper-v6-nudge 1.6s ease-in-out infinite;
 }
-.paper-v6-reference-record:not(:disabled)::before {
-  content: "👉 ";
-}
+
 .paper-v6-student[data-scene="1"] .paper-v6-shell__button--next:not(:disabled) {
   background: #2563eb;
   color: #fff;
@@ -1410,3 +1408,14 @@
 .paper-v6-jog__z { display: grid; gap: 6px; }
 .paper-v6-jog__z button { padding: 8px 12px; }
 .paper-v6-jog button:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Spoken activity overview (scene 1) */
+.paper-v6-narration { display: grid; gap: 6px; margin: 0 0 8px; padding: 8px 10px; border: 1px solid #c7d2fe; border-radius: 10px; background: #eef2ff; }
+.paper-v6-narration__bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.paper-v6-narration__play { border: 0; border-radius: 999px; padding: 6px 14px; background: #4f46e5; color: #fff; font-weight: 800; font-size: 13px; cursor: pointer; }
+.paper-v6-narration__play[aria-pressed="true"] { background: #312e81; }
+.paper-v6-narration__meta, .paper-v6-narration__note { font-size: 12px; color: #475569; }
+.paper-v6-narration__caption { margin: 0; font-size: 13px; line-height: 1.5; color: #1e293b; }
+.paper-v6-narration__caption b { color: #4338ca; margin-right: 4px; }
+.paper-v6-narration__script summary { cursor: pointer; font-size: 12px; color: #4338ca; }
+.paper-v6-narration__script ol { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; line-height: 1.5; color: #334155; }

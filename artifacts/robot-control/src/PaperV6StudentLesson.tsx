@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { PaperV6Narration } from "./PaperV6Narration";
 import { PaperV6StepShell } from "./PaperV6StepShell";
 import type {
   PaperV6Draft,
@@ -216,11 +217,11 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
   const needsModeChoice = !state.mockPracticeEnabled && state.tcpJog?.connection !== "connected" && !state.samples.length;
   const referencePrompt = missingReference
     ? state.mockPracticeEnabled
-      ? `버튼을 누르면 로봇이 종이의 ${missingReference} 꼭짓점으로 가서 펜으로 찍고, 그 점의 로봇 좌표를 알려줘요.`
+      ? `버튼을 누르면 로봇이 종이의 ${missingReference} 꼭짓점을 찍고, 그 점의 로봇 좌표를 기록합니다.`
       : state.tcpJog?.connection === "connected"
         ? `① 실제 MG400 팔을 손으로 옮기거나(교사 확인) 아래 미세 이동으로 펜 끝을 종이의 ${missingReference}에 대고 ② 기록하세요.`
         : "먼저 위에서 ‘시뮬레이션으로 하기’ 또는 ‘MG400 연결하기’를 고르세요."
-    : "O·X·Y 기록 완료 → 아래 ‘다음’ 버튼으로 내 식 예측하러 가요.";
+    : "O·X·Y 측정 완료. ‘다음’을 눌러 변환식 예측 단계로 이동하세요.";
   const [jogStep, setJogStep] = useState(20);
   const jogSim = state.mockPracticeEnabled;
   const jogSteps = jogSim ? [20, 5] : [2, 1, 0.5];
@@ -305,12 +306,12 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
       </div>
       {!state.runAvailable && !state.running && (
         <p className="paper-v6-error" role="status">
-          {state.dtBlockers?.[0]?.message ?? "예측을 저장한 뒤 실행할 수 있어요."}
+          {state.dtBlockers?.[0]?.message ?? "예측을 저장한 뒤 실행할 수 있습니다."}
         </p>
       )}
       {state.mockPracticeEnabled ? (
         <p className="paper-v6-callout" data-testid="paper-v6-mock-run-note">
-          지금은 연습 로봇이에요. 실제 MG400을 연결하면 이 화면, 이 버튼 그대로 실물 로봇이 움직여요.
+          현재 시뮬레이션 로봇으로 실행합니다. MG400을 연결하면 같은 화면과 버튼으로 실제 로봇이 동작합니다.
         </p>
       ) : (
         <ul className="paper-v6-ready-checks" aria-label="실물 실행 준비" data-testid="paper-v6-ready-checks">
@@ -358,15 +359,15 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
   if (!v6) return null;
 
   const sceneTitles = [
-    "종이가 어디 있지?",
-    "내 식으로 예측하기",
-    "로봇이 그려요",
-    "비교하고 AI에게 묻기",
-    "고칠까, 유지할까? → 새 점에서 확인",
+    "기준점 측정",
+    "변환식 예측",
+    "로봇 실행",
+    "비교 · AI 질문",
+    "모델 판단 · 독립점 검증",
   ];
   const sceneIntros = [
-    "로봇이 종이의 O·X·Y를 읽고, 종이와 로봇 좌표의 차이를 살펴봅니다.",
-    "O와 회전각으로 내 식을 세우고, 목표점을 직접 계산합니다.",
+    "로봇으로 종이의 O·X·Y를 측정해 종이 좌표계와 로봇 좌표계의 관계를 확인합니다.",
+    "원점 O와 회전각 θ로 변환식을 세우고, 목표점의 로봇 좌표를 계산합니다.",
     "저장된 학생 예측을 확인한 뒤 DT 또는 교사 감독 실장비를 직접 실행합니다.",
     "예측·제어기 보고·잉크를 구분해 비교하고, 현재 실행에 대해 AI에게 묻습니다.",
     "추가 근거로 모델을 판단하고, 독립점 V에서 다시 확인합니다.",
@@ -470,14 +471,15 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 </svg>
               </section>
             </div>
+            <PaperV6Narration />
             <p className="paper-v6-paper-note paper-v6-paper-note--lead">
-              로봇은 종이가 어디 있는지 몰라요. 내가 세운 식이 로봇 펜이 갈 곳을 정해요.
-              그래서 먼저 로봇 팔로 종이의 O·X·Y를 재요.
+              로봇은 종이의 위치를 알지 못합니다. 학생이 세운 변환식이 펜의 목표 좌표를 결정합니다.
+              먼저 로봇으로 종이의 기준점 O·X·Y를 측정합니다.
             </p>
             {needsModeChoice && (
               <section className="paper-v6-mode-choice" aria-label="실행 방식 선택" data-testid="paper-v6-mode-choice">
-                <strong>MG400이 아직 연결되지 않았어요</strong>
-                <p>장비 없이 시뮬레이션 로봇으로 똑같이 해 볼 수 있어요. 나중에 MG400을 연결하면 같은 화면 그대로 실물이 움직여요.</p>
+                <strong>MG400 미연결</strong>
+                <p>장비 없이 시뮬레이션 로봇으로 같은 절차를 진행할 수 있습니다. MG400을 연결하면 같은 화면으로 실제 로봇이 동작합니다.</p>
                 <div>
                   <button
                     type="button"
@@ -499,7 +501,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
             )}
             {state.mockPracticeEnabled && (
               <p className="paper-v6-sim-badge" data-testid="paper-v6-sim-badge">
-                🧪 시뮬레이션 로봇으로 진행 중 · 실제 측정값이 아니에요
+                시뮬레이션 진행 중 · 실측값 아님
               </p>
             )}
             <p className="paper-v6-reference-prompt" role="status" data-testid="paper-v6-current-reference">
@@ -524,13 +526,13 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
             {!needsModeChoice && missingReference && !state.mockPracticeEnabled && (
               <section className="paper-v6-jog" aria-label="펜 끝 옮기기" data-testid="paper-v6-jog" data-mode={jogSim ? "sim" : "hardware"}>
                 <header>
-                  <strong>{jogSim ? "🕹️ 시뮬레이션 로봇 움직이기" : "🦾 MG400 펜 끝 맞추기"}</strong>
+                  <strong>{jogSim ? "시뮬레이션 로봇 이동" : "MG400 펜 끝 위치 맞추기"}</strong>
                   <span className="paper-v6-jog__tip" data-testid="paper-v6-jog-tip">
                     펜 끝 {tip ? `X ${tip.x.toFixed(1)} · Y ${tip.y.toFixed(1)} · Z ${tip.z.toFixed(1)}` : "보고 대기"}
                   </span>
                 </header>
                 {!jogSim && (
-                  <p className="paper-v6-jog__note">실제 장비에서는 팔을 손으로 옮겨(드래그 모드) 대략 맞추고, 마지막은 아래 버튼으로 미세하게 맞춰요. 버튼을 누를 때마다 확인창이 떠요.</p>
+                  <p className="paper-v6-jog__note">실제 장비에서는 드래그 모드로 팔을 옮겨 대략 맞춘 뒤, 아래 버튼으로 미세 조정합니다. 버튼마다 확인창이 표시됩니다.</p>
                 )}
                 <div className="paper-v6-jog__steps" role="group" aria-label="한 번에 움직일 거리">
                   {jogSteps.map((mm) => (
@@ -566,13 +568,13 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
             >
               {missingReference
                 ? state.mockPracticeEnabled
-                  ? `📍 ${missingReference} 좌표 찍기`
+                  ? `${missingReference} 좌표 측정`
                   : `현재 위치를 ${missingReference}로 기록`
                 : "O · X · Y 기록 완료"}
             </button>}
             {!hasAllReferences && (
               <p className="paper-v6-hint" data-testid="paper-v6-references-required">
-                O·X·Y 세 점을 모두 기록하면 다음 장면으로 넘어가요.
+                O·X·Y 세 점을 모두 측정하면 다음 단계로 진행할 수 있습니다.
               </p>
             )}
             {state.referenceError && (
@@ -661,7 +663,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
               </p>
             )}
             <fieldset className="paper-v6-choice">
-              <legend>종이가 로봇 축과 나란하다는 가정을 사용할까요?</legend>
+              <legend>종이 축이 로봇 축과 평행하다고 가정합니까?</legend>
               <label>
                 <input
                   type="radio"
@@ -829,7 +831,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
               })}
             </div>
             <label className="paper-v6-field">
-              <span>왜 이 좌표를 예측했나요? 한두 문장</span>
+              <span>예측 근거 (한두 문장)</span>
               <textarea
                 aria-label="최초 예측 설명"
                 rows={2}
@@ -854,12 +856,12 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
         {scene === 3 && step === 5 && (
           <div className="paper-v6-step" data-testid="paper-v6-run">
             <p className="paper-v6-callout">
-              로봇은 내 식이 가리키는 곳에 펜을 찍어요. 종이 밖을 가리키면 펜을 든 채 지나가요.
+              로봇은 학생 식이 계산한 좌표에 펜을 찍습니다. 종이 밖 좌표는 펜을 든 채 통과합니다.
               {state.verificationCriteria && ` 판정 기준: ±${state.verificationCriteria.positionToleranceMm.toFixed(1)} mm`}
             </p>
             {!state.mockPracticeEnabled && state.physicalBlockers?.some((blocker) => blocker.target === "teacher") && (
               <p className="paper-v6-hint" data-testid="paper-v6-supervision-hint">
-                내 예측이 측정한 종이와 달라요. 실물로 확인하려면 교사가 장비 옆에서 감독을 켜야 해요.
+                예측 좌표가 측정한 종이 범위와 다릅니다. 실장비로 확인하려면 교사가 감독 모드를 켜야 합니다.
               </p>
             )}
             {executionControls}
@@ -867,7 +869,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
               <section className="paper-v6-run-result" aria-label="현재 실행 상태">
                 <h3>🤖 로봇 실행</h3>
                 <p>
-                  {run.status === "completed" ? "완료 · 다음 장면에서 비교해요" : run.status === "running" ? "그리는 중…" : "끝나지 않았어요 · 다시 실행하세요"}
+                  {run.status === "completed" ? "완료 · 다음 단계에서 비교" : run.status === "running" ? "그리는 중…" : "미완료 · 다시 실행하세요"}
                 </p>
                 <small>
                   {run.source === "hardware"
@@ -925,7 +927,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 <div><h3>AI 질문 뒤에 더 확인한 것</h3><p>확인 항목과 관찰 결과를 초안으로 남깁니다.</p></div>
               </div>
               <fieldset className="paper-v6-choice">
-                <legend>무엇을 추가로 확인했나요? 하나 이상 선택</legend>
+                <legend>추가로 확인한 항목 (하나 이상)</legend>
                 {[
                   ["remeasure-y", "Y점을 다시 측정"],
                   ["review-ox-direction", "O→X 방향을 다시 봄"],
@@ -969,7 +971,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
             <p className="paper-v6-callout" data-testid="paper-v6-support-level">
               도움 단계 {v6?.supportLevel ?? 1}/3 ·{" "}
               {(v6?.supportLevel ?? 1) === 1
-                ? "관측 질문: 선택한 추가 확인 결과가 내 설명과 어떻게 연결되나요?"
+                ? "관측 질문: 추가 확인 결과가 앞서 세운 원인 가설과 어떻게 연결됩니까?"
                 : (v6?.supportLevel ?? 1) === 2
                   ? "관계 힌트: O의 위치 변화와 O→X 방향 변화를 따로 비교해 보세요."
                   : "예시와 교사 도움: 목표점이 아닌 종이 (5,0), (0,5) cm를 식에 넣어 회전 항의 부호를 확인해 보세요. 필요하면 교사에게 함께 확인을 요청하세요."}
