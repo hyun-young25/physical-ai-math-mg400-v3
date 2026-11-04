@@ -46,6 +46,7 @@ import {
   useId,
   useLayoutEffect,
 } from "react";
+import { registerPaperSceneNavigator } from "./paperSceneStore";
 import type { LessonPose } from "./curriculum";
 import { PaperCoordinateStudyView } from "./PaperCoordinateStudyView";
 import { paperStageNavigationRequirement } from "./paperCoordinateViewModel";
@@ -1914,6 +1915,18 @@ export function PaperCoordinateStudy({
     setStage(bounded as PaperLessonStage);
     return null;
   };
+  const navigateV6Ref = useRef(navigateV6);
+  navigateV6Ref.current = navigateV6;
+  useEffect(
+    () =>
+      registerPaperSceneNavigator((scene) => {
+        const stageForScene = [2, 3, 5, 6, 7][scene - 1];
+        if (!stageForScene) return;
+        const result = navigateV6Ref.current(stageForScene);
+        if (result) setPageError(result.message);
+      }),
+    [],
+  );
 
   const createV6Revalidation = () => {
     const parent = active?.id
