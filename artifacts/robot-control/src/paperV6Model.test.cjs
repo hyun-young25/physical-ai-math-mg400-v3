@@ -564,11 +564,13 @@ test("v6 off-sheet predictions pass with the pen lifted instead of blocking the 
     ...frame,
     samples: ["O", "X", "Y"].map((point) => ({ ...frame.samples[0], point, pose: paper.paperV6MockReferencePose(point) })),
   };
+  const O = paper.paperV6MockReferencePose("O");
+  const at = (a, b) => [String(O.x + a), String(O.y + b)];
   const predictions = [
-    { name: "P1", xCm: 1, yCm: 1, robotX: "210", robotY: "60", robotZ: "0" },
-    { name: "P2", xCm: 9, yCm: 1, robotX: "290", robotY: "60", robotZ: "0" },
-    { name: "P3", xCm: 9, yCm: 9, robotX: "290", robotY: "140", robotZ: "0" },
-    { name: "P4", xCm: 1, yCm: 9, robotX: "210", robotY: "140", robotZ: "0" },
+    { name: "P1", xCm: 1, yCm: 1, robotX: at(10, 10)[0], robotY: at(10, 10)[1], robotZ: "0" },
+    { name: "P2", xCm: 9, yCm: 1, robotX: at(90, 10)[0], robotY: at(90, 10)[1], robotZ: "0" },
+    { name: "P3", xCm: 9, yCm: 9, robotX: at(90, 90)[0], robotY: at(90, 90)[1], robotZ: "0" },
+    { name: "P4", xCm: 1, yCm: 9, robotX: at(10, 90)[0], robotY: at(10, 90)[1], robotZ: "0" },
   ];
   const plan = v6.buildPaperV6MovePlan({
     startPose: { x: 250, y: 80, z: 40, r: 0 },
@@ -585,7 +587,7 @@ test("v6 off-sheet predictions pass with the pen lifted instead of blocking the 
   assert.deepEqual(captured.map(([, z]) => z === 0), [true, false, false, true]);
   assert.ok(plan.operations.every((operation) => operation.target.z >= 0));
   // The 30 mm sheet distance no longer blocks v6, but teacher/DT gates remain.
-  const outside = { point: "P3", pose: { x: 290, y: 140, z: 0, r: 0 } };
+  const outside = { point: "P3", pose: { x: O.x + 90, y: O.y + 90, z: 0, r: 0 } };
   assert.equal(guards.supervisedPaperBlockers(true, true, true, rotated, [outside], 10, true).length, 0);
   assert.deepEqual(guards.supervisedPaperBlockers(false, true, false, rotated, [outside], 10, true).map((x) => x.target), ["teacher", "dt"]);
   // Mock ink: off-sheet points are reported as no ink with a reason; on-sheet ones carry ruler-like noise.

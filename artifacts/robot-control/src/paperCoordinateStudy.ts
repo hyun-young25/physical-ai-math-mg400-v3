@@ -219,8 +219,11 @@ export type PaperInkReadingDraft = Pick<PaperInkReading, "point" | "status" | "r
 const PAPER_V6_MOCK_THETA_RAD = (28.6 * Math.PI) / 180;
 
 /** In-app practice data only; this is never sent to the hardware bridge. */
+export const PAPER_V6_MOCK_ORIGIN = { x: 250, y: -60 } as const;
+
 export function paperV6MockReferencePose(point: PaperPointName): LessonPose {
-  const origin = { x: 200, y: 50 };
+  // In front of the MG400, just under its ready pen position (350, 0) — where a sheet is taped in class.
+  const origin = PAPER_V6_MOCK_ORIGIN;
   const length = 100;
   if (point === "O")
     return { x: origin.x, y: origin.y, z: 0, r: 0 };
