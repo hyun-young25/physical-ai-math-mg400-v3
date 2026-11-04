@@ -137,8 +137,9 @@ export function PaperSceneOverlay(){
     // front (readable), the whole arm reaches in from behind it — never blocking it.
     const dx=centerWorld[0]-baseWorld[0],dz=centerWorld[2]-baseWorld[2],len=Math.hypot(dx,dz)||1;
     const ux=dx/len,uz=dz/len;
-    const t=[centerWorld[0]-ux*70,centerWorld[1]+45,centerWorld[2]-uz*70] as const;
-    return {position:[centerWorld[0]+ux*330-uz*90,centerWorld[1]+330,centerWorld[2]+uz*330+ux*90] as const,target:t};
+    // High, mostly top-down: the extended arm must not sit between camera and sheet.
+    const t=[centerWorld[0]-ux*40,centerWorld[1],centerWorld[2]-uz*40] as const;
+    return {position:[centerWorld[0]+ux*260-uz*60,centerWorld[1]+560,centerWorld[2]+uz*260+ux*60] as const,target:t};
   },[frame?.id,v6Scene]);
   const corners=[[0,0],[10,0],[10,10],[0,10]].map(([x,y])=>displayPoint(x,y));
   const vertices=new Float32Array([0,1,2,0,2,3].flatMap(i=>position(corners[i])));
