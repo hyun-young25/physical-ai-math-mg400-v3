@@ -447,7 +447,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
         intro={sceneIntros[scene - 1]}
         canGoBack={scene > 1 && !state.running}
         canGoNext={scene < 5 && !state.running && (scene !== 1 || hasAllReferences)}
-        nextLabel={scene === 2 ? editingRevisionModel ? "판단 화면으로 돌아가기" : hasFrozenInitialPrediction ? "저장된 예측으로 실행 단계 열기" : "모델과 예측 저장" : scene === 3 ? "비교하기" : scene === 4 ? "판단 이어가기" : "기준점 확인 후 계속"}
+        nextLabel={scene === 2 ? editingRevisionModel ? "판단 화면으로 돌아가기" : hasFrozenInitialPrediction ? "저장된 예측으로 실행 단계 열기" : "모델과 예측 저장" : scene === 3 ? "비교하기" : scene === 4 ? "판단 이어가기" : scene === 1 ? "다음: 변환식 예측" : "마지막 단계"}
         onBack={goBack}
         onNext={advance}
         statusMessage={state.error?.trim() || message?.trim() || undefined}
