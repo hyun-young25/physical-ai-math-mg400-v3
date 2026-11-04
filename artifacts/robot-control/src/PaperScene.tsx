@@ -4,7 +4,7 @@ import { DoubleSide } from "three";
 import { CoordinateStudyCamera } from "./CoordinateStudyCamera";
 import { shapeWorldPoint } from "./shapeKinematics";
 import { PAPER_COLORS as C, paperCorners, paperGrid, paperMismatchPoints, paperPoint, paperFrameAngleDegrees, paperSceneLiveModel, paperSceneLivePredictions, paperSceneReadout, paperSceneRotation, paperSceneSeries, paperSeriesSegments, paperFrameSource, paperSceneSourceText, validPaperPoint, type PaperScenePoint } from "./paperSceneModel";
-import { requestPaperCamera, selectPaperPoint, usePaperScene } from "./paperSceneStore";
+import { navigatePaperScene, requestPaperCamera, selectPaperPoint, usePaperScene } from "./paperSceneStore";
 import { paperV6EquationTerms } from "./paperV6Model";
 import { PAPER_HARDWARE_V6_VERSION, PAPER_V6_MOCK_ORIGIN } from "./paperCoordinateStudy";
 import "./paperScene.css";
@@ -44,7 +44,9 @@ function PaperLoopRing({data}:{data:SceneData}){
   const current=paperLoopPosition(data),attempt=data.activeAttempt?.attempt??1;
   return <ol className="paper-loop-ring" aria-label="학습 단계" data-testid="paper-loop-ring">
     {STEPS.map((label,index)=>{const step=index+1,value=stepValue(data,step);return <li key={label} className={step===current?"is-current":step<current?"is-done":""} data-current={step===current}>
-      <b><span aria-hidden="true">{step<current?"✓":step}</span>{label}</b>{value&&<small>{value}</small>}
+      {step<current&&!data.running
+        ?<button type="button" className="paper-loop-ring__back" onClick={()=>navigatePaperScene(step)} title={`${label} 단계로 돌아가기`} data-testid={`paper-loop-back-${step}`}><b><span aria-hidden="true">✓</span>{label}</b>{value&&<small>{value}</small>}</button>
+        :<><b><span aria-hidden="true">{step<current?"✓":step}</span>{label}</b>{value&&<small>{value}</small>}</>}
     </li>;})}
     <li className="paper-loop-ring__again" aria-label={`${attempt}회차`}>↻ {attempt}회차</li>
   </ol>;

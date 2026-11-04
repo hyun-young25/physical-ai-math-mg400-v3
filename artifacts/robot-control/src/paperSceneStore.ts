@@ -37,6 +37,10 @@ export function selectPaperFormulaTerm(term:string|null) {
   if (state.formulaTerm === term) return;
   set({...state,formulaTerm:term});
 }
+let sceneNavigator:((scene:number)=>void)|null=null;
+/** The lesson registers how a step-bar click moves back to an earlier scene. */
+export function registerPaperSceneNavigator(fn:((scene:number)=>void)|null){sceneNavigator=fn;return()=>{if(sceneNavigator===fn)sceneNavigator=null;};}
+export function navigatePaperScene(scene:number){sceneNavigator?.(scene);}
 export function requestPaperCamera(){if(state.data)set({...state,cameraKey:state.cameraKey+1});}
 export function usePaperScene() {
   const snapshot=useSyncExternalStore(subscribe,paperSceneSnapshot,paperSceneSnapshot), revision=useRevisionScene(),square=useSquareVisual();
