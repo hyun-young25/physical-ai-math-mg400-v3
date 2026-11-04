@@ -216,7 +216,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
   const needsModeChoice = !state.mockPracticeEnabled && state.tcpJog?.connection !== "connected" && !state.samples.length;
   const referencePrompt = missingReference
     ? state.mockPracticeEnabled
-      ? `X·Y 버튼으로 펜을 종이의 ${missingReference} 꼭짓점 근처로 옮기고, 아래 파란 버튼을 누르세요. 로봇이 펜을 내려 꼭짓점을 찍어요.`
+      ? `버튼을 누르면 로봇이 종이의 ${missingReference} 꼭짓점으로 가서 펜으로 찍고, 그 점의 로봇 좌표를 알려줘요.`
       : state.tcpJog?.connection === "connected"
         ? `① 실제 MG400 팔을 손으로 옮기거나(교사 확인) 아래 미세 이동으로 펜 끝을 종이의 ${missingReference}에 대고 ② 기록하세요.`
         : "먼저 위에서 ‘시뮬레이션으로 하기’ 또는 ‘MG400 연결하기’를 고르세요."
@@ -521,7 +521,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 })}
               </div>
             </section>
-            {!needsModeChoice && missingReference && (
+            {!needsModeChoice && missingReference && !state.mockPracticeEnabled && (
               <section className="paper-v6-jog" aria-label="펜 끝 옮기기" data-testid="paper-v6-jog" data-mode={jogSim ? "sim" : "hardware"}>
                 <header>
                   <strong>{jogSim ? "🕹️ 시뮬레이션 로봇 움직이기" : "🦾 MG400 펜 끝 맞추기"}</strong>
@@ -566,7 +566,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
             >
               {missingReference
                 ? state.mockPracticeEnabled
-                  ? `여기가 ${missingReference}! 펜 내려 찍기`
+                  ? `📍 ${missingReference} 좌표 찍기`
                   : `현재 위치를 ${missingReference}로 기록`
                 : "O · X · Y 기록 완료"}
             </button>}

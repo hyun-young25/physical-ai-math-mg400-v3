@@ -90,7 +90,6 @@ import {
   paperBaselineLengthMetrics,
   initialPaperAttemptForLevel,
   paperV6MockReferencePose,
-  PAPER_V6_MOCK_CAPTURE_TOLERANCE_MM,
   PAPER_V6_MOCK_MIN_Z_MM,
   paperV6MockInkDrafts,
   paperPenDownAllowed,
@@ -2692,27 +2691,13 @@ export function PaperCoordinateStudy({
           return;
         }
         const target = paperV6MockReferencePose(point);
-        const offPlane = Math.hypot(
-          mockPoseAvailable.x - target.x,
-          mockPoseAvailable.y - target.y,
-        );
-        if (offPlane > PAPER_V6_MOCK_CAPTURE_TOLERANCE_MM) {
-          setReferenceError(
-            offPlane > 40
-              ? `아직 ${point} 꼭짓점과 멀어요. 왼쪽 화면의 ${point} 표시를 보고 X·Y 버튼으로 펜을 그 위로 옮기세요.`
-              : `조금만 더! ${point}까지 약 ${Math.round(offPlane)} mm · 가까이(10 mm 안) 가면 로봇이 알아서 찍어요.`,
-          );
-          return;
-        }
-        // Close enough: the robot lowers the pen onto the corner, marks it, and lifts again.
-        const touch = { x: target.x, y: target.y, z: 0, r: mockPoseAvailable.r };
-        jogDigitalTwin?.(touch);
-        mockJogTargetRef.current = { pose: touch, at: Date.now() };
-        window.setTimeout(() => {
-          const lifted = { ...touch, z: 20 };
-          if (jogDigitalTwin?.(lifted))
-            mockJogTargetRef.current = { pose: lifted, at: Date.now() };
-        }, 700);
+        // Simulation: one press — the robot goes to the corner, touches the pen down, reports its coordinate.
+        const above = { x: target.x, y: target.y, z: 20, r: mockPoseAvailable.r };
+        const touch = { ...above, z: 0 };
+        jogDigitalTwin?.(above);
+        window.setTimeout(() => jogDigitalTwin?.(touch), 350);
+        window.setTimeout(() => jogDigitalTwin?.(above), 1100);
+        mockJogTargetRef.current = { pose: above, at: Date.now() + 1200 };
         const capturedAt = Date.now();
         const sample: PaperReferenceSample = {
           point,
