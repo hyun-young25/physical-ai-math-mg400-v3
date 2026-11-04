@@ -134,8 +134,9 @@ export function PaperSceneOverlay(){
   const view=useMemo(()=>{
     if(!v6Scene)return {position:[centerWorld[0]-30,centerWorld[1]+480,centerWorld[2]+230] as const,target:[centerWorld[0]-30,centerWorld[1],centerWorld[2]] as const};
     // Known-good framing (whole MG400 with the sheet in front of it), pulled in a little.
-    const t=[baseWorld[0]*0.35+centerWorld[0]*0.65,centerWorld[1]+50,baseWorld[2]*0.35+centerWorld[2]*0.65] as const;
-    return {position:[t[0]+100,t[1]+380,t[2]+450] as const,target:t};
+    // Same angle, a little farther out (smaller robot) and aimed past the sheet so the robot sits further left.
+    const t=[baseWorld[0]*0.1+centerWorld[0]*0.9+60,centerWorld[1]+50,baseWorld[2]*0.1+centerWorld[2]*0.9] as const;
+    return {position:[t[0]+125,t[1]+475,t[2]+560] as const,target:t};
   },[frame?.id,v6Scene]);
   const corners=[[0,0],[10,0],[10,10],[0,10]].map(([x,y])=>displayPoint(x,y));
   const vertices=new Float32Array([0,1,2,0,2,3].flatMap(i=>position(corners[i])));
