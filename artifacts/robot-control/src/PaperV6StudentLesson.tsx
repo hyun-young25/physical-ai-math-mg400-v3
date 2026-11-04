@@ -705,11 +705,6 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 tan⁻¹ 계산값을 입력칸에 넣기
               </button>
             </div>
-            {thetaFromDelta !== null && (
-              <p className="paper-v6-hint">
-                각도 계산기 결과: {thetaFromDelta.toFixed(2)}° · O→X 방향
-              </p>
-            )}
             <fieldset className="paper-v6-choice">
               <legend>종이 축이 로봇 축과 평행하다고 가정합니까?</legend>
               <label>

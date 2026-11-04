@@ -65,17 +65,10 @@ export function paperSceneLiveModel(data: PaperSceneData): PaperV6StudentModel |
   const model = draft
     ? paperV6ModelFromDraft({
         ...draft,
+        // Only the θ the student entered (or the θ=0 assumption) drives the preview —
+        // never a θ derived from ΔX/ΔY, which would show the answer before it is computed.
         thetaDeg:
-          draft.thetaAssumption === "zero"
-            ? "0"
-            : draft.thetaDeg?.trim() ||
-              (() => {
-                const dx = number(draft.deltaXmm ?? "");
-                const dy = number(draft.deltaYmm ?? "");
-                return dx !== null && dy !== null && Math.hypot(dx, dy) > 1e-6
-                  ? String((Math.atan2(dy, dx) * 180) / Math.PI)
-                  : "";
-              })(),
+          draft.thetaAssumption === "zero" ? "0" : draft.thetaDeg?.trim() ?? "",
       }).model
     : attempt.v6?.model ?? null;
   return model;
