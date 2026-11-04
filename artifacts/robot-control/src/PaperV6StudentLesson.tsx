@@ -193,9 +193,14 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
   const missingReference = (["O", "X", "Y"] as const).find(
     (point) => !state.samples.some((sample) => sample.point === point),
   );
+  const needsModeChoice = !state.mockPracticeEnabled && state.tcpJog?.connection !== "connected" && !state.samples.length;
   const referencePrompt = missingReference
-    ? `지금 찍을 점: ${missingReference} · 펜 끝을 맞춘 뒤 현재 위치를 기록하세요.`
-    : "O·X·Y 기록 완료 · 다음은 내 식으로 예측합니다.";
+    ? state.mockPracticeEnabled
+      ? `연습 로봇 펜 끝이 종이의 ${missingReference}에 와 있어요 → 아래 파란 버튼을 눌러 기록하세요.`
+      : state.tcpJog?.connection === "connected"
+        ? `지금 찍을 점: ${missingReference} · 펜 끝을 맞춘 뒤 현재 위치를 기록하세요.`
+        : "먼저 위에서 ‘시뮬레이션으로 하기’ 또는 ‘MG400 연결하기’를 고르세요."
+    : "O·X·Y 기록 완료 → 아래 ‘다음’ 버튼으로 내 식 예측하러 가요.";
   const sketchPoint = (xCm: number, yCm: number) => ({
     x: 40 + xCm * 9.6 - yCm * 0.9,
     y: 103 + xCm * 0.9 - yCm * 8,
@@ -441,7 +446,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
               로봇은 종이가 어디 있는지 몰라요. 내가 세운 식이 로봇 펜이 갈 곳을 정해요.
               그래서 먼저 로봇 팔로 종이의 O·X·Y를 재요.
             </p>
-            {!state.mockPracticeEnabled && state.tcpJog?.connection !== "connected" && !state.samples.length && (
+            {needsModeChoice && (
               <section className="paper-v6-mode-choice" aria-label="실행 방식 선택" data-testid="paper-v6-mode-choice">
                 <strong>MG400이 아직 연결되지 않았어요</strong>
                 <p>장비 없이 시뮬레이션 로봇으로 똑같이 해 볼 수 있어요. 나중에 MG400을 연결하면 같은 화면 그대로 실물이 움직여요.</p>
@@ -488,7 +493,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 })}
               </div>
             </section>
-            <button
+            {!needsModeChoice && <button
               type="button"
               className="paper-v6-reference-record"
               disabled={!missingReference || state.running || !state.currentPose}
@@ -501,7 +506,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
               {missingReference
                 ? `현재 위치를 ${missingReference}로 기록`
                 : "O · X · Y 기록 완료"}
-            </button>
+            </button>}
             {!hasAllReferences && (
               <p className="paper-v6-hint" data-testid="paper-v6-references-required">
                 O·X·Y 세 점을 모두 기록하면 다음 장면으로 넘어가요.
