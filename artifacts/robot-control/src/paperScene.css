@@ -157,11 +157,11 @@
 .paper-loop-ring li b { display:inline-flex; align-items:center; gap:5px; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .paper-loop-ring li b span { display:inline-grid; place-items:center; width:18px; height:18px; border-radius:50%; background:#ffffff26; font-size:10px; flex:0 0 auto; }
 .paper-loop-ring li small { font-size:10.5px; color:#93c5fd; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums; }
-.paper-loop-ring li.is-done { color:#bbf7d0; }
-.paper-loop-ring li.is-done b span { background:#16a34a; color:#fff; }
-.paper-loop-ring li.is-current { background:#fbbf24; color:#422006; box-shadow:0 0 14px #f59e0b88; }
-.paper-loop-ring li.is-current b span { background:#422006; color:#fbbf24; }
-.paper-loop-ring li.is-current small { color:#713f12; }
+.paper-loop-ring li.is-done { color:#c7d2fe; }
+.paper-loop-ring li.is-done b span { background:#818cf8; color:#fff; }
+.paper-loop-ring li.is-current { background:#4f46e5; color:#fff; box-shadow:0 0 14px #6366f188; }
+.paper-loop-ring li.is-current b span { background:#fff; color:#4338ca; }
+.paper-loop-ring li.is-current small { color:#e0e7ff; }
 .paper-loop-ring__again { flex:0 0 auto !important; color:#c4b5fd !important; font-weight:800; font-size:11px; }
 .paper-link-path { display:inline-flex; align-items:center; gap:5px; padding:4px 8px; border-radius:999px; background:#fffffff0; border:1px solid #cbd5e1; color:#334155; font-size:11px; font-weight:700; }
 .paper-link-path span { padding:1px 7px; border-radius:999px; background:#e2e8f0; }
