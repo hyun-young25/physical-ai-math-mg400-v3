@@ -149,7 +149,7 @@
 .paper-ai-anchor { max-width:240px; white-space:normal; color:#5b21b6; border-color:#c4b5fd; background:#f5f3ff; }
 
 /* v6: physical-AI loop and device link drawn on the 3D view itself. */
-.paper-scene-toolbar--v6 { grid-template-columns:minmax(0,1fr) auto; }
+.paper-scene-toolbar--v6 { grid-template-columns:minmax(0,1fr) auto; top:auto !important; bottom:8px; }
 .paper-scene-toolbar--v6 > button { grid-column:2; grid-row:1; }
 .paper-link-path { grid-column:1; grid-row:1; display:flex; flex-wrap:wrap; align-items:center; gap:4px; padding:5px 7px; border-radius:7px; background:#0b2d5ce6; color:#cbd5e1; font-size:11px; font-weight:700; }
 .paper-link-path span { padding:1px 6px; border-radius:4px; background:#ffffff1a; overflow-wrap:normal; }
@@ -180,14 +180,8 @@
 .paper-legend-robot-solid { background:#cbd5e1; border:2px solid #475569; }
 .paper-legend-ink { width:10px !important; height:10px !important; border-radius:50% !important; background:#1e3a8a; }
 
-/* v6 on narrow screens: the robot stays on screen (top ~42%) while the lesson scrolls under it. */
+/* v6 on narrow screens (layout itself is set in paperV6StudentLesson.css). */
 @media (max-width: 900px) {
-  .workspace-layout > .workspace-has-lesson > .curriculum-scene.curriculum-scene:has(.paper-scene-toolbar--v6) {
-    flex: 0 0 clamp(320px, 42dvh, 480px) !important;
-    height: clamp(320px, 42dvh, 480px) !important;
-    min-height: 320px;
-    position: sticky; top: 0; z-index: 20;
-  }
   .paper-loop-ring li { flex-basis: 30%; }
   .paper-loop-ring li em { display:none; }
 }

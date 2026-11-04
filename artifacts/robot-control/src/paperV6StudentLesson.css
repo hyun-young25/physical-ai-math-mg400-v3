@@ -1121,10 +1121,12 @@
   overflow: auto;
 }
 
+/* The v6 loop ring / device link (toolbar--v6) and 3-item caption stay visible:
+   they are what shows the physical-AI cycle on the robot view. */
 .learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-scene :is(
   .paper-scene-legend,
-  .paper-scene-caption,
-  .paper-scene-toolbar,
+  .paper-scene-caption:not(.paper-scene-caption--v6),
+  .paper-scene-toolbar:not(.paper-scene-toolbar--v6),
   .revision-scene-dock
 ) {
   display: none !important;
