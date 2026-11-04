@@ -926,6 +926,13 @@ export function makePaperPlanHash(frameId: string, targetSet: PaperTargetSet, tr
   })) });
 }
 
+/** O·X·Y build the model; a V re-check also excludes P1–P4, which the student used to revise it. */
+export function paperModelConstructionPointsValid(points: string[] | undefined, targetSet: PaperTargetSet): boolean {
+  const key = JSON.stringify(points ?? []);
+  if (key === JSON.stringify(["O", "X", "Y"])) return true;
+  return targetSet === "revalidation" && key === JSON.stringify(["O", "X", "Y", "P1", "P2", "P3", "P4"]);
+}
+
 export function validatePaperRunForDiagnosis(run: PaperRunSnapshot, frame: PaperFrame, currentPlanHash: string, targets = PAPER_TARGETS[run.targetSet]): string | null {
   if (run.status !== "completed" || !finite(run.endedAt) || !finite(run.startedAt) || run.endedAt! < run.startedAt)
     return "실행이 부분 완료 또는 중단되어 전체 비교를 완료할 수 없습니다.";
@@ -941,7 +948,7 @@ export function validatePaperRunForDiagnosis(run: PaperRunSnapshot, frame: Paper
     || !Number.isFinite(criteria.positionToleranceMm) || criteria.positionToleranceMm <= 0
     || !Number.isFinite(criteria.rotationToleranceDeg) || criteria.rotationToleranceDeg <= 0
     || !criteria.rationale.trim()
-    || JSON.stringify(criteria.modelConstructionPoints)!==JSON.stringify(["O","X","Y"])
+    || !paperModelConstructionPointsValid(criteria.modelConstructionPoints, run.targetSet)
     || !paperVerificationPointsAreValid(criteria,targets,true)))
     return "실행 전에 확인한 독립 검증 기준과 현재 실행이 일치하지 않습니다.";
   let previousSeq = run.startSequence ?? -1;

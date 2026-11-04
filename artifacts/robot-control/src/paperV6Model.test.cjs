@@ -606,3 +606,11 @@ test("v6 runs stay on the '로봇이 그려요' scene (stage 5) while executing"
   const arm = fs.readFileSync(path.join(__dirname, "RobotArm.tsx"), "utf8");
   assert.match(arm, /document\.hidden/);
 });
+
+test("V re-check criteria may exclude P1–P4 as model points; first runs stay O·X·Y only", () => {
+  const p = load("paperCoordinateStudy");
+  assert.equal(p.paperModelConstructionPointsValid(["O", "X", "Y"], "initial"), true);
+  assert.equal(p.paperModelConstructionPointsValid(["O", "X", "Y", "P1", "P2", "P3", "P4"], "revalidation"), true);
+  assert.equal(p.paperModelConstructionPointsValid(["O", "X", "Y", "P1", "P2", "P3", "P4"], "initial"), false);
+  assert.equal(p.paperModelConstructionPointsValid(["O", "X"], "revalidation"), false);
+});
