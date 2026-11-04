@@ -135,18 +135,22 @@ export function PaperSceneOverlay(){
   const v6Scene=isV6Scene(data);
   // v6 keeps the whole MG400 and the sheet in frame: the robot is the point of the lesson.
   const baseWorld=position({x:0,y:0,z:center.z});
+  const loopStep=v6Scene?paperLoopPosition(data):0;
+  const paperFocus=v6Scene&&loopStep>=2;
   const view=useMemo(()=>{
+    // From step 2 the sheet is the subject: close, higher view centred on the paper (pen still in frame).
+    if(paperFocus){const t=[centerWorld[0],centerWorld[1],centerWorld[2]] as const;return {position:[t[0]+40,t[1]+250,t[2]+150] as const,target:t};}
     if(!v6Scene)return {position:[centerWorld[0]-30,centerWorld[1]+480,centerWorld[2]+230] as const,target:[centerWorld[0]-30,centerWorld[1],centerWorld[2]] as const};
     // Known-good framing (whole MG400 with the sheet in front of it), pulled in a little.
     // Same angle, a little farther out (smaller robot) and aimed past the sheet so the robot sits further left.
     const t=[baseWorld[0]*0.1+centerWorld[0]*0.9+60,centerWorld[1]+50,baseWorld[2]*0.1+centerWorld[2]*0.9] as const;
     return {position:[t[0]+125,t[1]+475,t[2]+560] as const,target:t};
-  },[frame?.id,v6Scene]);
+  },[frame?.id,v6Scene,paperFocus]);
   const corners=[[0,0],[10,0],[10,10],[0,10]].map(([x,y])=>displayPoint(x,y));
   const vertices=new Float32Array([0,1,2,0,2,3].flatMap(i=>position(corners[i])));
   if(!data)return null;
   // v6: the target square P1–P4 is the step-2 task; it appears once the student reaches step 2.
-  const showTargets=!v6Scene||paperLoopPosition(data)>=2;
+  const showTargets=!v6Scene||loopStep>=2;
   const thetaShown=paperThetaRevealed(data);
   const series=paperSceneSeries(data,phase).filter(s=>showTargets||s.label!=="목표점"),mismatch=paperMismatchPoints(data,series);
   const rotation=paperSceneRotation(data,series);
@@ -188,7 +192,7 @@ export function PaperSceneOverlay(){
     .filter(r=>r.runId===data.run?.id&&r.status==="measured"&&r.xCm!==null&&r.yCm!==null)
     .map(r=>({point:r.point,world:position(displayPoint(r.xCm!,r.yCm!))}));
   return <group name="measured-paper-sheet">
-    <CoordinateStudyCamera requestKey={cameraKey} preset="free" view={view} minimumAspect={v6Scene?1.8:1.05}/>
+    <CoordinateStudyCamera requestKey={cameraKey} preset="free" view={view} minimumAspect={v6Scene&&!paperFocus?1.8:1.05}/>
     <mesh renderOrder={5}><bufferGeometry><bufferAttribute attach="attributes-position" args={[vertices,3]}/></bufferGeometry><meshBasicMaterial color="#ffffff" transparent opacity={frame ? .9 : v6Scene ? .78 : .23} side={DoubleSide} depthWrite={false}/></mesh>
     {v6Scene&&<Line points={[...corners,corners[0]].map(raised)} color={frame?"#334155":"#64748b"} lineWidth={frame?2.2:1.6} dashed={!frame} dashSize={6} gapSize={4} depthTest={false} renderOrder={6}/>}
     {grid.map((line,i)=><Line key={i} points={line.map(raised)} color={i%2===0?"#cbd5e1":"#94a3b8"} lineWidth={i%2===0?.55:1} transparent opacity={frame ? .75 : v6Scene ? .6 : .2}/>)}
@@ -208,7 +212,6 @@ export function PaperSceneOverlay(){
       {paperSeriesSegments(s.points).map((segment,i)=><Line key={i} points={segment.map(wp)} color={s.color} lineWidth={s.label==="목표점"?2:3} dashed={s.dashed} dashSize={5} gapSize={4} transparent depthTest={false} renderOrder={200}/>)}
       {s.points.filter(validPaperPoint).map(p=><mesh key={p.label} position={wp(p)} renderOrder={210}><sphereGeometry args={[s.label==="목표점"?3.8:2.7,12,8]}/><meshBasicMaterial color={s.color} transparent depthTest={false}/></mesh>)}
     </group>)}
-    {frame&&showTargets&&v6Scene&&<Html position={raised(displayPoint(5,12))} center zIndexRange={[14,0]}><span className="paper-target-caption">목표 경로 P1→P4 · 종이 1~9 cm</span></Html>}
     {frame&&showTargets&&data.targetPoints.map(p=>{const pos=displayPoint(p.xCm,p.yCm),bad=mismatch.includes(p.name);return <Html key={p.name} position={raised(pos)} center zIndexRange={[16,0]}><button type="button" data-point={p.name} className={`paper-point-label${bad?" paper-mismatch-pulse":""}`} style={{borderColor:bad?C.mismatch:C.target}} aria-label={`장면에서 ${p.name} 선택`} aria-pressed={selected(p.name)} onClick={()=>selectPaperPoint(p.name,"scene")}>{p.name}</button></Html>;})}
     {!frame&&!v6Scene&&data.targetPoints.map(p=>{const pos=displayPoint(p.xCm,p.yCm);return <Html key={`example-${p.name}`} position={raised(pos)} center zIndexRange={[14,0]}><span className="paper-point-label paper-point-label--example">{p.name}</span></Html>;})}
     {mismatch.map(label=>{const target=series[0]?.points.find(p=>p.label===label),observed=data.run?.observations.find(p=>p.point===label);return target&&validPaperPoint(target)&&observed?<Line key={label} points={[wp(target),wp(observed.pose)]} color={C.mismatch} lineWidth={4} transparent depthTest={false} renderOrder={215}/>:null;})}
