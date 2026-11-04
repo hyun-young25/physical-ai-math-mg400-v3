@@ -2779,11 +2779,11 @@ export function PaperCoordinateStudy({
       };
       next[axis] = snap(next[axis] + deltaMm);
       if (axis === "z" && next.z < PAPER_V6_MOCK_MIN_Z_MM - 1e-6) {
-        setReferenceError("더 내리면 펜이 종이를 뚫고 책상에 부딪혀요. 지금 높이가 종이 표면이에요.");
+        setReferenceError("현재 높이가 종이 표면입니다. 더 내릴 수 없습니다.");
         return;
       }
       if (!jogDigitalTwin?.(next)) {
-        setReferenceError("그 방향으로는 로봇 팔이 닿지 않아요. 다른 방향으로 움직여 보세요.");
+        setReferenceError("해당 방향은 로봇 작업 범위를 벗어납니다.");
         return;
       }
       mockJogTargetRef.current = { pose: next, at: Date.now() };

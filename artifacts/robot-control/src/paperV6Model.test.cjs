@@ -127,11 +127,11 @@ test("advanced v6 student UI maps seven saved stages to the five requested scene
   const ui = fs.readFileSync(path.join(__dirname, "PaperV6StudentLesson.tsx"), "utf8");
   const shell = fs.readFileSync(path.join(__dirname, "PaperV6StepShell.tsx"), "utf8");
   for (const title of [
-    "종이가 어디 있지?",
-    "내 식으로 예측하기",
-    "로봇이 그려요",
-    "비교하고 AI에게 묻기",
-    "고칠까, 유지할까? → 새 점에서 확인",
+    "기준점 측정",
+    "변환식 예측",
+    "로봇 실행",
+    "비교 · AI 질문",
+    "모델 판단 · 독립점 검증",
   ]) assert.ok(ui.includes(title), `missing scene title: ${title}`);
   assert.match(ui, /editingRevisionModel \? 2 : step <= 2 \? 1 : step <= 4 \? 2 : step === 5 \? 3 : step === 6 \? 4 : 5/);
   assert.match(ui, /if \(scene === 1\) navigate\(3\)/);
@@ -153,7 +153,7 @@ test("advanced v6 student UI maps seven saved stages to the five requested scene
   assert.match(ui, /runAction\(actions\.onV6CreateRevalidation\)/);
   assert.match(ui, /식 고치기/);
   assert.match(ui, /식 유지/);
-  assert.equal((ui.match(/무엇을 추가로 확인했나요\?/g) ?? []).length, 1);
+  assert.equal((ui.match(/추가로 확인한 항목 \(하나 이상\)/g) ?? []).length, 1);
   assert.doesNotMatch(ui, /paper-v6-current-ai-output/);
   assert.equal((ui.match(/\{blocks\.analysis\}/g) ?? []).length, 1);
   assert.match(ui, /state\.runAvailable/);
