@@ -1367,3 +1367,19 @@
   .paper-v6-student .paper-v6-is-next:not(:disabled),
   .paper-v6-student[data-scene="1"] .paper-v6-shell__button--next:not(:disabled) { animation: none; }
 }
+
+/* radios/checkboxes must not inherit the full-width text-input rule */
+.paper-v6-student input[type="radio"],
+.paper-v6-student input[type="checkbox"] {
+  width: 16px !important;
+  height: 16px !important;
+  min-height: 0 !important;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  accent-color: #4f46e5;
+}
+.paper-v6-choice label {
+  align-items: center;
+  gap: 8px;
+}
