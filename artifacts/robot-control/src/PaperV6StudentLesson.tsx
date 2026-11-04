@@ -441,6 +441,34 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
               로봇은 종이가 어디 있는지 몰라요. 내가 세운 식이 로봇 펜이 갈 곳을 정해요.
               그래서 먼저 로봇 팔로 종이의 O·X·Y를 재요.
             </p>
+            {!state.mockPracticeEnabled && state.tcpJog?.connection !== "connected" && !state.samples.length && (
+              <section className="paper-v6-mode-choice" aria-label="실행 방식 선택" data-testid="paper-v6-mode-choice">
+                <strong>MG400이 아직 연결되지 않았어요</strong>
+                <p>장비 없이 시뮬레이션 로봇으로 똑같이 해 볼 수 있어요. 나중에 MG400을 연결하면 같은 화면 그대로 실물이 움직여요.</p>
+                <div>
+                  <button
+                    type="button"
+                    className="paper-v6-primary"
+                    disabled={!!state.mockPracticeReason}
+                    onClick={() => actions.onToggleMockPractice(true)}
+                    data-testid="paper-v6-start-simulation"
+                  >
+                    시뮬레이션으로 하기
+                  </button>
+                  {actions.onOpenConnection && (
+                    <button type="button" className="paper-v6-secondary" onClick={actions.onOpenConnection}>
+                      MG400 연결하기
+                    </button>
+                  )}
+                </div>
+                {state.mockPracticeReason && <small>{state.mockPracticeReason}</small>}
+              </section>
+            )}
+            {state.mockPracticeEnabled && (
+              <p className="paper-v6-sim-badge" data-testid="paper-v6-sim-badge">
+                🧪 시뮬레이션 로봇으로 진행 중 · 실제 측정값이 아니에요
+              </p>
+            )}
             <p className="paper-v6-reference-prompt" role="status" data-testid="paper-v6-current-reference">
               {referencePrompt}
             </p>

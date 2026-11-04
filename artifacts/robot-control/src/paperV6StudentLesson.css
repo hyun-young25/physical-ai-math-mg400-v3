@@ -1327,3 +1327,9 @@
     flex: 1 1 auto !important; width: 100% !important; border-left: 0; border-top: 1px solid #dbe3ee;
   }
 }
+.paper-v6-mode-choice { display:grid; gap:8px; padding:14px; border-radius:12px; border:2px solid #2563eb; background:#eff6ff; }
+.paper-v6-mode-choice strong { font-size:15px; color:#1e3a8a; }
+.paper-v6-mode-choice p { margin:0; font-size:13px; color:#334155; line-height:1.5; }
+.paper-v6-mode-choice div { display:flex; flex-wrap:wrap; gap:8px; }
+.paper-v6-mode-choice small { color:#b91c1c; }
+.paper-v6-sim-badge { margin:0; padding:6px 10px; border-radius:999px; background:#f5f3ff; border:1px solid #c4b5fd; color:#5b21b6; font-size:12px; font-weight:750; width:fit-content; }

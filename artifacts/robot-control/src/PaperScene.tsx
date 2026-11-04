@@ -6,7 +6,7 @@ import { shapeWorldPoint } from "./shapeKinematics";
 import { PAPER_COLORS as C, paperCorners, paperGrid, paperMismatchPoints, paperPoint, paperFrameAngleDegrees, paperSceneLiveModel, paperSceneLivePredictions, paperSceneReadout, paperSceneRotation, paperSceneSeries, paperSeriesSegments, paperFrameSource, paperSceneSourceText, validPaperPoint, type PaperScenePoint } from "./paperSceneModel";
 import { requestPaperCamera, selectPaperPoint, usePaperScene } from "./paperSceneStore";
 import { paperV6EquationTerms } from "./paperV6Model";
-import { PAPER_HARDWARE_V6_VERSION } from "./paperCoordinateStudy";
+import { PAPER_HARDWARE_V6_VERSION, PAPER_V6_MOCK_ORIGIN } from "./paperCoordinateStudy";
 import "./paperScene.css";
 
 const references=[{name:"O",x:0,y:0},{name:"X",x:10,y:0},{name:"Y",x:0,y:10}];
@@ -123,7 +123,7 @@ export function PaperSceneOverlay(){
   const displayPoint=(xCm:number,yCm:number):PaperScenePoint=>{
     if(frame)return paperPoint(frame,xCm,yCm);
     const angle=(28.6*Math.PI)/180,a=xCm*10,b=yCm*10;
-    return {x:200+a*Math.cos(angle)-b*Math.sin(angle),y:50+a*Math.sin(angle)+b*Math.cos(angle),z:0};
+    return {x:PAPER_V6_MOCK_ORIGIN.x+a*Math.cos(angle)-b*Math.sin(angle),y:PAPER_V6_MOCK_ORIGIN.y+a*Math.sin(angle)+b*Math.cos(angle),z:0};
   };
   const center=displayPoint(5,5);
   const position=(p:PaperScenePoint):[number,number,number]=>shapeWorldPoint(p);
@@ -181,8 +181,9 @@ export function PaperSceneOverlay(){
     .map(r=>({point:r.point,world:position(displayPoint(r.xCm!,r.yCm!))}));
   return <group name="measured-paper-sheet">
     <CoordinateStudyCamera requestKey={cameraKey} preset="free" view={view} minimumAspect={1.05}/>
-    <mesh renderOrder={5}><bufferGeometry><bufferAttribute attach="attributes-position" args={[vertices,3]}/></bufferGeometry><meshBasicMaterial color="#f8fafc" transparent opacity={frame ? .82 : .23} side={DoubleSide} depthWrite={false}/></mesh>
-    {grid.map((line,i)=><Line key={i} points={line.map(raised)} color={i%2===0?"#cbd5e1":"#94a3b8"} lineWidth={i%2===0?.55:1} transparent opacity={frame ? .75 : .2}/>)}
+    <mesh renderOrder={5}><bufferGeometry><bufferAttribute attach="attributes-position" args={[vertices,3]}/></bufferGeometry><meshBasicMaterial color="#ffffff" transparent opacity={frame ? .9 : v6Scene ? .78 : .23} side={DoubleSide} depthWrite={false}/></mesh>
+    {v6Scene&&<Line points={[...corners,corners[0]].map(raised)} color={frame?"#334155":"#64748b"} lineWidth={frame?2.2:1.6} dashed={!frame} dashSize={6} gapSize={4} depthTest={false} renderOrder={6}/>}
+    {grid.map((line,i)=><Line key={i} points={line.map(raised)} color={i%2===0?"#cbd5e1":"#94a3b8"} lineWidth={i%2===0?.55:1} transparent opacity={frame ? .75 : v6Scene ? .6 : .2}/>)}
     <Line points={[...corners,corners[0]].map(raised)} color={C.reference} lineWidth={2} dashed={!frame}/>
     {frameArc.length>1&&<group name="paper-measured-x-axis">
       <Line points={[position(frameOrigin),position(displayPoint(2,0))]} color="#0f766e" lineWidth={3} depthTest={false} renderOrder={219}/>
