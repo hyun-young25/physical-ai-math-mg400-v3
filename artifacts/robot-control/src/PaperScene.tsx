@@ -133,9 +133,12 @@ export function PaperSceneOverlay(){
   const baseWorld=position({x:0,y:0,z:center.z});
   const view=useMemo(()=>{
     if(!v6Scene)return {position:[centerWorld[0]-30,centerWorld[1]+480,centerWorld[2]+230] as const,target:[centerWorld[0]-30,centerWorld[1],centerWorld[2]] as const};
-    // Sheet in the middle, the arm reaching in from behind: close enough to read the coordinates.
-    const t=[baseWorld[0]*0.22+centerWorld[0]*0.78,centerWorld[1]+30,baseWorld[2]*0.22+centerWorld[2]*0.78] as const;
-    return {position:[t[0]+60,t[1]+290,t[2]+300] as const,target:t};
+    // Look from the far side of the sheet back toward the base: the sheet sits in
+    // front (readable), the whole arm reaches in from behind it — never blocking it.
+    const dx=centerWorld[0]-baseWorld[0],dz=centerWorld[2]-baseWorld[2],len=Math.hypot(dx,dz)||1;
+    const ux=dx/len,uz=dz/len;
+    const t=[centerWorld[0]-ux*70,centerWorld[1]+45,centerWorld[2]-uz*70] as const;
+    return {position:[centerWorld[0]+ux*330-uz*90,centerWorld[1]+330,centerWorld[2]+uz*330+ux*90] as const,target:t};
   },[frame?.id,v6Scene]);
   const corners=[[0,0],[10,0],[10,10],[0,10]].map(([x,y])=>displayPoint(x,y));
   const vertices=new Float32Array([0,1,2,0,2,3].flatMap(i=>position(corners[i])));
@@ -188,9 +191,11 @@ export function PaperSceneOverlay(){
       <Line points={[position(frameOrigin),position(displayPoint(2,0))]} color="#0f766e" lineWidth={3} depthTest={false} renderOrder={219}/>
       <Line points={[position(frameOrigin),position(displayPoint(0,2))]} color="#0284c7" lineWidth={3} depthTest={false} renderOrder={219}/>
       <Line points={frameArc.map(raised)} color={measuredAngle===null?"#94a3b8":"#f59e0b"} lineWidth={measuredAngle===null?2:3} dashed={measuredAngle===null} depthTest={false} renderOrder={220}/>
+      {(!v6Scene||frame)&&<>
       <Html position={raised(displayPoint(2,0))} zIndexRange={[20,0]}><span className="paper-axis-tag paper-axis-tag--x">종이 x+</span></Html>
       <Html position={raised(displayPoint(0,2))} zIndexRange={[20,0]}><span className="paper-axis-tag paper-axis-tag--y">종이 y+</span></Html>
       <Html position={raised(frameOrigin)} zIndexRange={[20,0]}><span className="paper-angle-tag">{measuredAngle===null?"예시 θ 28.6°":`측정 θ ${measuredAngle.toFixed(1)}°`}</span></Html>
+      </>}
     </group>}
     {rotation&&<Line points={rotation.arc.map(raised)} color="#b45309" lineWidth={3} depthTest={false} renderOrder={220}/>}
     {series.map(s=><group key={s.label}>
@@ -198,7 +203,7 @@ export function PaperSceneOverlay(){
       {s.points.filter(validPaperPoint).map(p=><mesh key={p.label} position={wp(p)} renderOrder={210}><sphereGeometry args={[s.label==="목표점"?3.8:2.7,12,8]}/><meshBasicMaterial color={s.color} transparent depthTest={false}/></mesh>)}
     </group>)}
     {frame&&data.targetPoints.map(p=>{const pos=displayPoint(p.xCm,p.yCm),bad=mismatch.includes(p.name);return <Html key={p.name} position={raised(pos)} center zIndexRange={[16,0]}><button type="button" data-point={p.name} className={`paper-point-label${bad?" paper-mismatch-pulse":""}`} style={{borderColor:bad?C.mismatch:C.target}} aria-label={`장면에서 ${p.name} 선택`} aria-pressed={selected(p.name)} onClick={()=>selectPaperPoint(p.name,"scene")}>{p.name}</button></Html>;})}
-    {!frame&&data.targetPoints.map(p=>{const pos=displayPoint(p.xCm,p.yCm);return <Html key={`example-${p.name}`} position={raised(pos)} center zIndexRange={[14,0]}><span className="paper-point-label paper-point-label--example">{p.name}</span></Html>;})}
+    {!frame&&!v6Scene&&data.targetPoints.map(p=>{const pos=displayPoint(p.xCm,p.yCm);return <Html key={`example-${p.name}`} position={raised(pos)} center zIndexRange={[14,0]}><span className="paper-point-label paper-point-label--example">{p.name}</span></Html>;})}
     {mismatch.map(label=>{const target=series[0]?.points.find(p=>p.label===label),observed=data.run?.observations.find(p=>p.point===label);return target&&validPaperPoint(target)&&observed?<Line key={label} points={[wp(target),wp(observed.pose)]} color={C.mismatch} lineWidth={4} transparent depthTest={false} renderOrder={215}/>:null;})}
     {references.map(r=>{
        const sample=data.samples.find(s=>s.point===r.name);
@@ -232,7 +237,8 @@ export function PaperSceneOverlay(){
       <mesh position={[mark.world[0],mark.world[1]+1.6,mark.world[2]]} rotation={[-Math.PI/2,0,0]} renderOrder={212}><circleGeometry args={[2.2,20]}/><meshBasicMaterial color="#1e3a8a" transparent opacity={.92} depthTest={false}/></mesh>
     </group>)}
     {frame&&inkMarks.length>1&&<Line points={inkMarks.map(mark=>[mark.world[0],mark.world[1]+1.4,mark.world[2]] as [number,number,number])} color="#1e3a8a" lineWidth={1} dashed dashSize={2} gapSize={3} transparent opacity={.45} depthTest={false} renderOrder={211}/>}
-    {!frame&&<Html position={raised(center)} center><b className="paper-unknown">배치 예시<br/><small>비스듬한 종이 · 아직 실측 전</small></b></Html>}
+    {!frame&&!v6Scene&&<Html position={raised(center)} center><b className="paper-unknown">배치 예시<br/><small>비스듬한 종이 · 아직 실측 전</small></b></Html>}
+    {!frame&&v6Scene&&<Html position={raised(displayPoint(5,-1.5))} center zIndexRange={[14,0]}><span className="paper-unknown-tag">아직 재지 않은 종이 · O·X·Y를 찍어 위치를 알아내요</span></Html>}
   </group>;
 }
 

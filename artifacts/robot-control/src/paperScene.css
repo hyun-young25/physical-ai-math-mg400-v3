@@ -188,3 +188,4 @@
 }
 .paper-robot-tip-tag--soft { font-size:10px; padding:1px 5px; }
 .paper-reference-label { white-space:nowrap; }
+.paper-unknown-tag { display:inline-block; white-space:nowrap; padding:3px 8px; border-radius:999px; background:#fffffff0; border:1px dashed #94a3b8; color:#475569; font-size:11px; font-weight:700; pointer-events:none; }
