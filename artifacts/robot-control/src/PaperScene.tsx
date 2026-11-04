@@ -133,14 +133,9 @@ export function PaperSceneOverlay(){
   const baseWorld=position({x:0,y:0,z:center.z});
   const view=useMemo(()=>{
     if(!v6Scene)return {position:[centerWorld[0]-30,centerWorld[1]+480,centerWorld[2]+230] as const,target:[centerWorld[0]-30,centerWorld[1],centerWorld[2]] as const};
-    // Look from the far side of the sheet back toward the base: the sheet sits in
-    // front (readable), the whole arm reaches in from behind it — never blocking it.
-    const dx=centerWorld[0]-baseWorld[0],dz=centerWorld[2]-baseWorld[2],len=Math.hypot(dx,dz)||1;
-    const ux=dx/len,uz=dz/len;
-    // From the side of the base→sheet line and high up: the arm and sheet are side by side
-    // in view (arm reaching across), so the arm never sits between camera and sheet.
-    const t=[centerWorld[0]-ux*60,centerWorld[1],centerWorld[2]-uz*60] as const;
-    return {position:[t[0]-uz*330+ux*60,t[1]+470,t[2]+ux*330+uz*60] as const,target:t};
+    // Known-good framing (whole MG400 with the sheet in front of it), pulled in a little.
+    const t=[baseWorld[0]*0.35+centerWorld[0]*0.65,centerWorld[1]+50,baseWorld[2]*0.35+centerWorld[2]*0.65] as const;
+    return {position:[t[0]+100,t[1]+380,t[2]+450] as const,target:t};
   },[frame?.id,v6Scene]);
   const corners=[[0,0],[10,0],[10,10],[0,10]].map(([x,y])=>displayPoint(x,y));
   const vertices=new Float32Array([0,1,2,0,2,3].flatMap(i=>position(corners[i])));
