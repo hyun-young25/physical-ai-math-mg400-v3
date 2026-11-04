@@ -208,8 +208,10 @@ export function PaperSceneOverlay(){
       <Line points={[position(frameOrigin),position(displayPoint(0,2))]} color="#0284c7" lineWidth={3} depthTest={false} renderOrder={219}/>
       {thetaShown&&<Line points={frameArc.map(raised)} color={measuredAngle===null?"#94a3b8":"#f59e0b"} lineWidth={measuredAngle===null?2:3} dashed={measuredAngle===null} depthTest={false} renderOrder={220}/>}
       {(!v6Scene||frame)&&<>
+      {rulerTicks.length===0&&<>
       <Html position={raised(displayPoint(2,0))} zIndexRange={[20,0]}><span className="paper-axis-tag paper-axis-tag--x">종이 x+</span></Html>
       <Html position={raised(displayPoint(0,2))} zIndexRange={[20,0]}><span className="paper-axis-tag paper-axis-tag--y">종이 y+</span></Html>
+      </>}
       {thetaShown&&<Html position={raised(frameOrigin)} zIndexRange={[20,0]}><span className="paper-angle-tag">{measuredAngle===null?"예시 θ 28.6°":`측정 θ ${measuredAngle.toFixed(1)}°`}</span></Html>}
       </>}
     </group>}
@@ -222,13 +224,14 @@ export function PaperSceneOverlay(){
     {!frame&&!v6Scene&&data.targetPoints.map(p=>{const pos=displayPoint(p.xCm,p.yCm);return <Html key={`example-${p.name}`} position={raised(pos)} center zIndexRange={[14,0]}><span className="paper-point-label paper-point-label--example">{p.name}</span></Html>;})}
     {mismatch.map(label=>{const target=series[0]?.points.find(p=>p.label===label),observed=data.run?.observations.find(p=>p.point===label);return target&&validPaperPoint(target)&&observed?<Line key={label} points={[wp(target),wp(observed.pose)]} color={C.mismatch} lineWidth={4} transparent depthTest={false} renderOrder={215}/>:null;})}
     {rulerTicks.map(cm=><Html key={`rx-${cm}`} position={raised(displayPoint(cm,-0.9))} center zIndexRange={[12,0]}><span className="paper-ruler-tick">{cm}</span></Html>)}
+    {rulerTicks.length>0&&<Html position={raised(displayPoint(-0.9,11.4))} center zIndexRange={[12,0]}><span className="paper-ruler-tick paper-ruler-tick--unit">종이 y (cm)</span></Html>}
     {rulerTicks.filter(cm=>cm>0).map(cm=><Html key={`ry-${cm}`} position={raised(displayPoint(-0.9,cm))} center zIndexRange={[12,0]}><span className="paper-ruler-tick">{cm}</span></Html>)}
-    {rulerTicks.length>0&&<Html position={raised(displayPoint(11.2,-0.9))} center zIndexRange={[12,0]}><span className="paper-ruler-tick paper-ruler-tick--unit">cm</span></Html>}
+    {rulerTicks.length>0&&<Html position={raised(displayPoint(11.2,-0.9))} center zIndexRange={[12,0]}><span className="paper-ruler-tick paper-ruler-tick--unit">종이 x (cm)</span></Html>}
     {abTarget&&abCorner&&<group name="paper-ab-legs">
       <Line points={[raised(displayPoint(0,0)),raised(abCorner)]} color="#db2777" lineWidth={4} depthTest={false} renderOrder={224}/>
       <Line points={[raised(abCorner),raised(displayPoint(abTarget.xCm,abTarget.yCm))]} color="#0891b2" lineWidth={4} depthTest={false} renderOrder={224}/>
-      <Html position={raised(displayPoint(abTarget.xCm/2,-0.2))} center zIndexRange={[27,0]}><span className="paper-ab-tag paper-ab-tag--a">a = {abTarget.xCm*10} mm</span></Html>
-      <Html position={raised(displayPoint(abTarget.xCm+0.3,abTarget.yCm/2))} center zIndexRange={[27,0]}><span className="paper-ab-tag paper-ab-tag--b">b = {abTarget.yCm*10} mm</span></Html>
+      <Html position={raised(displayPoint(abTarget.xCm/2,-2.1))} center zIndexRange={[27,0]}><span className="paper-ab-tag paper-ab-tag--a">a = {abTarget.xCm*10} mm</span></Html>
+      <Html position={raised(displayPoint(abTarget.xCm+1.8,Math.max(abTarget.yCm/2,1.2)))} center zIndexRange={[27,0]}><span className="paper-ab-tag paper-ab-tag--b">b = {abTarget.yCm*10} mm</span></Html>
     </group>}
     {references.map(r=>{
        const sample=data.samples.find(s=>s.point===r.name);
