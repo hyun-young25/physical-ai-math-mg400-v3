@@ -134,3 +134,60 @@
 .pcv-teacher-setting { padding:12px; border:1px solid #d97706; border-radius:8px; }
 .pcv-teacher-setting label { display:flex; align-items:center; gap:8px; font-weight:700; }
 .pcv-teacher-setting input { width:auto; }
+
+/* 3D label tags: without these rules each tag wrapped one character per line. */
+.paper-axis-tag,.paper-angle-tag,.paper-origin-tag,.paper-robot-tip-tag,.paper-ai-anchor {
+  display:inline-block; white-space:nowrap; padding:2px 6px; border-radius:5px; font-size:11px; line-height:1.35;
+  font-weight:750; background:#fffffff2; border:1px solid #cbd5e1; color:#0b2d5c; pointer-events:none;
+  transform:translate(6px,-50%); box-shadow:0 1px 3px #0b2d5c1f;
+}
+.paper-axis-tag--x { color:#0f766e; border-color:#5eead4; }
+.paper-axis-tag--y { color:#0369a1; border-color:#7dd3fc; }
+.paper-angle-tag { color:#92400e; border-color:#fcd34d; transform:translate(10px,8px); }
+.paper-origin-tag { color:#6d28d9; border-color:#c4b5fd; transform:translate(-110%,-120%); }
+.paper-robot-tip-tag { color:#1d4ed8; border-color:#93c5fd; }
+.paper-ai-anchor { max-width:240px; white-space:normal; color:#5b21b6; border-color:#c4b5fd; background:#f5f3ff; }
+
+/* v6: physical-AI loop and device link drawn on the 3D view itself. */
+.paper-scene-toolbar--v6 { grid-template-columns:minmax(0,1fr) auto; }
+.paper-scene-toolbar--v6 > button { grid-column:2; grid-row:1; }
+.paper-link-path { grid-column:1; grid-row:1; display:flex; flex-wrap:wrap; align-items:center; gap:4px; padding:5px 7px; border-radius:7px; background:#0b2d5ce6; color:#cbd5e1; font-size:11px; font-weight:700; }
+.paper-link-path span { padding:1px 6px; border-radius:4px; background:#ffffff1a; overflow-wrap:normal; }
+.paper-link-path span.is-on { background:#2563eb; color:#fff; }
+.paper-link-path[data-source="hardware"] span.is-on { background:#16a34a; }
+.paper-link-path i { font-style:normal; color:#93c5fd; }
+.paper-link-path em { font-style:normal; margin-left:4px; color:#94a3b8; font-weight:600; }
+.paper-link-path em.is-live { color:#86efac; animation:paper-live-blink 1.4s steps(2,start) infinite; }
+@keyframes paper-live-blink { 50% { opacity:.45; } }
+.paper-loop-ring { grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:4px; margin:0; padding:0; list-style:none; }
+.paper-loop-ring li { position:relative; flex:1 1 92px; min-width:0; padding:4px 7px 4px 8px; border-radius:7px; background:#ffffffe0; border:1px solid #cbd5e1; color:#334155; }
+.paper-loop-ring li:not(.paper-loop-ring__again)::after { content:"→"; position:absolute; right:-9px; top:50%; transform:translateY(-50%); color:#94a3b8; font-size:11px; z-index:1; }
+.paper-loop-ring li b { display:block; font-size:11px; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.paper-loop-ring li small { display:block; font-size:10px; color:#0b2d5c; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.paper-loop-ring li em { display:block; font-style:normal; font-size:9px; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.paper-loop-ring li.is-done { background:#ecfdf5e6; border-color:#86efac; }
+.paper-loop-ring li.is-current { background:#fef3c7; border-color:#f59e0b; box-shadow:0 0 0 2px #fbbf2466, 0 0 14px #f59e0b66; animation:paper-loop-glow 1.6s ease-in-out infinite; }
+.paper-loop-ring li.is-current b { color:#92400e; }
+.paper-loop-ring__again { flex:0 0 auto !important; display:flex; align-items:center; background:#ede9fe !important; border-color:#c4b5fd !important; color:#5b21b6 !important; font-weight:800; font-size:11px; }
+@keyframes paper-loop-glow { 50% { box-shadow:0 0 0 2px #fbbf2433, 0 0 4px #f59e0b33; } }
+@media(prefers-reduced-motion:reduce) { .paper-loop-ring li.is-current,.paper-link-path em.is-live { animation:none; } }
+
+/* v6 caption: three meanings only (ghost = my equation, robot = reported, ink = physical result). */
+.paper-scene-caption--v6 { display:flex; flex-wrap:wrap; gap:4px 14px; padding:6px 10px; font-size:11px; color:#334155; }
+.paper-scene-caption--v6 span { display:inline-flex; align-items:center; gap:5px; }
+.paper-scene-caption--v6 i { display:inline-block; width:14px; height:10px; border-radius:3px; }
+.paper-legend-ghost { background:#60a5fa99; border:2px solid #3b82f6; }
+.paper-legend-robot-solid { background:#cbd5e1; border:2px solid #475569; }
+.paper-legend-ink { width:10px !important; height:10px !important; border-radius:50% !important; background:#1e3a8a; }
+
+/* v6 on narrow screens: the robot stays on screen (top ~42%) while the lesson scrolls under it. */
+@media (max-width: 900px) {
+  .workspace-layout > .workspace-has-lesson > .curriculum-scene.curriculum-scene:has(.paper-scene-toolbar--v6) {
+    flex: 0 0 clamp(320px, 42dvh, 480px) !important;
+    height: clamp(320px, 42dvh, 480px) !important;
+    min-height: 320px;
+    position: sticky; top: 0; z-index: 20;
+  }
+  .paper-loop-ring li { flex-basis: 30%; }
+  .paper-loop-ring li em { display:none; }
+}

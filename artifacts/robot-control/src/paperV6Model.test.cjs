@@ -557,3 +557,50 @@ test("entering advanced-paper-hardware with a saved v5 attempt starts a new v6 a
     assert.doesNotMatch(source, /20\s*[×x]\s*20|20\s*cm/i);
   }
 });
+
+test("v6 off-sheet predictions pass with the pen lifted instead of blocking the run (thesis case A)", () => {
+  // θ=0 assumption on a sheet rotated by ~28.6°: P2/P3 land off the sheet.
+  const rotated = {
+    ...frame,
+    samples: ["O", "X", "Y"].map((point) => ({ ...frame.samples[0], point, pose: paper.paperV6MockReferencePose(point) })),
+  };
+  const predictions = [
+    { name: "P1", xCm: 1, yCm: 1, robotX: "210", robotY: "60", robotZ: "0" },
+    { name: "P2", xCm: 9, yCm: 1, robotX: "290", robotY: "60", robotZ: "0" },
+    { name: "P3", xCm: 9, yCm: 9, robotX: "290", robotY: "140", robotZ: "0" },
+    { name: "P4", xCm: 1, yCm: 9, robotX: "210", robotY: "140", robotZ: "0" },
+  ];
+  const plan = v6.buildPaperV6MovePlan({
+    startPose: { x: 250, y: 80, z: 40, r: 0 },
+    paperOriginPose: rotated.samples[0].pose,
+    predictions,
+    surfaceZ: 0,
+    liftGapMm: 10,
+    penDownAt: (pose) => paper.paperPenDownAllowed(rotated, pose),
+  });
+  assert.equal(plan.ok, true);
+  const captured = Object.entries(plan.capturePointByOperationIndex).map(([index, point]) => [point, plan.operations[Number(index)].target.z]);
+  assert.deepEqual(captured.map(([point]) => point), ["P1", "P2", "P3", "P4"]);
+  // Pen down only on the sheet; off-sheet points are observed at the lifted height.
+  assert.deepEqual(captured.map(([, z]) => z === 0), [true, false, false, true]);
+  assert.ok(plan.operations.every((operation) => operation.target.z >= 0));
+  // The 30 mm sheet distance no longer blocks v6, but teacher/DT gates remain.
+  const outside = { point: "P3", pose: { x: 290, y: 140, z: 0, r: 0 } };
+  assert.equal(guards.supervisedPaperBlockers(true, true, true, rotated, [outside], 10, true).length, 0);
+  assert.deepEqual(guards.supervisedPaperBlockers(false, true, false, rotated, [outside], 10, true).map((x) => x.target), ["teacher", "dt"]);
+  // Mock ink: off-sheet points are reported as no ink with a reason; on-sheet ones carry ruler-like noise.
+  const ink = paper.paperV6MockInkDrafts(rotated, predictions.map((p) => ({ point: p.name, pose: { x: Number(p.robotX), y: Number(p.robotY), z: 0, r: 0 } })));
+  assert.deepEqual(ink.map((row) => row.status), ["measured", "outside-range", "outside-range", "measured"]);
+  assert.ok(ink.filter((row) => row.status === "outside-range").every((row) => row.reason.trim() && !row.xCm && !row.yCm));
+  for (const row of ink.filter((item) => item.status === "measured")) {
+    const exact = paper.frameInversePoint(rotated, { x: Number(predictions.find((p) => p.name === row.point).robotX), y: Number(predictions.find((p) => p.name === row.point).robotY), z: 0, r: 0 });
+    assert.ok(Math.abs(Number(row.xCm) - exact.xCm) <= 0.051 && Math.abs(Number(row.yCm) - exact.yCm) <= 0.051);
+  }
+});
+
+test("v6 runs stay on the '로봇이 그려요' scene (stage 5) while executing", () => {
+  const source = fs.readFileSync(path.join(__dirname, "PaperCoordinateStudy.tsx"), "utf8");
+  assert.match(source, /const runStage: PaperLessonStage =\s*isMergedPaper\(level\) && active\.targetSet === "revalidation"\s*\?\s*7\s*:\s*isV6Attempt\s*\?\s*5\s*:\s*4;/);
+  const arm = fs.readFileSync(path.join(__dirname, "RobotArm.tsx"), "utf8");
+  assert.match(arm, /document\.hidden/);
+});

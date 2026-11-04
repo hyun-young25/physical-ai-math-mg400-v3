@@ -52,6 +52,8 @@ export function buildPaperV6MovePlan(input: {
   predictions: PaperPredictionPoint[];
   surfaceZ: number;
   liftGapMm: number;
+  /** Return false for a point off the sheet: the pen passes there lifted (no ink). */
+  penDownAt?: (point: { x: number; y: number }) => boolean;
 }):
   | {
       ok: true;
@@ -60,7 +62,7 @@ export function buildPaperV6MovePlan(input: {
       capturePointByOperationIndex: Record<string, string>;
     }
   | { ok: false; error: string } {
-  const { startPose, paperOriginPose, predictions, surfaceZ, liftGapMm } = input;
+  const { startPose, paperOriginPose, predictions, surfaceZ, liftGapMm, penDownAt } = input;
   if (
     ![startPose.x, startPose.y, startPose.z, startPose.r, paperOriginPose.r, surfaceZ, liftGapMm]
       .every(Number.isFinite) ||
@@ -95,6 +97,11 @@ export function buildPaperV6MovePlan(input: {
       r: paperOriginPose.r,
     };
     operations.push({ kind: "move", motion: "MoveL", target: elevated });
+    if (penDownAt && !penDownAt(elevated)) {
+      // Off the sheet: record the lifted pose as the observation, never touch the table.
+      capturePointByOperationIndex[String(operations.length - 1)] = point.name;
+      continue;
+    }
     operations.push({ kind: "move", motion: "MoveL", target: contact });
     capturePointByOperationIndex[String(operations.length - 1)] = point.name;
     operations.push({ kind: "move", motion: "MoveL", target: { ...elevated } });

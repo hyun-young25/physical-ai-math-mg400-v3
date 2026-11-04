@@ -6,9 +6,61 @@ import { shapeWorldPoint } from "./shapeKinematics";
 import { PAPER_COLORS as C, paperCorners, paperGrid, paperMismatchPoints, paperPoint, paperFrameAngleDegrees, paperSceneLiveModel, paperSceneLivePredictions, paperSceneReadout, paperSceneRotation, paperSceneSeries, paperSeriesSegments, paperFrameSource, paperSceneSourceText, validPaperPoint, type PaperScenePoint } from "./paperSceneModel";
 import { requestPaperCamera, selectPaperPoint, usePaperScene } from "./paperSceneStore";
 import { paperV6EquationTerms } from "./paperV6Model";
+import { PAPER_HARDWARE_V6_VERSION } from "./paperCoordinateStudy";
 import "./paperScene.css";
 
 const references=[{name:"O",x:0,y:0},{name:"X",x:10,y:0},{name:"Y",x:0,y:10}];
+type SceneData=NonNullable<ReturnType<typeof usePaperScene>["data"]>;
+const isV6Scene=(data:SceneData|null)=>data?.activeAttempt?.taskVersion===PAPER_HARDWARE_V6_VERSION;
+/** Where the physical-AI loop currently is, from saved lesson state only (display, never a gate). */
+export function paperLoopPosition(data:SceneData):number{
+  const attempt=data.activeAttempt,stage=attempt?.stage??data.stage;
+  if(data.running)return 2;
+  if(stage<=2)return 0;
+  if(stage<=4)return 1;
+  if(stage===5)return data.run?.status==="completed"?3:2;
+  if(stage===6)return attempt?.aiAnalyses?.some(a=>a.runId===data.run?.id&&!!a.displayedAt)?4:3;
+  return 5;
+}
+const LOOP=[
+  {short:"로봇이 잰다",paper:"작업환경 측정"},
+  {short:"내 식으로 예측",paper:"수학적 관계로 예측"},
+  {short:"로봇이 그린다",paper:"실제 로봇 실행"},
+  {short:"관측",paper:"제어기 보고·잉크"},
+  {short:"AI가 묻는다",paper:"관측+내 풀이 해석"},
+  {short:"내가 판단",paper:"근거로 수정·유지 → 재검증"},
+];
+function loopValue(data:SceneData,index:number):string{
+  const a=data.activeAttempt,ev=data.diagnosis?.taskEvidence??[];
+  const worst=ev.reduce((m,e)=>Math.max(m,e.distance),0);
+  if(index===0){const measured=paperFrameAngleDegrees(data.frame);return measured===null?`O·X·Y ${data.samples.length}/3`:`종이 θ ${measured.toFixed(1)}°`;}
+  if(index===1){const m=a?.v6?.model;return m?`내 θ ${m.thetaDeg.toFixed(1)}°`:"입력 전";}
+  if(index===2)return data.running?"그리는 중":data.run?.status==="completed"?`${data.run.observations.length}점 완료`:"대기";
+  if(index===3)return ev.length?`최대 차이 ${worst.toFixed(1)} mm`:"대기";
+  if(index===4){const q=a?.aiAnalyses?.filter(x=>x.runId===data.run?.id&&!!x.displayedAt).at(-1);return q?"질문 도착":data.diagnosis?.pattern==="rotation"?"회전 의심":"요청 전";}
+  return a?.v6?.decision==="revise"?"식 수정":a?.v6?.decision==="retain"?"식 유지":"대기";
+}
+/** Screen ⇄ bridge ⇄ controller: the same buttons drive DT, the mock controller or the MG400. */
+function PaperLinkPath({data}:{data:SceneData}){
+  const source=data.displaySource;
+  const live=source==="hardware"||source==="mock";
+  const device=source==="hardware"?"MG400 제어기":source==="mock"?"연습 제어기(모의)":"MG400 (미연결)";
+  return <div className="paper-link-path" data-source={source??"dt"} data-testid="paper-link-path" aria-label="장비 연결 경로">
+    <span className="is-on">화면 · DT</span><i aria-hidden="true">⇄</i>
+    <span className={live?"is-on":""}>브리지</span><i aria-hidden="true">⇄</i>
+    <span className={live?"is-on":""}>{device}</span>
+    <em className={live?"is-live":""}>{live?"● 위치 보고 수신 중":"○ DT 미리보기"}</em>
+  </div>;
+}
+function PaperLoopRing({data}:{data:SceneData}){
+  const current=paperLoopPosition(data),attempt=data.activeAttempt?.attempt??1;
+  return <ol className="paper-loop-ring" aria-label="피지컬 AI 순환" data-testid="paper-loop-ring">
+    {LOOP.map((step,index)=><li key={step.short} className={index===current?"is-current":index<current?"is-done":""} data-current={index===current}>
+      <b>{step.short}</b><small>{loopValue(data,index)}</small><em>{step.paper}</em>
+    </li>)}
+    <li className="paper-loop-ring__again" aria-label={`${attempt}회차`}>↻ {attempt}회차</li>
+  </ol>;
+}
 export function PaperSceneLegend(){
   const entries=[
     {label:"O·X·Y 기준점",color:C.reference},
@@ -23,11 +75,21 @@ export function PaperSceneLegend(){
 }
 export function PaperSceneToolbar(){
   const {data}=usePaperScene();if(!data)return null;
+  if(isV6Scene(data))return <div className="paper-scene-toolbar paper-scene-toolbar--v6" data-v6="true">
+    <PaperLinkPath data={data}/>
+    <button type="button" onClick={requestPaperCamera}>↺ 로봇·종이 시점</button>
+    <PaperLoopRing data={data}/>
+  </div>;
   const measured=data.displaySource==="hardware"||data.displaySource==="mock";
   return <div className="paper-scene-toolbar"><span>{data.frame?"종이 10×10 cm · 1 cm 눈금":"위치 미확인 · 반투명 종이는 배치 예시"}<small>{measured?"원래 색: 현재 보고 위치":"원래 색: 현재 위치 고정 · 파란 고스트: DT 예측 이동 · 실측 아님"}</small></span><button type="button" onClick={requestPaperCamera}>↺ 종이 시점</button></div>;
 }
 export function PaperSceneCaption(){
   const {data,point,reference,phase,robotDisplay}=usePaperScene();if(!data)return null;
+  if(isV6Scene(data))return <div className="paper-scene-caption paper-scene-caption--v6" data-testid="paper-v6-scene-legend">
+    <span><i className="paper-legend-ghost"/>파란 고스트 = 내 식이 보낸 곳</span>
+    <span><i className="paper-legend-robot-solid"/>로봇 실체 = {data.displaySource==="hardware"?"MG400이 보고한 위치":data.displaySource==="mock"?"연습 제어기가 보고한 위치":"현재 DT 위치"}</span>
+    <span><i className="paper-legend-ink"/>잉크 자국 = 종이에 남은 결과</span>
+  </div>;
   const readout=paperSceneReadout(data,phase,point,reference),number=(value:number)=>Number.isFinite(value)?(Math.round(value*100)/100).toFixed(2):"—";
   const xy=(value:{x:number;y:number}|null)=>value?`X ${number(value.x)} · Y ${number(value.y)} mm`:"자료 없음";
   const pose=data.displayPose;
@@ -82,7 +144,14 @@ export function PaperSceneOverlay(){
   const center=displayPoint(5,5);
   const position=(p:PaperScenePoint):[number,number,number]=>shapeWorldPoint(p);
   const centerWorld=position(center);
-  const view=useMemo(()=>({position:[centerWorld[0]-30,centerWorld[1]+480,centerWorld[2]+230] as const,target:[centerWorld[0]-30,centerWorld[1],centerWorld[2]] as const}),[frame?.id]);
+  const v6Scene=isV6Scene(data);
+  // v6 keeps the whole MG400 and the sheet in frame: the robot is the point of the lesson.
+  const baseWorld=position({x:0,y:0,z:center.z});
+  const view=useMemo(()=>{
+    if(!v6Scene)return {position:[centerWorld[0]-30,centerWorld[1]+480,centerWorld[2]+230] as const,target:[centerWorld[0]-30,centerWorld[1],centerWorld[2]] as const};
+    const t=[baseWorld[0]*0.4+centerWorld[0]*0.6,centerWorld[1]+60,baseWorld[2]*0.4+centerWorld[2]*0.6] as const;
+    return {position:[t[0]+120,t[1]+430,t[2]+520] as const,target:t};
+  },[frame?.id,v6Scene]);
   const corners=[[0,0],[10,0],[10,10],[0,10]].map(([x,y])=>displayPoint(x,y));
   const vertices=new Float32Array([0,1,2,0,2,3].flatMap(i=>position(corners[i])));
   if(!data)return null;
@@ -121,6 +190,10 @@ export function PaperSceneOverlay(){
   const worst=evidence.reduce<(typeof evidence)[number]|null>((best,item)=>!best||item.distance>best.distance?item:best,null);
   const latestAi=data.activeAttempt?.aiAnalyses?.filter(item=>item.runId===data.run?.id&&!!item.displayedAt).at(-1);
   const aiAnchor=worst?data.run?.observations.find(item=>item.point===worst.point)?.pose:null;
+  // Ink is what the pen physically left on the sheet (student ruler reading or mock ink), never the TCP report.
+  const inkMarks=(data.activeAttempt?.inkReadings??[])
+    .filter(r=>r.runId===data.run?.id&&r.status==="measured"&&r.xCm!==null&&r.yCm!==null)
+    .map(r=>({point:r.point,world:position(displayPoint(r.xCm!,r.yCm!))}));
   return <group name="measured-paper-sheet">
     <CoordinateStudyCamera requestKey={cameraKey} preset="free" view={view} minimumAspect={1.05}/>
     <mesh renderOrder={5}><bufferGeometry><bufferAttribute attach="attributes-position" args={[vertices,3]}/></bufferGeometry><meshBasicMaterial color="#f8fafc" transparent opacity={frame ? .82 : .23} side={DoubleSide} depthWrite={false}/></mesh>
@@ -166,10 +239,11 @@ export function PaperSceneOverlay(){
       <Line points={[position(aiAnchor),position({x:aiAnchor.x+28,y:aiAnchor.y+24,z:aiAnchor.z+3})]} color="#7c3aed" lineWidth={2} dashed depthTest={false} renderOrder={232}/>
       <Html position={position({x:aiAnchor.x+28,y:aiAnchor.y+24,z:aiAnchor.z+4})} zIndexRange={[30,0]}><span className="paper-ai-anchor">AI · {latestAi.question.slice(0,76)}</span></Html>
     </group>}
+    {frame&&inkMarks.map(mark=><group key={`ink-${mark.point}`} name="paper-ink-mark">
+      <mesh position={[mark.world[0],mark.world[1]+1.6,mark.world[2]]} rotation={[-Math.PI/2,0,0]} renderOrder={212}><circleGeometry args={[2.2,20]}/><meshBasicMaterial color="#1e3a8a" transparent opacity={.92} depthTest={false}/></mesh>
+    </group>)}
+    {frame&&inkMarks.length>1&&<Line points={inkMarks.map(mark=>[mark.world[0],mark.world[1]+1.4,mark.world[2]] as [number,number,number])} color="#1e3a8a" lineWidth={1} dashed dashSize={2} gapSize={3} transparent opacity={.45} depthTest={false} renderOrder={211}/>}
     {!frame&&<Html position={raised(center)} center><b className="paper-unknown">배치 예시<br/><small>비스듬한 종이 · 아직 실측 전</small></b></Html>}
-    <Html position={[centerWorld[0],centerWorld[1]+120,centerWorld[2]]} zIndexRange={[18,0]}>
-      <div className="paper-scene-mini-legend"><span>종이 10×10</span><span>내 식 · 파랑</span><span>O/X/Y·로봇</span></div>
-    </Html>
   </group>;
 }
 
