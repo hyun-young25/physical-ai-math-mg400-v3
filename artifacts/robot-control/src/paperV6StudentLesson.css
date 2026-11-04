@@ -1430,3 +1430,8 @@
 .paper-v6-reference-record:not(:disabled),
 .paper-v6-student .paper-v6-is-next:not(:disabled),
 .paper-v6-student[data-scene="1"] .paper-v6-shell__button--next:not(:disabled) { background: #4f46e5; border-color: #4f46e5; }
+.paper-v6-equation .paper-v6-equation__note { display:block; margin-top:8px; color:#e0e7ff !important; opacity:1 !important; font-family:'Pretendard','Noto Sans KR',sans-serif; font-size:12.5px; line-height:1.5; }
+.paper-v6-equation__note b { color:#fff; }
+.paper-v6-point__ab { margin:0 0 8px; padding:6px 10px; border-radius:8px; background:#f5f3ff; color:#3730a3; font-size:12.5px; line-height:1.5; }
+.paper-v6-point__ab b:first-of-type { color:#be185d; }
+.paper-v6-point__ab b:last-of-type { color:#0e7490; }

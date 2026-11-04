@@ -165,6 +165,12 @@ export function PaperSceneOverlay(){
   const selected=(label:string)=>reference?reference===label:point!==null&&`P${point+1}`===label;
   const liveModel=paperSceneLiveModel(data);
   const livePredictions=paperSceneLivePredictions(data);
+  // v6: the student's own arithmetic comes first; coordinates appear on the sheet once the prediction is saved.
+  const predictionSaved=!!data.activeAttempt?.planHash;
+  // v6 step 2: show what a and b mean for the selected target (O → along paper x by a → along paper y by b).
+  const abTarget=v6Scene&&loopStep===2&&frame?data.targetPoints[point??0]:null;
+  const abCorner=abTarget?displayPoint(abTarget.xCm,0):null;
+  const rulerTicks=v6Scene&&frame&&loopStep>=2?[0,2,4,6,8,10]:[];
   const firstTarget=data.targetPoints[0];
   const firstTerms=liveModel&&firstTarget?paperV6EquationTerms(firstTarget,liveModel):null;
   const livePoint=livePredictions[0];
@@ -215,6 +221,15 @@ export function PaperSceneOverlay(){
     {frame&&showTargets&&data.targetPoints.map(p=>{const pos=displayPoint(p.xCm,p.yCm),bad=mismatch.includes(p.name);return <Html key={p.name} position={raised(pos)} center zIndexRange={[16,0]}><button type="button" data-point={p.name} className={`paper-point-label${bad?" paper-mismatch-pulse":""}`} style={{borderColor:bad?C.mismatch:C.target}} aria-label={`장면에서 ${p.name} 선택`} aria-pressed={selected(p.name)} onClick={()=>selectPaperPoint(p.name,"scene")}>{p.name}</button></Html>;})}
     {!frame&&!v6Scene&&data.targetPoints.map(p=>{const pos=displayPoint(p.xCm,p.yCm);return <Html key={`example-${p.name}`} position={raised(pos)} center zIndexRange={[14,0]}><span className="paper-point-label paper-point-label--example">{p.name}</span></Html>;})}
     {mismatch.map(label=>{const target=series[0]?.points.find(p=>p.label===label),observed=data.run?.observations.find(p=>p.point===label);return target&&validPaperPoint(target)&&observed?<Line key={label} points={[wp(target),wp(observed.pose)]} color={C.mismatch} lineWidth={4} transparent depthTest={false} renderOrder={215}/>:null;})}
+    {rulerTicks.map(cm=><Html key={`rx-${cm}`} position={raised(displayPoint(cm,-0.9))} center zIndexRange={[12,0]}><span className="paper-ruler-tick">{cm}</span></Html>)}
+    {rulerTicks.filter(cm=>cm>0).map(cm=><Html key={`ry-${cm}`} position={raised(displayPoint(-0.9,cm))} center zIndexRange={[12,0]}><span className="paper-ruler-tick">{cm}</span></Html>)}
+    {rulerTicks.length>0&&<Html position={raised(displayPoint(11.2,-0.9))} center zIndexRange={[12,0]}><span className="paper-ruler-tick paper-ruler-tick--unit">cm</span></Html>}
+    {abTarget&&abCorner&&<group name="paper-ab-legs">
+      <Line points={[raised(displayPoint(0,0)),raised(abCorner)]} color="#db2777" lineWidth={4} depthTest={false} renderOrder={224}/>
+      <Line points={[raised(abCorner),raised(displayPoint(abTarget.xCm,abTarget.yCm))]} color="#0891b2" lineWidth={4} depthTest={false} renderOrder={224}/>
+      <Html position={raised(displayPoint(abTarget.xCm/2,-0.2))} center zIndexRange={[27,0]}><span className="paper-ab-tag paper-ab-tag--a">a = {abTarget.xCm*10} mm</span></Html>
+      <Html position={raised(displayPoint(abTarget.xCm+0.3,abTarget.yCm/2))} center zIndexRange={[27,0]}><span className="paper-ab-tag paper-ab-tag--b">b = {abTarget.yCm*10} mm</span></Html>
+    </group>}
     {references.map(r=>{
        const sample=data.samples.find(s=>s.point===r.name);
        const p=frame?raised(displayPoint(r.x,r.y)):sample?shapeWorldPoint({...sample.pose,z:sample.pose.z+2}):raised(displayPoint(r.x,r.y));
@@ -226,12 +241,12 @@ export function PaperSceneOverlay(){
     </group>}
     {v6Scene&&livePredictions.slice(1).map(prediction=>{const x=Number(prediction.robotX),y=Number(prediction.robotY);if(!Number.isFinite(x)||!Number.isFinite(y))return null;return <group key={`ghost-${prediction.name}`} name="student-equation-ghost-point">
       <mesh position={position({x,y,z:center.z+3})} renderOrder={229}><sphereGeometry args={[3.6,14,10]}/><meshBasicMaterial color={C.robotPreview} transparent opacity={.85} depthTest={false}/></mesh>
-      <Html position={position({x,y,z:center.z+8})} zIndexRange={[25,0]}><span className="paper-robot-tip-tag paper-robot-tip-tag--soft">{prediction.name} ({x.toFixed(0)}, {y.toFixed(0)})</span></Html>
+      <Html position={position({x,y,z:center.z+8})} zIndexRange={[25,0]}><span className="paper-robot-tip-tag paper-robot-tip-tag--soft">{prediction.name}{predictionSaved?` (${x.toFixed(0)}, ${y.toFixed(0)})`:""}</span></Html>
     </group>;})}
     {livePose&&<group name="student-equation-ghost">
       <Line points={[raised(displayPoint(firstTarget.xCm,firstTarget.yCm)),raised({x:livePose.x,y:livePose.y,z:livePose.z})]} color={C.robotPreview} lineWidth={2} dashed depthTest={false} renderOrder={226}/>
       <mesh position={position({x:livePose.x,y:livePose.y,z:livePose.z+4})} renderOrder={230}><sphereGeometry args={[5,16,12]}/><meshBasicMaterial color={C.robotPreview} transparent opacity={.9} depthTest={false}/></mesh>
-      <Html position={position({x:livePose.x,y:livePose.y,z:livePose.z+10})} zIndexRange={[26,0]}><span className="paper-robot-tip-tag">내 식 · {livePoint?.name}{v6Scene?` (${livePose.x.toFixed(0)}, ${livePose.y.toFixed(0)})`:""}</span></Html>
+      <Html position={position({x:livePose.x,y:livePose.y,z:livePose.z+10})} zIndexRange={[26,0]}><span className="paper-robot-tip-tag">내 식 · {livePoint?.name}{v6Scene&&predictionSaved?` (${livePose.x.toFixed(0)}, ${livePose.y.toFixed(0)})`:""}</span></Html>
     </group>}
     {origin&&<group name="student-origin-and-components">
       <Line points={[position({x:0,y:0,z:origin.z}),position(origin)]} color={formulaTerm==="originX"||formulaTerm==="originY"?"#7c3aed":"#a78bfa"} lineWidth={formulaTerm?.startsWith("origin")?4:2} dashed depthTest={false} renderOrder={217}/>
