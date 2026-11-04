@@ -18,11 +18,13 @@ export function paperLoopPosition(data:SceneData):number{
   if(data.running)return 3;
   return stage<=2?1:stage<=4?2:stage===5?3:stage===6?4:5;
 }
-const STEPS=["종이 재기","내 식 예측","로봇이 그림","비교 · AI 질문","판단 · 새 점 확인"];
+const STEPS=["기준점 측정","변환식 예측","로봇 실행","비교 · AI 질문","모델 판단 · 검증"];
+/** v6: the measured θ is what the student computes in step 2, so it stays hidden until a prediction is saved. */
+function paperThetaRevealed(data:SceneData):boolean{return !isV6Scene(data)||!!data.activeAttempt?.planHash;}
 function stepValue(data:SceneData,step:number):string{
   const a=data.activeAttempt,ev=data.diagnosis?.taskEvidence??[];
   const worst=ev.reduce((m,e)=>Math.max(m,e.distance),0);
-  if(step===1){const measured=paperFrameAngleDegrees(data.frame);return measured===null?`O·X·Y ${data.samples.length}/3`:`종이 θ ${measured.toFixed(1)}°`;}
+  if(step===1){const measured=paperFrameAngleDegrees(data.frame);return measured===null||!paperThetaRevealed(data)?`O·X·Y ${data.samples.length}/3`:`종이 θ ${measured.toFixed(1)}°`;}
   if(step===2){const m=a?.v6?.model;return m?`내 θ ${m.thetaDeg.toFixed(1)}°`:"";}
   if(step===3)return data.running?"그리는 중…":data.run?.status==="completed"?`${data.run.observations.length}점 완료`:"";
   if(step===4)return ev.length?`차이 ${worst.toFixed(1)} mm`:"";
@@ -143,7 +145,10 @@ export function PaperSceneOverlay(){
   const corners=[[0,0],[10,0],[10,10],[0,10]].map(([x,y])=>displayPoint(x,y));
   const vertices=new Float32Array([0,1,2,0,2,3].flatMap(i=>position(corners[i])));
   if(!data)return null;
-  const series=paperSceneSeries(data,phase),mismatch=paperMismatchPoints(data,series);
+  // v6: the target square P1–P4 is the step-2 task; it appears once the student reaches step 2.
+  const showTargets=!v6Scene||paperLoopPosition(data)>=2;
+  const thetaShown=paperThetaRevealed(data);
+  const series=paperSceneSeries(data,phase).filter(s=>showTargets||s.label!=="목표점"),mismatch=paperMismatchPoints(data,series);
   const rotation=paperSceneRotation(data,series);
   const measuredAngle=paperFrameAngleDegrees(frame);
   const displayAngle=measuredAngle??28.6;
@@ -191,11 +196,11 @@ export function PaperSceneOverlay(){
     {frameArc.length>1&&<group name="paper-measured-x-axis">
       <Line points={[position(frameOrigin),position(displayPoint(2,0))]} color="#0f766e" lineWidth={3} depthTest={false} renderOrder={219}/>
       <Line points={[position(frameOrigin),position(displayPoint(0,2))]} color="#0284c7" lineWidth={3} depthTest={false} renderOrder={219}/>
-      <Line points={frameArc.map(raised)} color={measuredAngle===null?"#94a3b8":"#f59e0b"} lineWidth={measuredAngle===null?2:3} dashed={measuredAngle===null} depthTest={false} renderOrder={220}/>
+      {thetaShown&&<Line points={frameArc.map(raised)} color={measuredAngle===null?"#94a3b8":"#f59e0b"} lineWidth={measuredAngle===null?2:3} dashed={measuredAngle===null} depthTest={false} renderOrder={220}/>}
       {(!v6Scene||frame)&&<>
       <Html position={raised(displayPoint(2,0))} zIndexRange={[20,0]}><span className="paper-axis-tag paper-axis-tag--x">종이 x+</span></Html>
       <Html position={raised(displayPoint(0,2))} zIndexRange={[20,0]}><span className="paper-axis-tag paper-axis-tag--y">종이 y+</span></Html>
-      <Html position={raised(frameOrigin)} zIndexRange={[20,0]}><span className="paper-angle-tag">{measuredAngle===null?"예시 θ 28.6°":`측정 θ ${measuredAngle.toFixed(1)}°`}</span></Html>
+      {thetaShown&&<Html position={raised(frameOrigin)} zIndexRange={[20,0]}><span className="paper-angle-tag">{measuredAngle===null?"예시 θ 28.6°":`측정 θ ${measuredAngle.toFixed(1)}°`}</span></Html>}
       </>}
     </group>}
     {rotation&&<Line points={rotation.arc.map(raised)} color="#b45309" lineWidth={3} depthTest={false} renderOrder={220}/>}
@@ -203,7 +208,8 @@ export function PaperSceneOverlay(){
       {paperSeriesSegments(s.points).map((segment,i)=><Line key={i} points={segment.map(wp)} color={s.color} lineWidth={s.label==="목표점"?2:3} dashed={s.dashed} dashSize={5} gapSize={4} transparent depthTest={false} renderOrder={200}/>)}
       {s.points.filter(validPaperPoint).map(p=><mesh key={p.label} position={wp(p)} renderOrder={210}><sphereGeometry args={[s.label==="목표점"?3.8:2.7,12,8]}/><meshBasicMaterial color={s.color} transparent depthTest={false}/></mesh>)}
     </group>)}
-    {frame&&data.targetPoints.map(p=>{const pos=displayPoint(p.xCm,p.yCm),bad=mismatch.includes(p.name);return <Html key={p.name} position={raised(pos)} center zIndexRange={[16,0]}><button type="button" data-point={p.name} className={`paper-point-label${bad?" paper-mismatch-pulse":""}`} style={{borderColor:bad?C.mismatch:C.target}} aria-label={`장면에서 ${p.name} 선택`} aria-pressed={selected(p.name)} onClick={()=>selectPaperPoint(p.name,"scene")}>{p.name}</button></Html>;})}
+    {frame&&showTargets&&v6Scene&&<Html position={raised(displayPoint(5,9.6))} center zIndexRange={[14,0]}><span className="paper-target-caption">목표 경로 P1→P4 · 종이 1~9 cm</span></Html>}
+    {frame&&showTargets&&data.targetPoints.map(p=>{const pos=displayPoint(p.xCm,p.yCm),bad=mismatch.includes(p.name);return <Html key={p.name} position={raised(pos)} center zIndexRange={[16,0]}><button type="button" data-point={p.name} className={`paper-point-label${bad?" paper-mismatch-pulse":""}`} style={{borderColor:bad?C.mismatch:C.target}} aria-label={`장면에서 ${p.name} 선택`} aria-pressed={selected(p.name)} onClick={()=>selectPaperPoint(p.name,"scene")}>{p.name}</button></Html>;})}
     {!frame&&!v6Scene&&data.targetPoints.map(p=>{const pos=displayPoint(p.xCm,p.yCm);return <Html key={`example-${p.name}`} position={raised(pos)} center zIndexRange={[14,0]}><span className="paper-point-label paper-point-label--example">{p.name}</span></Html>;})}
     {mismatch.map(label=>{const target=series[0]?.points.find(p=>p.label===label),observed=data.run?.observations.find(p=>p.point===label);return target&&validPaperPoint(target)&&observed?<Line key={label} points={[wp(target),wp(observed.pose)]} color={C.mismatch} lineWidth={4} transparent depthTest={false} renderOrder={215}/>:null;})}
     {references.map(r=>{
