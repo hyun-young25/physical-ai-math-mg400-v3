@@ -1294,3 +1294,41 @@
 .paper-v6-shell__status-spacer { flex:1; }
 .paper-v6-ready-actions { background:transparent !important; border:0 !important; padding:0 !important; gap:6px; }
 .paper-v6-ready-actions button { padding:4px 10px; border-radius:999px; border:1px solid #2563eb; background:#eff6ff; color:#1d4ed8; font-size:12px; font-weight:700; cursor:pointer; }
+
+/* ── v6 "one view" layout ─────────────────────────────────────────────
+   The robot + paper fill the screen; steps run along the top of the 3D;
+   the current step's task floats as a popup card. No separate paper
+   diagram, step list or legend competing with the robot. */
+.learning-workspace:has(.paper-v6-student[data-scene]) { position: relative; }
+.learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-scene {
+  flex: 1 1 100% !important; width: 100% !important; max-width: none !important;
+}
+.learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-panel {
+  position: absolute !important; z-index: 40;
+  top: 92px; right: 16px; bottom: 16px;
+  width: min(430px, 44%) !important; max-width: none !important; height: auto !important;
+  overflow: auto; border-radius: 16px; background: #ffffff;
+  box-shadow: 0 18px 50px #0b2d5c38, 0 2px 8px #0b2d5c1f; border: 1px solid #dbe3ee;
+}
+.learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-panel .curriculum-title,
+.learning-workspace:has(.paper-v6-student[data-scene]) .pcv-header,
+.learning-workspace:has(.paper-v6-student[data-scene]) .paper-v6-cycle,
+.learning-workspace:has(.paper-v6-student[data-scene]) .paper-v6-coordinate-pair,
+.learning-workspace:has(.paper-v6-student[data-scene]) .paper-v6-shell__progress,
+.learning-workspace:has(.paper-v6-student[data-scene]) .paper-v6-source-legend,
+.learning-workspace:has(.paper-v6-student[data-scene]) .tcp-readout { display: none !important; }
+.learning-workspace:has(.paper-v6-student[data-scene]) .paper-v6-shell { border: 0; box-shadow: none; }
+.learning-workspace:has(.paper-v6-student[data-scene]) .paper-v6-shell__header { padding-top: 12px; }
+.learning-workspace:has(.paper-v6-student[data-scene]) .paper-v6-shell__footer {
+  position: sticky; bottom: 0; background: #ffffffee; backdrop-filter: blur(6px); z-index: 2;
+}
+.paper-v6-measure-details > summary { font-weight: 750; cursor: pointer; }
+
+@media (max-width: 900px) {
+  .learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-scene {
+    flex: 1 1 100% !important; height: 100% !important; max-height: none !important;
+  }
+  .learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-panel {
+    top: auto; left: 8px; right: 8px; bottom: 8px; width: auto !important; max-height: 52%;
+  }
+}

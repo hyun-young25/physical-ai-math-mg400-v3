@@ -2324,7 +2324,7 @@ function AppInner() {
         </div>}
 
         {/* ── Bottom-right coord readout ── */}
-        {!isPickLesson && <div className="absolute right-3 z-10 select-none" style={{ top:paperScene.data?52:undefined, bottom:paperScene.data?undefined:activeNav === "용어·기호와 기초수학" ? "calc(0.75rem + 34px + 10px)" : "0.75rem" }}>
+        {!isPickLesson && <div className="absolute right-3 z-10 select-none tcp-readout" style={{ top:paperScene.data?52:undefined, bottom:paperScene.data?undefined:activeNav === "용어·기호와 기초수학" ? "calc(0.75rem + 34px + 10px)" : "0.75rem" }}>
           <div style={{
             background: "rgba(255,255,255,0.82)",
             backdropFilter: "blur(8px)",
