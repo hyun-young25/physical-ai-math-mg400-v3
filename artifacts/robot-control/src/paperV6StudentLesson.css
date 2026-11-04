@@ -1303,7 +1303,13 @@
 .learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-scene {
   flex: 1 1 auto !important; width: auto !important; max-width: none !important;
 }
-/* Same panel width, title band and course tabs as the other 2-4 levels. */
+/* Same title band and course tabs as the other 2-4 levels; the robot gets more room here. */
+@media (min-width: 901px) {
+  .learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-panel {
+    flex: 0 0 clamp(400px, 32vw, 560px) !important;
+    width: clamp(400px, 32vw, 560px) !important;
+  }
+}
 .learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-panel .paper-coordinate-host { overflow: auto; }
 .learning-workspace:has(.paper-v6-student[data-scene]) .pcv-header,
 .learning-workspace:has(.paper-v6-student[data-scene]) .paper-v6-cycle,
