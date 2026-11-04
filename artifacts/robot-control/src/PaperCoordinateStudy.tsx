@@ -1923,6 +1923,7 @@ export function PaperCoordinateStudy({
     setStage(bounded as PaperLessonStage);
     return null;
   };
+  const mockJogTargetRef = useRef<{ pose: LessonPose; at: number } | null>(null);
   const navigateV6Ref = useRef(navigateV6);
   navigateV6Ref.current = navigateV6;
   useEffect(
@@ -2699,7 +2700,7 @@ export function PaperCoordinateStudy({
           );
           return;
         }
-        if (mockPoseAvailable.z > PAPER_V6_MOCK_TOUCH_MAX_Z_MM) {
+        if (mockPoseAvailable.z > PAPER_V6_MOCK_TOUCH_MAX_Z_MM + 0.05) {
           setReferenceError(
             `펜이 종이 위에 떠 있어요(Z ${mockPoseAvailable.z.toFixed(1)} mm). Z↓로 내려 종이에 닿게 하세요.`,
           );
@@ -2773,8 +2774,19 @@ export function PaperCoordinateStudy({
     },
     onMockJog: (axis, deltaMm) => {
       if (!mockPracticeEnabled || running || hardwareConnected) return;
-      const next = { ...currentPose, [axis]: currentPose[axis] + deltaMm };
-      if (axis === "z" && next.z < PAPER_V6_MOCK_MIN_Z_MM) {
+      // Rapid clicks land before the DT pose re-renders: continue from the last commanded pose.
+      const recent = mockJogTargetRef.current;
+      const base =
+        recent && Date.now() - recent.at < 600 ? recent.pose : currentPose;
+      const snap = (value: number) => Math.round(value * 10) / 10;
+      const next = {
+        x: snap(base.x),
+        y: snap(base.y),
+        z: snap(base.z),
+        r: base.r,
+      };
+      next[axis] = snap(next[axis] + deltaMm);
+      if (axis === "z" && next.z < PAPER_V6_MOCK_MIN_Z_MM - 1e-6) {
         setReferenceError("더 내리면 펜이 종이를 뚫고 책상에 부딪혀요. 지금 높이가 종이 표면이에요.");
         return;
       }
@@ -2782,6 +2794,7 @@ export function PaperCoordinateStudy({
         setReferenceError("그 방향으로는 로봇 팔이 닿지 않아요. 다른 방향으로 움직여 보세요.");
         return;
       }
+      mockJogTargetRef.current = { pose: next, at: Date.now() };
       setReferenceError("");
     },
     onToggleMockPractice: (enabled) => {
