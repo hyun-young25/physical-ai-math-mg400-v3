@@ -1435,3 +1435,5 @@
 .paper-v6-point__ab { margin:0 0 8px; padding:6px 10px; border-radius:8px; background:#f5f3ff; color:#3730a3; font-size:12.5px; line-height:1.5; }
 .paper-v6-point__ab b:first-of-type { color:#be185d; }
 .paper-v6-point__ab b:last-of-type { color:#0e7490; }
+.paper-v6-trig { margin:6px 0; padding:8px 12px; border-radius:8px; background:#fff7ed; border:1px solid #fdba74; color:#9a3412; font:700 13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
+.paper-v6-point__trig { color:#9a3412; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; }

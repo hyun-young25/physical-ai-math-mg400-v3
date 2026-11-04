@@ -223,6 +223,13 @@ export function PaperSceneOverlay(){
     {frame&&showTargets&&data.targetPoints.map(p=>{const pos=displayPoint(p.xCm,p.yCm),bad=mismatch.includes(p.name);return <Html key={p.name} position={raised(pos)} center zIndexRange={[16,0]}><button type="button" data-point={p.name} className={`paper-point-label${bad?" paper-mismatch-pulse":""}`} style={{borderColor:bad?C.mismatch:C.target}} aria-label={`장면에서 ${p.name} 선택`} aria-pressed={selected(p.name)} onClick={()=>selectPaperPoint(p.name,"scene")}>{p.name}</button></Html>;})}
     {!frame&&!v6Scene&&data.targetPoints.map(p=>{const pos=displayPoint(p.xCm,p.yCm);return <Html key={`example-${p.name}`} position={raised(pos)} center zIndexRange={[14,0]}><span className="paper-point-label paper-point-label--example">{p.name}</span></Html>;})}
     {mismatch.map(label=>{const target=series[0]?.points.find(p=>p.label===label),observed=data.run?.observations.find(p=>p.point===label);return target&&validPaperPoint(target)&&observed?<Line key={label} points={[wp(target),wp(observed.pose)]} color={C.mismatch} lineWidth={4} transparent depthTest={false} renderOrder={215}/>:null;})}
+    {v6Scene&&frame&&loopStep===2&&!thetaShown&&<group name="paper-theta-where">
+      <Line points={[raised(frameOrigin),raised({x:frameOrigin.x+45,y:frameOrigin.y,z:frameOrigin.z})]} color="#64748b" lineWidth={2} dashed dashSize={4} gapSize={3} depthTest={false} renderOrder={223}/>
+      <Line points={[raised(frameOrigin),raised(displayPoint(4.5,0))]} color="#0f766e" lineWidth={3} depthTest={false} renderOrder={223}/>
+      <Line points={arc(frameOrigin,displayAngle,28).map(raised)} color="#f59e0b" lineWidth={3} depthTest={false} renderOrder={223}/>
+      <Html position={raised({x:frameOrigin.x+50,y:frameOrigin.y-3,z:frameOrigin.z})} zIndexRange={[27,0]}><span className="paper-ab-tag paper-ab-tag--robotx">로봇 X축 방향</span></Html>
+      <Html position={raised(arc(frameOrigin,displayAngle/2,34).at(-1)!)} center zIndexRange={[27,0]}><span className="paper-ab-tag paper-ab-tag--theta">θ{origin?` = ${liveModel!.thetaDeg.toFixed(1)}°`:" = ?"}</span></Html>
+    </group>}
     {rulerTicks.map(cm=><Html key={`rx-${cm}`} position={raised(displayPoint(cm,-0.9))} center zIndexRange={[12,0]}><span className="paper-ruler-tick">{cm}</span></Html>)}
     {rulerTicks.length>0&&<Html position={raised(displayPoint(-0.9,11.4))} center zIndexRange={[12,0]}><span className="paper-ruler-tick paper-ruler-tick--unit">종이 y (cm)</span></Html>}
     {rulerTicks.filter(cm=>cm>0).map(cm=><Html key={`ry-${cm}`} position={raised(displayPoint(-0.9,cm))} center zIndexRange={[12,0]}><span className="paper-ruler-tick">{cm}</span></Html>)}
