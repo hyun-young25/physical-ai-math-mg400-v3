@@ -1593,7 +1593,7 @@ export function RobotArm({
   if (paperCoordinateOpen) {
     return (
       <div className="paper-coordinate-host">
-        {paperLevel !== "advanced-paper-hardware" && <LessonCoursePath label="도형 수업 경로" current={paperLevel==="advanced-paper-dt"?4:5} disabled={status==="running"||paperBusy}
+        {<LessonCoursePath label="도형 수업 경로" current={paperLevel==="advanced-paper-dt"?4:5} disabled={status==="running"||paperBusy}
           items={Array.from({length:SHAPE_LESSON_COUNT},(_,index)=>({label:`${["기초","응용","심화"][Math.floor(index/2)]} ${index%2+1}`,
             detail:index>=4?PAPER_RECTANGLE_TITLES[index===4?"advanced-paper-dt":"advanced-paper-hardware"]:getShapeLesson("사각형",index).title}))}
           onSelect={index=>{if(status==="running"||paperBusy)return;if(index>=4)setPaperLevel(index===4?"advanced-paper-dt":"advanced-paper-hardware");else{setPaperLevel(null);selectShapeLesson(index);}}}/>}
