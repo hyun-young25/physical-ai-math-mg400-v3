@@ -236,7 +236,7 @@ export function PaperSceneOverlay(){
     </group>)}
     {frame&&inkMarks.length>1&&<Line points={inkMarks.map(mark=>[mark.world[0],mark.world[1]+1.4,mark.world[2]] as [number,number,number])} color="#1e3a8a" lineWidth={1} dashed dashSize={2} gapSize={3} transparent opacity={.45} depthTest={false} renderOrder={211}/>}
     {!frame&&!v6Scene&&<Html position={raised(center)} center><b className="paper-unknown">배치 예시<br/><small>비스듬한 종이 · 아직 실측 전</small></b></Html>}
-    {!frame&&v6Scene&&<Html position={raised(displayPoint(5,-1.5))} center zIndexRange={[14,0]}><span className="paper-unknown-tag">아직 재지 않은 종이 · O·X·Y를 찍어 위치를 알아내요</span></Html>}
+
   </group>;
 }
 

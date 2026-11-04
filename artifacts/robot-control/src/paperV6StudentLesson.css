@@ -1333,3 +1333,9 @@
 .paper-v6-mode-choice div { display:flex; flex-wrap:wrap; gap:8px; }
 .paper-v6-mode-choice small { color:#b91c1c; }
 .paper-v6-sim-badge { margin:0; padding:6px 10px; border-radius:999px; background:#f5f3ff; border:1px solid #c4b5fd; color:#5b21b6; font-size:12px; font-weight:750; width:fit-content; }
+
+/* Card text was too large next to the robot: scale the whole card down evenly. */
+.learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-panel .paper-coordinate-view { zoom: .78; }
+@media (max-width: 900px) {
+  .learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-panel .paper-coordinate-view { zoom: .9; }
+}
