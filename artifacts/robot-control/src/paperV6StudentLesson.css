@@ -457,6 +457,8 @@
   --v6-green: #275e52;
   --v6-coral: #c96e50;
   --v6-wash: #e9f1eb;
+  --v6-blue: #2563eb;
+  --v6-border: #d7e2db;
   color: var(--v6-ink);
   font-family: "Pretendard", "Noto Sans KR", sans-serif;
 }
@@ -1338,4 +1340,30 @@
 .learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-panel .paper-coordinate-view { zoom: .78; }
 @media (max-width: 900px) {
   .learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-panel .paper-coordinate-view { zoom: .9; }
+}
+
+/* "지금 누를 버튼" — one obvious next action */
+@keyframes paper-v6-nudge {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, .45); }
+  50% { box-shadow: 0 0 0 7px rgba(37, 99, 235, 0); }
+}
+.paper-v6-reference-record:not(:disabled),
+.paper-v6-student .paper-v6-is-next:not(:disabled) {
+  background: #2563eb;
+  color: #fff;
+  animation: paper-v6-nudge 1.6s ease-in-out infinite;
+}
+.paper-v6-reference-record:not(:disabled)::before {
+  content: "👉 ";
+}
+.paper-v6-student[data-scene="1"] .paper-v6-shell__button--next:not(:disabled) {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+  animation: paper-v6-nudge 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .paper-v6-reference-record:not(:disabled),
+  .paper-v6-student .paper-v6-is-next:not(:disabled),
+  .paper-v6-student[data-scene="1"] .paper-v6-shell__button--next:not(:disabled) { animation: none; }
 }
