@@ -1288,14 +1288,14 @@
   }
 }
 
-.paper-v6-paper-note--lead { font-weight:750; color:#0b2d5c; background:#fef3c7; border-left:4px solid #f59e0b; padding:8px 10px; border-radius:6px; }
+.paper-v6-paper-note--lead { font-weight:700; color:#3730a3; background:#f5f3ff; border-left:4px solid #8b5cf6; padding:8px 10px; border-radius:6px; }
 .paper-v6-ready-checks { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 0; padding:0; list-style:none; }
 .paper-v6-ready-checks li { display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:999px; font-size:12px; font-weight:700; border:1px solid #cbd5e1; background:#f8fafc; color:#475569; }
 .paper-v6-ready-checks li.is-ok { background:#ecfdf5; border-color:#86efac; color:#166534; }
 .paper-v6-ready-checks li span { font-weight:900; }
 .paper-v6-shell__status-spacer { flex:1; }
 .paper-v6-ready-actions { background:transparent !important; border:0 !important; padding:0 !important; gap:6px; }
-.paper-v6-ready-actions button { padding:4px 10px; border-radius:999px; border:1px solid #2563eb; background:#eff6ff; color:#1d4ed8; font-size:12px; font-weight:700; cursor:pointer; }
+.paper-v6-ready-actions button { padding:4px 10px; border-radius:999px; border:1px solid #4f46e5; background:#eef2ff; color:#3730a3; font-size:12px; font-weight:700; cursor:pointer; }
 
 /* ── v6 "one view" layout ─────────────────────────────────────────────
    Robot + paper on the left with the step bar across its top; the current
@@ -1303,12 +1303,8 @@
 .learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-scene {
   flex: 1 1 auto !important; width: auto !important; max-width: none !important;
 }
-.learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-panel {
-  flex: 0 0 clamp(340px, 32%, 440px) !important;
-  width: clamp(340px, 32%, 440px) !important; max-width: none !important;
-  overflow: auto; background: #ffffff; border-left: 1px solid #dbe3ee;
-}
-.learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-panel .curriculum-title,
+/* Same panel width, title band and course tabs as the other 2-4 levels. */
+.learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-panel .paper-coordinate-host { overflow: auto; }
 .learning-workspace:has(.paper-v6-student[data-scene]) .pcv-header,
 .learning-workspace:has(.paper-v6-student[data-scene]) .paper-v6-cycle,
 .learning-workspace:has(.paper-v6-student[data-scene]) .paper-v6-coordinate-pair,
@@ -1329,18 +1325,14 @@
     flex: 1 1 auto !important; width: 100% !important; border-left: 0; border-top: 1px solid #dbe3ee;
   }
 }
-.paper-v6-mode-choice { display:grid; gap:8px; padding:14px; border-radius:12px; border:2px solid #2563eb; background:#eff6ff; }
-.paper-v6-mode-choice strong { font-size:15px; color:#1e3a8a; }
+.paper-v6-mode-choice { display:grid; gap:8px; padding:14px; border-radius:12px; border:1px solid #c7d2fe; background:#f5f7ff; }
+.paper-v6-mode-choice strong { font-size:15px; color:#3730a3; }
 .paper-v6-mode-choice p { margin:0; font-size:13px; color:#334155; line-height:1.5; }
 .paper-v6-mode-choice div { display:flex; flex-wrap:wrap; gap:8px; }
 .paper-v6-mode-choice small { color:#b91c1c; }
 .paper-v6-sim-badge { margin:0; padding:6px 10px; border-radius:999px; background:#f5f3ff; border:1px solid #c4b5fd; color:#5b21b6; font-size:12px; font-weight:750; width:fit-content; }
 
-/* Card text was too large next to the robot: scale the whole card down evenly. */
-.learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-panel .paper-coordinate-view { zoom: .78; }
-@media (max-width: 900px) {
-  .learning-workspace:has(.paper-v6-student[data-scene]) .curriculum-panel .paper-coordinate-view { zoom: .9; }
-}
+
 
 /* "지금 누를 버튼" — one obvious next action */
 @keyframes paper-v6-nudge {
@@ -1425,3 +1417,10 @@
 .paper-v6-reference-tools { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .paper-v6-reference-tools button { border: 1px solid #c7d2fe; background: #fff; color: #3730a3; border-radius: 999px; padding: 5px 12px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
 .paper-v6-reference-tools button:hover { background: #eef2ff; }
+
+/* Match the other levels' type scale (title ~20px, body 14px) and indigo accents. */
+.learning-workspace:has(.paper-v6-student[data-scene]) .paper-v6-shell__title,
+.learning-workspace:has(.paper-v6-student[data-scene]) .paper-v6-shell h2 { font-size: 20px !important; color: #1e293b; }
+.paper-v6-reference-record:not(:disabled),
+.paper-v6-student .paper-v6-is-next:not(:disabled),
+.paper-v6-student[data-scene="1"] .paper-v6-shell__button--next:not(:disabled) { background: #4f46e5; border-color: #4f46e5; }
