@@ -33,6 +33,11 @@ export function PaperV6Narration({ script = PAPER_V6_INTRO_SCRIPT }: { script?: 
   const [current, setCurrent] = useState<number | null>(null);
   const runRef = useRef(0);
 
+  useEffect(() => {
+    // Voices load asynchronously in Chrome/Edge; touching the list starts the load early.
+    if (supported) window.speechSynthesis.getVoices();
+  }, [supported]);
+
   useEffect(() => () => {
     runRef.current += 1;
     if (supported) window.speechSynthesis.cancel();
@@ -48,7 +53,6 @@ export function PaperV6Narration({ script = PAPER_V6_INTRO_SCRIPT }: { script?: 
     if (!supported) return;
     stop();
     const run = runRef.current;
-    const voice = koreanVoice();
     const speakFrom = (index: number) => {
       if (run !== runRef.current) return;
       if (index >= script.length) {
@@ -58,6 +62,7 @@ export function PaperV6Narration({ script = PAPER_V6_INTRO_SCRIPT }: { script?: 
       setCurrent(index);
       const utterance = new SpeechSynthesisUtterance(script[index]);
       utterance.lang = "ko-KR";
+      const voice = koreanVoice();
       if (voice) utterance.voice = voice;
       utterance.rate = 1;
       utterance.onend = () => speakFrom(index + 1);
