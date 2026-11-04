@@ -208,7 +208,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
   ];
   const executionControls = (
     <section className="paper-v6-run-controls" aria-label="명시적 실행 선택">
-      {(state.allowMismatchedHardware ||
+      {!state.mockPracticeEnabled && (state.allowMismatchedHardware ||
         state.physicalBlockers?.some((blocker) => blocker.target === "teacher")) && (
         <fieldset
           className="paper-v6-supervision"
@@ -390,7 +390,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
         onBack={goBack}
         onNext={advance}
         statusMessage={state.error?.trim() || message?.trim() || undefined}
-        statusKind={state.error?.trim() ? "error" : messageKind}
+        statusKind={state.error?.trim() ? (/^(연습 완료|DT 완료)/.test(state.error.trim()) ? "success" : "error") : messageKind}
       >
         {scene === 1 && (
           <div className="paper-v6-step" data-testid="paper-v6-understand">
@@ -761,7 +761,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
               로봇은 내 식이 가리키는 곳에 펜을 찍어요. 종이 밖을 가리키면 펜을 든 채 지나가요.
               {state.verificationCriteria && ` 판정 기준: ±${state.verificationCriteria.positionToleranceMm.toFixed(1)} mm`}
             </p>
-            {state.physicalBlockers?.some((blocker) => blocker.target === "teacher") && (
+            {!state.mockPracticeEnabled && state.physicalBlockers?.some((blocker) => blocker.target === "teacher") && (
               <p className="paper-v6-hint" data-testid="paper-v6-supervision-hint">
                 내 예측이 측정한 종이와 달라요. 실물로 확인하려면 교사가 장비 옆에서 감독을 켜야 해요.
               </p>
@@ -800,7 +800,10 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 </>
               )}
             </div>
-            {blocks.observationsAndInk}
+            <details className="paper-v6-details paper-v6-measure-details" data-testid="paper-v6-measure-details" open={!state.mockPracticeEnabled}>
+              <summary>🙋 잉크 위치 입력 · 측정값 자세히 보기</summary>
+              {blocks.observationsAndInk}
+            </details>
             <section className="paper-v6-ai-card">
               <div className="paper-v6-section-heading">
                 <span className="paper-v6-role">💬 AI</span>

@@ -12,52 +12,40 @@ import "./paperScene.css";
 const references=[{name:"O",x:0,y:0},{name:"X",x:10,y:0},{name:"Y",x:0,y:10}];
 type SceneData=NonNullable<ReturnType<typeof usePaperScene>["data"]>;
 const isV6Scene=(data:SceneData|null)=>data?.activeAttempt?.taskVersion===PAPER_HARDWARE_V6_VERSION;
-/** Where the physical-AI loop currently is, from saved lesson state only (display, never a gate). */
+/** Student scene (1–5) from saved lesson state only (display, never a gate). */
 export function paperLoopPosition(data:SceneData):number{
-  const attempt=data.activeAttempt,stage=attempt?.stage??data.stage;
-  if(data.running)return 2;
-  if(stage<=2)return 0;
-  if(stage<=4)return 1;
-  if(stage===5)return data.run?.status==="completed"?3:2;
-  if(stage===6)return attempt?.aiAnalyses?.some(a=>a.runId===data.run?.id&&!!a.displayedAt)?4:3;
-  return 5;
+  const stage=data.activeAttempt?.stage??data.stage;
+  if(data.running)return 3;
+  return stage<=2?1:stage<=4?2:stage===5?3:stage===6?4:5;
 }
-const LOOP=[
-  {short:"로봇이 잰다",paper:"작업환경 측정"},
-  {short:"내 식으로 예측",paper:"수학적 관계로 예측"},
-  {short:"로봇이 그린다",paper:"실제 로봇 실행"},
-  {short:"관측",paper:"제어기 보고·잉크"},
-  {short:"AI가 묻는다",paper:"관측+내 풀이 해석"},
-  {short:"내가 판단",paper:"근거로 수정·유지 → 재검증"},
-];
-function loopValue(data:SceneData,index:number):string{
+const STEPS=["종이 재기","내 식 예측","로봇이 그림","비교 · AI 질문","판단 · 새 점 확인"];
+function stepValue(data:SceneData,step:number):string{
   const a=data.activeAttempt,ev=data.diagnosis?.taskEvidence??[];
   const worst=ev.reduce((m,e)=>Math.max(m,e.distance),0);
-  if(index===0){const measured=paperFrameAngleDegrees(data.frame);return measured===null?`O·X·Y ${data.samples.length}/3`:`종이 θ ${measured.toFixed(1)}°`;}
-  if(index===1){const m=a?.v6?.model;return m?`내 θ ${m.thetaDeg.toFixed(1)}°`:"입력 전";}
-  if(index===2)return data.running?"그리는 중":data.run?.status==="completed"?`${data.run.observations.length}점 완료`:"대기";
-  if(index===3)return ev.length?`최대 차이 ${worst.toFixed(1)} mm`:"대기";
-  if(index===4){const q=a?.aiAnalyses?.filter(x=>x.runId===data.run?.id&&!!x.displayedAt).at(-1);return q?"질문 도착":data.diagnosis?.pattern==="rotation"?"회전 의심":"요청 전";}
-  return a?.v6?.decision==="revise"?"식 수정":a?.v6?.decision==="retain"?"식 유지":"대기";
+  if(step===1){const measured=paperFrameAngleDegrees(data.frame);return measured===null?`O·X·Y ${data.samples.length}/3`:`종이 θ ${measured.toFixed(1)}°`;}
+  if(step===2){const m=a?.v6?.model;return m?`내 θ ${m.thetaDeg.toFixed(1)}°`:"";}
+  if(step===3)return data.running?"그리는 중…":data.run?.status==="completed"?`${data.run.observations.length}점 완료`:"";
+  if(step===4)return ev.length?`차이 ${worst.toFixed(1)} mm`:"";
+  return a?.v6?.decision==="revise"?"식 수정":a?.v6?.decision==="retain"?"식 유지":"";
 }
 /** Screen ⇄ bridge ⇄ controller: the same buttons drive DT, the mock controller or the MG400. */
 function PaperLinkPath({data}:{data:SceneData}){
   const source=data.displaySource;
   const live=source==="hardware"||source==="mock";
-  const device=source==="hardware"?"MG400 제어기":source==="mock"?"연습 제어기(모의)":"MG400 (미연결)";
+  const device=source==="hardware"?"MG400":source==="mock"?"연습 로봇":"MG400 미연결";
+  const tip=data.displayPose;
   return <div className="paper-link-path" data-source={source??"dt"} data-testid="paper-link-path" aria-label="장비 연결 경로">
-    <span className="is-on">화면 · DT</span><i aria-hidden="true">⇄</i>
-    <span className={live?"is-on":""}>브리지</span><i aria-hidden="true">⇄</i>
+    <span className="is-on">화면</span><i aria-hidden="true">⇄</i>
     <span className={live?"is-on":""}>{device}</span>
-    <em className={live?"is-live":""}>{live?"● 위치 보고 수신 중":"○ DT 미리보기"}</em>
+    <em className={live?"is-live":""}>{live?"●":"○"} 펜 끝 {tip?`(${tip.x.toFixed(0)}, ${tip.y.toFixed(0)})`:"—"}</em>
   </div>;
 }
 function PaperLoopRing({data}:{data:SceneData}){
   const current=paperLoopPosition(data),attempt=data.activeAttempt?.attempt??1;
-  return <ol className="paper-loop-ring" aria-label="피지컬 AI 순환" data-testid="paper-loop-ring">
-    {LOOP.map((step,index)=><li key={step.short} className={index===current?"is-current":index<current?"is-done":""} data-current={index===current}>
-      <b>{step.short}</b><small>{loopValue(data,index)}</small><em>{step.paper}</em>
-    </li>)}
+  return <ol className="paper-loop-ring" aria-label="학습 단계" data-testid="paper-loop-ring">
+    {STEPS.map((label,index)=>{const step=index+1,value=stepValue(data,step);return <li key={label} className={step===current?"is-current":step<current?"is-done":""} data-current={step===current}>
+      <b><span aria-hidden="true">{step<current?"✓":step}</span>{label}</b>{value&&<small>{value}</small>}
+    </li>;})}
     <li className="paper-loop-ring__again" aria-label={`${attempt}회차`}>↻ {attempt}회차</li>
   </ol>;
 }
@@ -76,20 +64,16 @@ export function PaperSceneLegend(){
 export function PaperSceneToolbar(){
   const {data}=usePaperScene();if(!data)return null;
   if(isV6Scene(data))return <div className="paper-scene-toolbar paper-scene-toolbar--v6" data-v6="true">
-    <PaperLinkPath data={data}/>
-    <button type="button" onClick={requestPaperCamera}>↺ 로봇·종이 시점</button>
     <PaperLoopRing data={data}/>
+    <PaperLinkPath data={data}/>
+    <button type="button" onClick={requestPaperCamera}>↺ 시점</button>
   </div>;
   const measured=data.displaySource==="hardware"||data.displaySource==="mock";
   return <div className="paper-scene-toolbar"><span>{data.frame?"종이 10×10 cm · 1 cm 눈금":"위치 미확인 · 반투명 종이는 배치 예시"}<small>{measured?"원래 색: 현재 보고 위치":"원래 색: 현재 위치 고정 · 파란 고스트: DT 예측 이동 · 실측 아님"}</small></span><button type="button" onClick={requestPaperCamera}>↺ 종이 시점</button></div>;
 }
 export function PaperSceneCaption(){
   const {data,point,reference,phase,robotDisplay}=usePaperScene();if(!data)return null;
-  if(isV6Scene(data))return <div className="paper-scene-caption paper-scene-caption--v6" data-testid="paper-v6-scene-legend">
-    <span><i className="paper-legend-ghost"/>파란 고스트 = 내 식이 보낸 곳</span>
-    <span><i className="paper-legend-robot-solid"/>로봇 실체 = {data.displaySource==="hardware"?"MG400이 보고한 위치":data.displaySource==="mock"?"연습 제어기가 보고한 위치":"현재 DT 위치"}</span>
-    <span><i className="paper-legend-ink"/>잉크 자국 = 종이에 남은 결과</span>
-  </div>;
+  if(isV6Scene(data))return null;
   const readout=paperSceneReadout(data,phase,point,reference),number=(value:number)=>Number.isFinite(value)?(Math.round(value*100)/100).toFixed(2):"—";
   const xy=(value:{x:number;y:number}|null)=>value?`X ${number(value.x)} · Y ${number(value.y)} mm`:"자료 없음";
   const pose=data.displayPose;
@@ -218,16 +202,20 @@ export function PaperSceneOverlay(){
     {references.map(r=>{
        const sample=data.samples.find(s=>s.point===r.name);
        const p=frame?raised(displayPoint(r.x,r.y)):sample?shapeWorldPoint({...sample.pose,z:sample.pose.z+2}):raised(displayPoint(r.x,r.y));
-       return <group key={r.name}><mesh position={p}><sphereGeometry args={[sample?4:3,12,8]}/><meshBasicMaterial color={sample?.source==="mock"?C.robotPreview:C.reference} depthTest={false}/></mesh><Html position={p} zIndexRange={[15,0]}><button type="button" className="paper-reference-label" aria-label={`장면에서 ${r.name} 기준점 선택`} aria-pressed={reference===r.name} onClick={()=>selectPaperPoint(r.name,"scene")}>{r.name}</button></Html></group>;
+       return <group key={r.name}><mesh position={p}><sphereGeometry args={[sample?4:3,12,8]}/><meshBasicMaterial color={sample?.source==="mock"?C.robotPreview:C.reference} depthTest={false}/></mesh><Html position={p} zIndexRange={[15,0]}><button type="button" className="paper-reference-label" aria-label={`장면에서 ${r.name} 기준점 선택`} aria-pressed={reference===r.name} onClick={()=>selectPaperPoint(r.name,"scene")}>{r.name}{v6Scene&&sample?` (${sample.pose.x.toFixed(0)}, ${sample.pose.y.toFixed(0)})`:""}</button></Html></group>;
     })}
     {data.displayPose&&<group>
       <mesh position={position({x:data.displayPose.x,y:data.displayPose.y,z:data.displayPose.z+3})} renderOrder={230}><sphereGeometry args={[4.5,16,12]}/><meshBasicMaterial color={data.displaySource==="mock"?C.robotPreview:C.reference} transparent opacity={.9} depthTest={false}/></mesh>
       {data.displaySource==="mock"&&<Html position={position({x:data.displayPose.x,y:data.displayPose.y,z:data.displayPose.z+8})} zIndexRange={[24,0]}><span className="paper-robot-tip-tag">연습 펜 끝</span></Html>}
     </group>}
+    {v6Scene&&livePredictions.slice(1).map(prediction=>{const x=Number(prediction.robotX),y=Number(prediction.robotY);if(!Number.isFinite(x)||!Number.isFinite(y))return null;return <group key={`ghost-${prediction.name}`} name="student-equation-ghost-point">
+      <mesh position={position({x,y,z:center.z+3})} renderOrder={229}><sphereGeometry args={[3.6,14,10]}/><meshBasicMaterial color={C.robotPreview} transparent opacity={.85} depthTest={false}/></mesh>
+      <Html position={position({x,y,z:center.z+8})} zIndexRange={[25,0]}><span className="paper-robot-tip-tag paper-robot-tip-tag--soft">{prediction.name} ({x.toFixed(0)}, {y.toFixed(0)})</span></Html>
+    </group>;})}
     {livePose&&<group name="student-equation-ghost">
       <Line points={[raised(displayPoint(firstTarget.xCm,firstTarget.yCm)),raised({x:livePose.x,y:livePose.y,z:livePose.z})]} color={C.robotPreview} lineWidth={2} dashed depthTest={false} renderOrder={226}/>
       <mesh position={position({x:livePose.x,y:livePose.y,z:livePose.z+4})} renderOrder={230}><sphereGeometry args={[5,16,12]}/><meshBasicMaterial color={C.robotPreview} transparent opacity={.9} depthTest={false}/></mesh>
-      <Html position={position({x:livePose.x,y:livePose.y,z:livePose.z+10})} zIndexRange={[26,0]}><span className="paper-robot-tip-tag">내 식 · {livePoint?.name}</span></Html>
+      <Html position={position({x:livePose.x,y:livePose.y,z:livePose.z+10})} zIndexRange={[26,0]}><span className="paper-robot-tip-tag">내 식 · {livePoint?.name}{v6Scene?` (${livePose.x.toFixed(0)}, ${livePose.y.toFixed(0)})`:""}</span></Html>
     </group>}
     {origin&&<group name="student-origin-and-components">
       <Line points={[position({x:0,y:0,z:origin.z}),position(origin)]} color={formulaTerm==="originX"||formulaTerm==="originY"?"#7c3aed":"#a78bfa"} lineWidth={formulaTerm?.startsWith("origin")?4:2} dashed depthTest={false} renderOrder={217}/>
