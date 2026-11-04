@@ -100,6 +100,15 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
   const hasAllReferences = (["O", "X", "Y"] as const).every((point) =>
     state.frame?.samples.some((sample) => sample.point === point),
   );
+  const studentTheta = (() => {
+    const value = Number(draft.thetaAssumption === "zero" ? 0 : draft.thetaDeg);
+    if (!String(draft.thetaAssumption === "zero" ? "0" : draft.thetaDeg ?? "").trim() || !Number.isFinite(value)) return null;
+    const radians = (value * Math.PI) / 180;
+    return { deg: value, cos: Math.cos(radians), sin: Math.sin(radians) };
+  })();
+  const thetaTrig = studentTheta
+    ? `θ = ${studentTheta.deg.toFixed(2)}° → cos θ = ${studentTheta.cos.toFixed(4)} · sin θ = ${studentTheta.sin.toFixed(4)}`
+    : "";
   const thetaFromDelta = useMemo(() => {
     const dx = Number(draft.deltaXmm);
     const dy = Number(draft.deltaYmm);
@@ -689,7 +698,12 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 </>
               )}
             </div>
-            <p className="paper-v6-equation">θ = tan⁻¹(ΔY / ΔX)</p>
+            <p className="paper-v6-equation">
+              θ = tan⁻¹(ΔY / ΔX)
+              <small className="paper-v6-equation__note">
+                θ는 로봇 X축에서 종이 x축(O→X 방향)까지 돌아간 각입니다. 왼쪽 종이에서 O의 두 선 사이 각을 보세요.
+              </small>
+            </p>
             <div className="paper-v6-form-grid">
               {field("내가 구한 θ (도)", draft.thetaDeg, (value) => updateDraft({ thetaDeg: value }), "학생이 구한 회전각 도", "paper-v6-theta")}
               <button
@@ -706,6 +720,11 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 tan⁻¹ 계산값을 입력칸에 넣기
               </button>
             </div>
+            {thetaTrig && (
+              <p className="paper-v6-trig" data-testid="paper-v6-trig">
+                🧮 {thetaTrig}
+              </p>
+            )}
             <fieldset className="paper-v6-choice">
               <legend>종이 축이 로봇 축과 평행하다고 가정합니까?</legend>
               <label>
@@ -860,6 +879,8 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                     </legend>
                     <p className="paper-v6-point__ab" data-testid={`paper-v6-${point.name}-ab`}>
                       O에서 종이 x축으로 {point.xCm} cm → <b>a = {point.xCm * 10} mm</b> · 종이 y축으로 {point.yCm} cm → <b>b = {point.yCm * 10} mm</b>
+                      <br />
+                      {thetaTrig ? <span className="paper-v6-point__trig">{thetaTrig}</span> : <span className="paper-v6-point__trig">위에서 θ를 먼저 입력하면 cos θ · sin θ가 표시됩니다.</span>}
                     </p>
                     {manual ? (
                       <div className="paper-v6-form-grid">
