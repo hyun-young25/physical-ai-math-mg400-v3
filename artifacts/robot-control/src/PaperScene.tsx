@@ -133,8 +133,9 @@ export function PaperSceneOverlay(){
   const baseWorld=position({x:0,y:0,z:center.z});
   const view=useMemo(()=>{
     if(!v6Scene)return {position:[centerWorld[0]-30,centerWorld[1]+480,centerWorld[2]+230] as const,target:[centerWorld[0]-30,centerWorld[1],centerWorld[2]] as const};
-    const t=[baseWorld[0]*0.4+centerWorld[0]*0.6,centerWorld[1]+60,baseWorld[2]*0.4+centerWorld[2]*0.6] as const;
-    return {position:[t[0]+120,t[1]+430,t[2]+520] as const,target:t};
+    // Sheet in the middle, the arm reaching in from behind: close enough to read the coordinates.
+    const t=[baseWorld[0]*0.22+centerWorld[0]*0.78,centerWorld[1]+30,baseWorld[2]*0.22+centerWorld[2]*0.78] as const;
+    return {position:[t[0]+60,t[1]+290,t[2]+300] as const,target:t};
   },[frame?.id,v6Scene]);
   const corners=[[0,0],[10,0],[10,10],[0,10]].map(([x,y])=>displayPoint(x,y));
   const vertices=new Float32Array([0,1,2,0,2,3].flatMap(i=>position(corners[i])));
