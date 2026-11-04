@@ -553,6 +553,18 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                   </article>;
                 })}
               </div>
+              {state.samples.length > 0 && !hasFrozenInitialPrediction && !state.running && (
+                <div className="paper-v6-reference-tools" data-testid="paper-v6-reference-tools">
+                  <button type="button" onClick={() => { setLastAnnouncement(""); actions.onClearReferences(); }} data-testid="paper-v6-clear-references">
+                    ↺ 처음부터 다시 측정
+                  </button>
+                  {state.mockPracticeEnabled && (
+                    <button type="button" onClick={actions.onReturnHome} data-testid="paper-v6-return-home">
+                      ⌂ 로봇 시작 위치로
+                    </button>
+                  )}
+                </div>
+              )}
               {lastAnnouncement && (
                 <p className="paper-v6-live-points__said" aria-live="polite" data-testid="paper-v6-reference-said">
                   🔊 {writtenForm(lastAnnouncement)}

@@ -332,6 +332,8 @@ export type PaperCoordinateStudyViewActions = {
     reason: string,
   ) => { message: string } | null;
   onResetRetry?: () => void;
+  onClearReferences: () => void;
+  onReturnHome: () => void;
   onPathConceptChange: (
     field: "motion" | "closeX" | "closeY",
     value: string,

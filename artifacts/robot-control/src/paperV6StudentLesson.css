@@ -1422,3 +1422,6 @@
 .paper-v6-live-points__meaning { display: block; color: #4338ca; font-weight: 600; }
 .paper-v6-live-points__delta { display: block; color: #0f172a; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .paper-v6-live-points__said { margin: 8px 0 0; padding: 6px 10px; border-radius: 8px; background: #eef2ff; color: #1e293b; font-size: 12.5px; line-height: 1.5; }
+.paper-v6-reference-tools { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.paper-v6-reference-tools button { border: 1px solid #c7d2fe; background: #fff; color: #3730a3; border-radius: 999px; padding: 5px 12px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.paper-v6-reference-tools button:hover { background: #eef2ff; }

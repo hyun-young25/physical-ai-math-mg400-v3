@@ -2500,6 +2500,44 @@ export function PaperCoordinateStudy({
       setPageError("");
       return null;
     },
+    onClearReferences: () => {
+      if (!active || active.run || active.planHash || running) {
+        setReferenceError("예측을 저장한 뒤에는 기준점을 다시 측정할 수 없습니다. 새 시도에서 측정하세요.");
+        return;
+      }
+      upsert(
+        {
+          ...active,
+          referenceSamples: [],
+          frame: undefined,
+          status: "references",
+          stage: 1,
+          transform: undefined,
+          predictions: undefined,
+          planHash: undefined,
+          diagnosis: undefined,
+          dtRunPlanHash: undefined,
+          drafts: active.drafts?.v6
+            ? {
+                ...active.drafts,
+                v6: { ...active.drafts.v6, originXmm: "", originYmm: "", deltaXmm: "", deltaYmm: "" },
+              }
+            : active.drafts,
+        },
+        "기준점 측정 기록을 지웠습니다. O부터 다시 측정하세요.",
+      );
+      setManualInputs(manualInputsFromSamples([]));
+      setStage(1 as PaperLessonStage);
+      setReferenceError("");
+    },
+    onReturnHome: () => {
+      if (!mockPracticeEnabled || running || hardwareConnected) return;
+      const home = { x: 350, y: 0, z: 40, r: 0 };
+      if (jogDigitalTwin?.(home)) {
+        mockJogTargetRef.current = { pose: home, at: Date.now() };
+        setReferenceError("");
+      }
+    },
     onResetRetry: () => {
       if (!active || !isMergedPaper(level) || active.run || running) return;
       setResetRetryId(active.id);
