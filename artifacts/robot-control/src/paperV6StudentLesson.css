@@ -1445,3 +1445,15 @@
 .paper-v6-handcheck { margin-top: 6px; }
 .paper-v6-handcheck > summary { cursor: pointer; font-size: 12.5px; color: #4338ca; font-weight: 700; }
 .paper-v6-generated { font-weight: 700; color: #1e293b; }
+
+/* Step 4, light: comparison picture + AI question + one-line cause. Rule detail stays for the teacher. */
+.paper-v6-student[data-scene="4"] .pcv-lead,
+.paper-v6-student[data-scene="4"] .pcv-interpretation,
+.paper-v6-student[data-scene="4"] .execution-ai-note,
+.paper-v6-student[data-scene="4"] .execution-ai-eyebrow,
+.paper-v6-student[data-scene="4"] .execution-ai-evidence,
+.paper-v6-student[data-scene="4"] .paper-v6-source-legend { display: none !important; }
+/* one cause box only (the one inside the comparison panel) */
+.paper-v6-student[data-scene="4"] .pcv-field:has(> textarea[aria-label="관측 차이에 대한 원인 가설"]) { display: none !important; }
+.paper-v6-student[data-scene="4"] .execution-ai-button { font-size: 15px; padding: 10px 16px; background: #4f46e5; color: #fff; border-radius: 10px; border: 0; }
+.paper-v6-student[data-scene="4"] .execution-ai-result { border-left: 4px solid #8b5cf6; background: #f5f3ff; padding: 10px 12px; border-radius: 8px; }
