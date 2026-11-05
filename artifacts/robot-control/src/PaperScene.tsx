@@ -20,7 +20,7 @@ export function paperLoopPosition(data:SceneData):number{
 }
 const STEPS=["기준점 측정","변환식 예측","로봇 실행","비교 · AI 질문","모델 판단 · 검증"];
 /** v6: the measured θ is what the student computes in step 2, so it stays hidden until a prediction is saved. */
-function paperThetaRevealed(data:SceneData):boolean{return !isV6Scene(data)||!!data.activeAttempt?.planHash;}
+function paperThetaRevealed(data:SceneData):boolean{return !isV6Scene(data);}
 function stepValue(data:SceneData,step:number):string{
   const a=data.activeAttempt,ev=data.diagnosis?.taskEvidence??[];
   const worst=ev.reduce((m,e)=>Math.max(m,e.distance),0);
@@ -70,6 +70,12 @@ export function PaperSceneToolbar(){
   if(isV6Scene(data))return <div className="paper-scene-toolbar paper-scene-toolbar--v6" data-v6="true">
     <PaperLoopRing data={data}/>
     <PaperLinkPath data={data}/>
+    {paperLoopPosition(data)>=3&&<div className="paper-v6-legend" aria-label="선 색 범례" data-testid="paper-v6-legend">
+      <span><i style={{borderColor:C.target}}/>목표 (종이 위 사각형)</span>
+      <span><i style={{borderColor:C.prediction,borderTopStyle:"dashed"}}/>내 예측</span>
+      <span><i style={{borderColor:C.first}}/>로봇이 실제로 찍은 경로</span>
+      <span><i style={{borderColor:C.mismatch}}/>허용오차 밖</span>
+    </div>}
     <button type="button" onClick={requestPaperCamera}>↺ 시점</button>
   </div>;
   const measured=data.displaySource==="hardware"||data.displaySource==="mock";
@@ -228,7 +234,7 @@ export function PaperSceneOverlay(){
       <Line points={[raised(frameOrigin),raised(displayPoint(4.5,0))]} color="#0f766e" lineWidth={3} depthTest={false} renderOrder={223}/>
       <Line points={arc(frameOrigin,displayAngle,28).map(raised)} color="#f59e0b" lineWidth={3} depthTest={false} renderOrder={223}/>
       <Html position={raised({x:frameOrigin.x+50,y:frameOrigin.y-3,z:frameOrigin.z})} zIndexRange={[27,0]}><span className="paper-ab-tag paper-ab-tag--robotx">로봇 X축 방향</span></Html>
-      <Html position={raised(arc(frameOrigin,displayAngle/2,34).at(-1)!)} center zIndexRange={[27,0]}><span className="paper-ab-tag paper-ab-tag--theta">θ{origin?` = ${liveModel!.thetaDeg.toFixed(1)}°`:" = ?"}</span></Html>
+      <Html position={raised(arc(frameOrigin,displayAngle/2,34).at(-1)!)} center zIndexRange={[27,0]}><span className="paper-ab-tag paper-ab-tag--theta">θ = ?</span></Html>
     </group>}
     {rulerTicks.map(cm=><Html key={`rx-${cm}`} position={raised(displayPoint(cm,-0.9))} center zIndexRange={[12,0]}><span className="paper-ruler-tick">{cm}</span></Html>)}
     {rulerTicks.length>0&&<Html position={raised(displayPoint(-0.9,11.4))} center zIndexRange={[12,0]}><span className="paper-ruler-tick paper-ruler-tick--unit">종이 y (cm)</span></Html>}
@@ -264,7 +270,7 @@ export function PaperSceneOverlay(){
       {modelVectorSegments.map(segment=><Line key={segment.id} points={[position(segment.a),position(segment.b)]} color={segment.color} lineWidth={formulaTerm===segment.id?5:formulaTerm?1.5:2.3} transparent opacity={formulaTerm&&formulaTerm!==segment.id?0.25:1} depthTest={false} renderOrder={218}/>)}
       <Html position={position(origin)} zIndexRange={[22,0]}><span className="paper-origin-tag">O · {liveModel?.thetaDeg.toFixed(1)}°</span></Html>
     </group>}
-    {worst&&latestAi?.question&&aiAnchor&&<group name="ai-question-anchor">
+    {!v6Scene&&worst&&latestAi?.question&&aiAnchor&&<group name="ai-question-anchor">
       <Line points={[position(aiAnchor),position({x:aiAnchor.x+28,y:aiAnchor.y+24,z:aiAnchor.z+3})]} color="#7c3aed" lineWidth={2} dashed depthTest={false} renderOrder={232}/>
       <Html position={position({x:aiAnchor.x+28,y:aiAnchor.y+24,z:aiAnchor.z+4})} zIndexRange={[30,0]}><span className="paper-ai-anchor">AI · {latestAi.question.slice(0,76)}</span></Html>
     </group>}

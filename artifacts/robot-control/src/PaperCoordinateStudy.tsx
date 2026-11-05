@@ -169,7 +169,7 @@ const emptyPaperV6Draft = (
   deltaXmm: "",
   deltaYmm: "",
   thetaDeg: "",
-  thetaAssumption: "calculated",
+  // The student chooses the assumption (parallel θ = 0 / tilted → θ); no default.
   explanation: "",
   formulaWork: {},
   followupChecks: [],
