@@ -8,6 +8,7 @@ import {
   writtenForm,
 } from "./PaperV6Narration";
 import { selectPaperPoint } from "./paperSceneStore";
+import { paperV6EquationTerms, paperV6ModelFromDraft } from "./paperV6Model";
 import { PaperV6StepShell } from "./PaperV6StepShell";
 import type {
   PaperV6Draft,
@@ -106,6 +107,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
     const radians = (value * Math.PI) / 180;
     return { deg: value, cos: Math.cos(radians), sin: Math.sin(radians) };
   })();
+  const liveModel = paperV6ModelFromDraft(draft).model;
   const thetaTrig = studentTheta
     ? `θ = ${studentTheta.deg.toFixed(2)}° → cos θ = ${studentTheta.cos.toFixed(4)} · sin θ = ${studentTheta.sin.toFixed(4)}`
     : "";
@@ -698,6 +700,31 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 </>
               )}
             </div>
+            <fieldset className="paper-v6-choice">
+              <legend>내 가정 · 종이가 로봇 축과 나란히 놓였다고 볼까요?</legend>
+              <label>
+                <input
+                  type="radio"
+                  name="paper-v6-theta-assumption"
+                  checked={(draft.thetaAssumption ?? "calculated") === "calculated"}
+                  onChange={() => updateDraft({ thetaAssumption: "calculated" })}
+                />
+                기울어져 있다 → θ를 구해서 쓴다
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="paper-v6-theta-assumption"
+                  checked={draft.thetaAssumption === "zero"}
+                  onChange={() =>
+                    updateDraft({ thetaAssumption: "zero", thetaDeg: "0" })
+                  }
+                />
+                나란하다고 본다 → θ = 0
+              </label>
+            </fieldset>
+            {draft.thetaAssumption !== "zero" && (
+              <>
             <p className="paper-v6-equation">
               θ = tan⁻¹(ΔY / ΔX)
               <small className="paper-v6-equation__note">
@@ -725,35 +752,16 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 🧮 {thetaTrig}
               </p>
             )}
-            <fieldset className="paper-v6-choice">
-              <legend>종이 축이 로봇 축과 평행하다고 가정합니까?</legend>
-              <label>
-                <input
-                  type="radio"
-                  name="paper-v6-theta-assumption"
-                  checked={(draft.thetaAssumption ?? "calculated") === "calculated"}
-                  onChange={() => updateDraft({ thetaAssumption: "calculated" })}
-                />
-                입력한 θ 사용
-              </label>
-              <label>
-                <input
-                  type="radio"
-                  name="paper-v6-theta-assumption"
-                  checked={draft.thetaAssumption === "zero"}
-                  onChange={() =>
-                    updateDraft({ thetaAssumption: "zero", thetaDeg: "0" })
-                  }
-                />
-                θ=0 가정으로 진행
-              </label>
-            </fieldset>
+              </>
+            )}
             {draft.thetaAssumption === "zero" && (
               <p className="paper-v6-hint">
                 θ=0 가정을 기록합니다. 측정된 O–X 방향과 차이가 있어도 실행 후 비교할 수
                 있습니다.
               </p>
             )}
+            <details className="paper-v6-extra" open={!state.mockPracticeEnabled}>
+            <summary>로봇 설정 · 펜 들기 간격{state.mockPracticeEnabled ? " (시뮬레이션은 기본 30 mm)" : " (실장비는 입력 필요)"}</summary>
             <section
               className="paper-v6-lift-gap"
               aria-labelledby="paper-v6-lift-gap-heading"
@@ -816,6 +824,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 </p>
               )}
             </section>
+            </details>
             {state.frame && (
               <details className="paper-v6-details">
                 <summary>Y점 방향·축척 참고</summary>
@@ -835,6 +844,11 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
 
         {scene === 2 && !editingRevisionModel && (
           <div className="paper-v6-step" data-testid="paper-v6-prediction">
+            <p className="paper-v6-callout paper-v6-compute-note">
+              P1~P4의 로봇 좌표는 <b>내가 정한 O와 θ</b>로 콘텐츠가 계산합니다. 내가 할 일은 식의 의미(a, b, θ)를 확인하고 예측 근거를 쓰는 것입니다.
+            </p>
+            <details className="paper-v6-extra">
+            <summary>계산 방식 (선택)</summary>
             <label className="paper-v6-field">
               <span>계산 연습</span>
               <select
@@ -846,10 +860,11 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                   updateDraft({ supportMode: value });
                 }}
               >
-                <option value="guided">기본 지원 · P1만 직접 대입</option>
+                <option value="guided">기본 · 콘텐츠가 계산 (P1 검산은 선택)</option>
                 <option value="challenge">도전 · P1~P4 모두 직접 계산</option>
               </select>
             </label>
+            </details>
             <p className="paper-v6-equation">
               x = {linkedFormulaTerm("originX", "xO")} + {linkedFormulaTerm("aCos", "a·cosθ")} − {linkedFormulaTerm("bSin", "b·sinθ")}
               <br />
@@ -882,7 +897,17 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                       <br />
                       {thetaTrig ? <span className="paper-v6-point__trig">{thetaTrig}</span> : <span className="paper-v6-point__trig">위에서 θ를 먼저 입력하면 cos θ · sin θ가 표시됩니다.</span>}
                     </p>
-                    {manual ? (
+                    {(() => {
+                      const live = liveModel ? paperV6EquationTerms(point, liveModel) : null;
+                      return (
+                        <p className="paper-v6-generated" data-testid={`paper-v6-generated-${point.name}`}>
+                          내 식으로 계산 · X {numberText(live?.robotX ?? (v6?.predictions?.[index] ? Number(v6.predictions[index].robotX) : undefined))} mm · Y {numberText(live?.robotY ?? (v6?.predictions?.[index] ? Number(v6.predictions[index].robotY) : undefined))} mm
+                        </p>
+                      );
+                    })()}
+                    {manual && (
+                      <details className="paper-v6-handcheck" open={selectedSupport === "challenge"}>
+                      <summary>{selectedSupport === "challenge" ? "직접 계산 (필수)" : `${point.name} 직접 검산해 보기 (선택)`}</summary>
                       <div className="paper-v6-form-grid">
                         {field(`${point.name} a·cosθ`, draft.formulaWork?.[point.name]?.aCos, (value) => updateWork(point.name, "aCos", value), `${point.name} a 코사인 세타`, `paper-v6-${point.name}-acos`)}
                         {field(`${point.name} b·sinθ`, draft.formulaWork?.[point.name]?.bSin, (value) => updateWork(point.name, "bSin", value), `${point.name} b 사인 세타`, `paper-v6-${point.name}-bsin`)}
@@ -891,14 +916,11 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                         {field(`${point.name} 최종 X (mm)`, draft.formulaWork?.[point.name]?.robotX, (value) => updateWork(point.name, "robotX", value), `${point.name} 계산한 로봇 X mm`, `paper-v6-${point.name}-x`)}
                         {field(`${point.name} 최종 Y (mm)`, draft.formulaWork?.[point.name]?.robotY, (value) => updateWork(point.name, "robotY", value), `${point.name} 계산한 로봇 Y mm`, `paper-v6-${point.name}-y`)}
                       </div>
-                    ) : (
-                      <p className="paper-v6-generated" data-testid={`paper-v6-generated-${point.name}`}>
-                        내 식으로 계산 · X {numberText(v6?.predictions?.[index] ? Number(v6.predictions[index].robotX) : undefined)} mm · Y {numberText(v6?.predictions?.[index] ? Number(v6.predictions[index].robotY) : undefined)} mm
-                      </p>
+                      </details>
                     )}
                     {work && (
                       <small>
-                        {manual ? "입력한 대입값이 학생의 O·θ 식과 일치합니다." : "학생이 저장한 식으로 계산한 목표입니다."}
+                        {manual && Object.values(draft.formulaWork?.[point.name] ?? {}).some((value) => String(value ?? "").trim()) ? "직접 검산한 값이 내 O·θ 식과 일치합니다." : "내 O·θ 식으로 계산한 목표입니다."}
                       </small>
                     )}
                   </fieldset>

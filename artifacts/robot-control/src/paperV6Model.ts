@@ -291,8 +291,14 @@ export function paperV6PredictionsFromDraft(
   for (const target of targets) {
     const expected = paperV6EquationTerms(target, model);
     let work = expected;
-    if (manualPoints.has(target.name)) {
-      const row = draft.formulaWork?.[target.name];
+    const row = draft.formulaWork?.[target.name];
+    // Guided: P1 hand substitution is an optional self-check; untouched → the content computes it
+    // (rule calculation does the coordinate transform; the student sets up O, θ and the assumption).
+    const handTouched = manualFields.some((field) => String(row?.[field] ?? "").trim() !== "");
+    const checkByHand =
+      manualPoints.has(target.name) &&
+      ((draft.supportMode ?? "guided") === "challenge" || handTouched);
+    if (checkByHand) {
       const parsed = Object.fromEntries(
         manualFields.map((field) => [field, numberFromDraft(row?.[field])]),
       ) as Record<(typeof manualFields)[number], number | null>;
