@@ -164,6 +164,17 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefillKey]);
+  // A new step starts at the top of its card (not where the previous step was scrolled).
+  useEffect(() => {
+    const root = document.querySelector('[data-testid="paper-v6-student-flow"]');
+    for (let node = root?.parentElement; node; node = node.parentElement) {
+      const style = window.getComputedStyle(node);
+      if (/(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight) {
+        node.scrollTop = 0;
+        break;
+      }
+    }
+  }, [scene]);
   // Each new O·X·Y measurement is read aloud with what the coordinate means.
   const sampleOrigin = state.samples.find((sample) => sample.point === "O")?.pose;
   const [lastAnnouncement, setLastAnnouncement] = useState("");
@@ -277,6 +288,24 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
   const jog = (axis: "x" | "y" | "z", sign: 1 | -1) =>
     jogSim ? actions.onMockJog(axis, sign * jogStepMm) : actions.onPreparationTcpJog(axis, sign * jogStepMm);
   const tip = state.currentPose;
+  const recordButton = needsModeChoice ? null : (
+    <button
+              type="button"
+              className="paper-v6-reference-record"
+              disabled={!missingReference || state.running || !state.currentPose}
+              onClick={() => {
+                if (missingReference)
+                  actions.onRecordCurrentReference(missingReference);
+              }}
+              data-testid="paper-v6-record-current-reference"
+            >
+              {missingReference
+                ? state.mockPracticeEnabled
+                  ? `${missingReference} 좌표 측정`
+                  : `현재 위치를 ${missingReference}로 기록`
+                : "O · X · Y 기록 완료"}
+            </button>
+  );
   const sketchPoint = (xCm: number, yCm: number) => ({
     x: 40 + xCm * 9.6 - yCm * 0.9,
     y: 103 + xCm * 0.9 - yCm * 8,
@@ -424,7 +453,10 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
     else if (scene === 2) {
       if (editingRevisionModel) setEditingRevisionModel(false);
       else if (hasFrozenInitialPrediction) navigate(5);
-      else saveModelAndPrediction();
+      else if (!draft.thetaAssumption) {
+        setMessage("먼저 내 가정을 고르세요: 종이가 기울어져 있다(θ를 구함) 또는 나란하다(θ = 0).");
+        setMessageKind("error");
+      } else saveModelAndPrediction();
     } else if (scene === 3) navigate(6);
     else if (scene === 4) navigate(7);
   };
@@ -554,6 +586,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
             <p className="paper-v6-reference-prompt" role="status" data-testid="paper-v6-current-reference">
               {referencePrompt}
             </p>
+            {state.mockPracticeEnabled && recordButton}
             <section className="paper-v6-live-points" aria-label="현재 O X Y 측정값" data-testid="paper-v6-live-points">
               <div className="paper-v6-section-heading">
                 <span className="paper-v6-role">🤖 로봇</span>
@@ -624,22 +657,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 {!jogSim && !state.tcpJog.canMove && state.tcpJog.blocker && <p className="paper-v6-jog__note">{state.tcpJog.blocker}</p>}
               </section>
             )}
-            {!needsModeChoice && <button
-              type="button"
-              className="paper-v6-reference-record"
-              disabled={!missingReference || state.running || !state.currentPose}
-              onClick={() => {
-                if (missingReference)
-                  actions.onRecordCurrentReference(missingReference);
-              }}
-              data-testid="paper-v6-record-current-reference"
-            >
-              {missingReference
-                ? state.mockPracticeEnabled
-                  ? `${missingReference} 좌표 측정`
-                  : `현재 위치를 ${missingReference}로 기록`
-                : "O · X · Y 기록 완료"}
-            </button>}
+            {!state.mockPracticeEnabled && recordButton}
             {!hasAllReferences && (
               <p className="paper-v6-hint" data-testid="paper-v6-references-required">
                 O·X·Y 세 점을 모두 측정하면 다음 단계로 진행할 수 있습니다.
@@ -714,7 +732,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 <input
                   type="radio"
                   name="paper-v6-theta-assumption"
-                  checked={(draft.thetaAssumption ?? "calculated") === "calculated"}
+                  checked={draft.thetaAssumption === "calculated"}
                   onChange={() => updateDraft({ thetaAssumption: "calculated" })}
                 />
                 기울어져 있다 → θ를 구해서 쓴다
@@ -731,7 +749,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
                 나란하다고 본다 → θ = 0
               </label>
             </fieldset>
-            {draft.thetaAssumption !== "zero" && (
+            {draft.thetaAssumption === "calculated" && (
               <>
             <p className="paper-v6-equation">
               θ = tan⁻¹(ΔY / ΔX)
@@ -951,7 +969,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
             {v6?.predictions && (
               <p className="paper-v6-callout" role="status">
                 {v6.supportMode === "guided"
-                  ? "P1 계산을 확인했습니다. P2~P4는 저장된 내 식으로 계산했습니다."
+                  ? "예측을 저장했습니다. P1~P4는 내가 정한 O·θ로 계산했습니다."
                   : "P1~P4 직접 계산을 확인했습니다."}
               </p>
             )}
