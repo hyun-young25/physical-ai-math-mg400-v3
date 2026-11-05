@@ -614,3 +614,16 @@ test("V re-check criteria may exclude P1–P4 as model points; first runs stay O
   assert.equal(p.paperModelConstructionPointsValid(["O", "X", "Y", "P1", "P2", "P3", "P4"], "initial"), false);
   assert.equal(p.paperModelConstructionPointsValid(["O", "X"], "revalidation"), false);
 });
+
+test("guided mode: untouched P1 is computed from the student's O·θ; a started hand check must be complete", () => {
+  const model = v6.paperV6ModelFromDraft({ originXmm: "250", originYmm: "-60", deltaXmm: "87.8", deltaYmm: "47.87", thetaDeg: "28.6", thetaAssumption: "calculated" }).model;
+  const target = [{ name: "P1", xCm: 1, yCm: 1 }];
+  const auto = v6.paperV6PredictionsFromDraft(frame, target, model, { supportMode: "guided", formulaWork: {} });
+  assert.equal(auto.error, null);
+  const terms = v6.paperV6EquationTerms(target[0], model);
+  assert.equal(auto.predictions[0].robotX, String(terms.robotX));
+  const partial = v6.paperV6PredictionsFromDraft(frame, target, model, { supportMode: "guided", formulaWork: { P1: { aCos: "8.78" } } });
+  assert.match(partial.error, /모두 입력하세요/);
+  const challenge = v6.paperV6PredictionsFromDraft(frame, target, model, { supportMode: "challenge", formulaWork: {} });
+  assert.match(challenge.error, /모두 입력하세요/);
+});
