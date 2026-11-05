@@ -82,6 +82,14 @@ function linkedFormulaTerm(term: string, label: string) {
   );
 }
 
+const FOLLOWUP_LABELS: Record<string, string> = {
+  "remeasure-y": "Y점을 다시 측정",
+  "review-ox-direction": "O→X 방향을 다시 봄",
+  "remeasure-ink": "잉크 위치를 다시 측정",
+  "substitute-one-point": "내 식에 한 점을 대입해 검산",
+  "check-units": "cm와 mm 단위를 확인",
+};
+
 export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
   const v6 = state.v6;
   const [editingRevisionModel, setEditingRevisionModel] = useState(false);
@@ -1002,36 +1010,18 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
             <section className="paper-v6-ai-card">
               <div className="paper-v6-section-heading">
                 <span className="paper-v6-role">💬 AI</span>
-                <div><h3>현재 실행에 대해 묻기</h3><p>원인 후보를 적고, 직접 요청할 때만 답변을 받습니다.</p></div>
+                <div><h3>차이를 보고 AI 질문 받기</h3><p>① 왼쪽 종이에서 예측(파란 점)과 실제로 찍힌 점을 비교 → ② "기본 체험 분석 보기"로 AI 질문 받기 → ③ 생각한 원인을 한 줄로 쓰기. AI는 답을 알려 주지 않고 질문만 합니다.</p></div>
               </div>
               {blocks.analysis}
             </section>
-            {state.diagnosis && (
-              <p className="paper-v6-callout" data-testid="paper-v6-rule-diagnosis">
-                규칙 계산은 원인 후보를 제안할 뿐 원인을 단정하지 않습니다.{" "}
-                {state.diagnosis.estimatedRotationDifferenceDeg != null && (
-                  <>
-                    O→X 회전 차이 추정{" "}
-                    {state.diagnosis.estimatedRotationDifferenceDeg.toFixed(1)}°{" "}
-                  </>
-                )}
-                {state.diagnosis.candidate} 질문: {state.diagnosis.question}
-              </p>
-            )}
             <section className="paper-v6-followup-card" aria-label="추가 확인 기록">
               <div className="paper-v6-section-heading">
                 <span className="paper-v6-role">🙋 나</span>
-                <div><h3>AI 질문 뒤에 더 확인한 것</h3><p>확인 항목과 관찰 결과를 초안으로 남깁니다.</p></div>
+                <div><h3>질문을 보고 직접 확인한 것</h3><p>무엇을 확인했는지 고르고, 확인한 결과를 한 줄로 씁니다. 다음 단계의 판단 근거가 됩니다.</p></div>
               </div>
               <fieldset className="paper-v6-choice">
                 <legend>추가로 확인한 항목 (하나 이상)</legend>
-                {[
-                  ["remeasure-y", "Y점을 다시 측정"],
-                  ["review-ox-direction", "O→X 방향을 다시 봄"],
-                  ["remeasure-ink", "잉크 위치를 다시 측정"],
-                  ["substitute-one-point", "내 식에 한 점을 대입해 검산"],
-                  ["check-units", "cm와 mm 단위를 확인"],
-                ].map(([value, label]) => (
+                {Object.entries(FOLLOWUP_LABELS).map(([value, label]) => (
                   <label key={value}>
                     <input
                       type="checkbox"
@@ -1083,7 +1073,7 @@ export function PaperV6StudentLesson({ state, actions, blocks }: Props) {
             </details>
             <section className="paper-v6-followup-summary" aria-label="Scene 4에 저장한 추가 확인">
               <strong>추가 확인 기록</strong>
-              <p>{draft.followupChecks?.length ? draft.followupChecks.join(" · ") : "Scene 4에서 확인 항목을 선택하세요."}</p>
+              <p>{draft.followupChecks?.length ? draft.followupChecks.map((item) => FOLLOWUP_LABELS[item] ?? item).join(" · ") : "④ 비교 · AI 질문에서 확인한 항목을 선택하세요."}</p>
               <p>{draft.followupResult?.trim() || "관찰 결과가 아직 기록되지 않았습니다."}</p>
             </section>
             <fieldset className="paper-v6-decision">

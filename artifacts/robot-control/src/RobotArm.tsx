@@ -24,6 +24,10 @@ import { downloadEvidence, readEvidence, writeEvidence } from "./learningEvidenc
 import { getEvidenceItem, setEvidenceItem } from "./learningSync";
 import type { SquareObservedVertex } from "./squareMismatchDiagnosis";
 
+/** Pending DT animation frames (frame/timer race) so they can be cancelled together. */
+let paperFrameSeq = 0;
+const paperFrameCancels = new Map<number, () => void>();
+
 interface Joints { j1: number; j2: number; j3: number; j4: number; }
 interface Coords { x: number; y: number; z: number; r: number; }
 type MissionStatus = "idle" | "running" | "done";
@@ -1565,12 +1569,33 @@ export function RobotArm({
       moveTo: pose => onMoveTo(pose.x, pose.y, pose.z, pose.r),
       moveEnd: onMoveEnd,
       scheduler: {
-        // Browsers pause animation frames in hidden tabs/panes; fall back to a timer
-        // so a practice run still finishes instead of staying "실행 중" forever.
-        requestFrame: callback => document.hidden
-          ? -(window.setTimeout(() => callback(window.performance.now()), 16) as unknown as number)
-          : window.requestAnimationFrame(callback),
-        cancelFrame: id => id < 0 ? window.clearTimeout(-id) : window.cancelAnimationFrame(id),
+        // Browsers pause animation frames in hidden tabs or minimized windows (document.hidden
+        // is not always set). Race a frame against a short timer so a practice run always
+        // finishes instead of staying "실행 중" or timing out.
+        requestFrame: callback => {
+          const id = ++paperFrameSeq;
+          let done = false;
+          const run = (time: number) => {
+            if (done) return;
+            done = true;
+            window.cancelAnimationFrame(frame);
+            window.clearTimeout(timer);
+            paperFrameCancels.delete(id);
+            callback(time);
+          };
+          const frame = window.requestAnimationFrame(run);
+          const timer = window.setTimeout(() => run(window.performance.now()), document.hidden ? 16 : 60);
+          paperFrameCancels.set(id, () => {
+            done = true;
+            window.cancelAnimationFrame(frame);
+            window.clearTimeout(timer);
+          });
+          return id;
+        },
+        cancelFrame: id => {
+          paperFrameCancels.get(id)?.();
+          paperFrameCancels.delete(id);
+        },
         setTimer: (callback, delayMs) => window.setTimeout(callback, delayMs),
         clearTimer: timer => window.clearTimeout(timer as number),
         now: () => window.performance.now(),
